@@ -1,6 +1,7 @@
 type variable = int
 
-module Expr = struct
+(* NOTE: original name Expr was renamed to Exp due to name collision with Z3.Expr *)
+module Exp = struct
     type t = 
       | Var of variable
       | Const of const_val
@@ -66,10 +67,10 @@ let rec to_string e =
 end
 
 (* pure part *)
-type pi = Expr.t list
+type pi = Exp.t list
 
 type heap_pred =
-  | Hpointsto of Expr.t * Expr.t (* bez off -> v pi / mozno interval a ine *)
+  | Hpointsto of Exp.t * Exp.t (* bez off -> v pi / mozno interval a ine *)
   (* todo *)
 
 (* spatial part *)
@@ -78,7 +79,7 @@ type sigma = heap_pred list
 let rec sigma_to_string s =
 	let pred_to_list a =
 		match a with
-		| Hpointsto (a,b) -> Expr.to_string a ^ " -> " ^ Expr.to_string b
+		| Hpointsto (a,b) -> Exp.to_string a ^ " -> " ^ Exp.to_string b
 	in
 	match s with 
 	| [] -> ""
@@ -100,7 +101,7 @@ let to_string f =
 	let rec pi_to_string p =
 		match p with 
 		| [] -> ""
-		| first::rest -> Expr.to_string first ^ " & " ^  pi_to_string rest
+		| first::rest -> Exp.to_string first ^ " & " ^  pi_to_string rest
 	in
 	"[Ex. " ^ evars_to_string f.evars ^ "] " ^
 	sigma_to_string f.sigma ^ pi_to_string f.pi
@@ -123,7 +124,7 @@ let rec join_list_unique l1 l2 =
 
 let rec find_vars_expr expr =
 	match expr with 
-     	| Expr.Var a -> [a] 		
+     	| Exp.Var a -> [a] 		
       	| Const a -> []
       	| UnOp (op,a) -> find_vars_expr a
       	| BinOp (op,a,b) -> List.append (find_vars_expr a) (find_vars_expr b)
@@ -154,7 +155,7 @@ let rec get_varmap f =
 	match f with
 	| [] -> []
 	| elm :: t -> ( match elm with
-		| Expr.BinOp ( Peq, Var fst, Var scd) -> ( fst, scd ) :: get_varmap t 
+		| Exp.BinOp ( Peq, Var fst, Var scd) -> ( fst, scd ) :: get_varmap t 
 		                                        (* odlisit prog od log vars *)
 		| _ -> get_varmap t)
 
@@ -192,22 +193,22 @@ let rec substitute_sigma var1 var2 sigma =
 	match sigma with
 		| [] -> []
 		| Hpointsto (a, b) ::rest ->
-			let a_new = match (a=Expr.Var var2) with 
-				| true -> Expr.Var var1
+			let a_new = match (a=Exp.Var var2) with 
+				| true -> Exp.Var var1
 				| false -> a
 			in
-			let b_new = match (b=Expr.Var var2) with
-				| true -> Expr.Var var1
+			let b_new = match (b=Exp.Var var2) with
+				| true -> Exp.Var var1
 				| false -> b
 			in
 			Hpointsto (a_new,b_new) :: substitute_sigma var1 var2 rest
 
 let rec substitute_expr var1 var2 expr =
 	match expr with 
-     	| Expr.Var a ->
+     	| Exp.Var a ->
 		if (a=var2) 
-		then Expr.Var var1
-		else Expr.Var a
+		then Exp.Var var1
+		else Exp.Var a
       	| Const a -> Const a
       	| UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
       	| BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
@@ -256,9 +257,9 @@ let rec remove_redundant_eq pi =
 	| [] -> []
 	| first::rest ->
 		match first with
-		| Expr.BinOp (op,a,b) -> if a=b 
+		| Exp.BinOp (op,a,b) -> if a=b 
 			then remove_redundant_eq rest
-			else Expr.BinOp (op,a,b) :: (remove_redundant_eq rest)
+			else Exp.BinOp (op,a,b) :: (remove_redundant_eq rest)
 		| x -> x:: (remove_redundant_eq rest)
 
 let rec remove_unused_evars_ll evars vars =
