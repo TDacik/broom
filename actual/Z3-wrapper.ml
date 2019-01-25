@@ -74,7 +74,7 @@ let create_global_restrictions ctx names_z3 =
 	let l=Arithmetic.mk_add ctx [ (Arithmetic.mk_sub ctx [x;(Expr.mk_app ctx names_z3.base [x] )]); (Expr.mk_app ctx names_z3.len [x]) ] in
 	let r=Expr.mk_app ctx names_z3.len [ (Expr.mk_app ctx names_z3.base [x]) ] in
 	let eq = Boolean.mk_eq ctx l r in
-	let q=Quantifier.mk_forall ctx [(Integer.mk_sort ctx)] [ (Symbol.mk_string ctx "x")] eq 
+	let q=Quantifier.mk_exist ctx [(Integer.mk_sort ctx)] [ (Symbol.mk_string ctx "x")] eq 
 		(Some 1) [] [] (Some (Symbol.mk_string ctx "Q1")) (Some (Symbol.mk_string ctx "skid1")) in
 	[ Quantifier.expr_of_quantifier q]
 
@@ -115,7 +115,8 @@ let formula_to_solver ctx form =
 	let pi= pi_to_solver ctx names_z3 form.pi in
 	let sigma= sigma_to_solver ctx names_z3 form.sigma in
 	let global_constr=create_global_restrictions ctx names_z3 in
-	List.append pi (List.append sigma global_constr)
+	List.append pi (List.append sigma [])
+	(*List.append pi (List.append sigma global_constr)*)
 
 (* Experiments *)
 
@@ -123,7 +124,8 @@ let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (mk_context cfg)
 
 open Solver
-let z3_form1=pi_to_solver ctx form1.pi
-let solver = (mk_solver ctx None)
-check solver z3_form1
+let z3_form1=formula_to_solver ctx form1
+
+let solv = (mk_solver ctx None)
+check solv z3_form1
 
