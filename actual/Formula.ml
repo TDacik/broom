@@ -354,6 +354,16 @@ let post_free = {
     evars = []
 }
 
+let form2 = {
+    sigma = [ Hpointsto (Var 1, Var 2); Hpointsto(Var 3, Var 4) ];
+    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    	  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
+          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
+          BinOp ( Peq, Var 1, Var 2332 );
+          BinOp ( Peq, Var 2, Const (Ptr 0)) ];
+    evars = [ 2;3;4 ]
+}
+
 
 (* in utop type: 
    #mod_use "Formula.ml" and then you can do e.g. Formula.simplify Formula.form1 
