@@ -89,7 +89,6 @@ let rec sigma_to_string s =
 type t = { 
     sigma: sigma;  (** spatial part *)
     pi: pi;  (** pure part *)
-    evars: variable list; (* list of existentially quantified variables *)
 }
 
 let to_string f =
@@ -103,7 +102,7 @@ let to_string f =
 		| [] -> ""
 		| first::rest -> Exp.to_string first ^ " & " ^  pi_to_string rest
 	in
-	"[Ex. " ^ evars_to_string f.evars ^ "] " ^
+	(*"[Ex. " ^ evars_to_string f.evars ^ "] " ^*)
 	sigma_to_string f.sigma ^ pi_to_string f.pi
 
 
@@ -179,15 +178,6 @@ let rec get_eq_vars vlist equalities =
 	| [] -> []
 	| _ -> join_list_unique eq (get_eq_vars (join_list_unique eq vlist) equalities)
 
-(*
-let rec get_eq_vars v equalities =
-	match equalities with
-	| [] -> []
-	| (a,b) :: rest ->
-		let add_1 = if (a=v) then [b] else [] in
-		let add_2 = if (b=v) then [a] else [] in
-		join_list_unique add_2 (join_list_unique add_1 (get_eq_vars v rest))
-*)
 
 let rec substitute_sigma var1 var2 sigma =
 	match sigma with
@@ -224,7 +214,8 @@ let rec substitute_pi var1 var2 pi =
 let substitutevars var1 var2 form = 
 	let sigma_out = substitute_sigma var1 var2 form.sigma in
 	let pi_out=substitute_pi var1 var2 form.pi in
-	{sigma = sigma_out; pi = pi_out; evars = form.evars} 
+	{sigma = sigma_out; pi = pi_out} 
+	(*{sigma = sigma_out; pi = pi_out; evars = form.evars} *)
 
 let rec substitute var1 eqvarlist form = 
 	match eqvarlist with
@@ -273,26 +264,29 @@ let rec remove_unused_evars_ll evars vars =
 			then first::(remove_unused_evars_ll rest vars)
 			else (remove_unused_evars_ll rest vars)
 
-let remove_unused_evars form =
+let remove_unused_evars form evars =
 	let vars=find_vars form in
-	{ sigma=form.sigma; pi=form.pi; evars=(remove_unused_evars_ll form.evars vars) }
+	remove_unused_evars_ll evars vars
 
 
-(* now we have everything for global simplify function *)
-let simplify form =
+(* now we have everything for global simplify function,
+   evars is a list of Ex. q. variables, which can be renamed/removed/etc...*)
+let simplify form evars=
 	let mem x =
 		let eq y= (x=y) in
-		not (List.exists eq form.evars )
+		not (List.exists eq evars )
 	in
 	let vars=find_vars form in
 	let gvars=List.filter mem vars in
-	let form1 = simplify_ll gvars form.evars form in
-	let form2 = { 
+	let form1 = simplify_ll gvars evars form in
+	{ sigma=form1.sigma; 
+	  pi=remove_redundant_eq form1.pi }
+	(*let form2 = { 
 		sigma=form1.sigma;
 		pi=remove_redundant_eq form1.pi;
 		evars = form1.evars
 	} in
-	remove_unused_evars form2
+	remove_unused_evars form2*)
 
 	
 (*** RENAME CONFLICTING LOGICAL VARIABLES ***)
@@ -310,7 +304,7 @@ let rec rename_ex_variables_ll form all_vars to_rename conflicts seed new_evars=
 		else s
 	in
 	match to_rename with
-	| [] -> { sigma = form.sigma; pi= form.pi; evars=new_evars}
+	| [] -> { sigma = form.sigma; pi= form.pi}, new_evars
 	| first::rest -> if (mem first conflicts)
 			then 
 				let new_var = get_fresh_var seed (List.append all_vars conflicts) in
@@ -319,9 +313,10 @@ let rec rename_ex_variables_ll form all_vars to_rename conflicts seed new_evars=
 			else rename_ex_variables_ll form all_vars rest conflicts seed (first :: new_evars)
 
 
-let rename_ex_variables form conflicts =
+(* create fresh names for evars with conflicts *)
+let rename_ex_variables form evars conflicts =
 	let all_vars = find_vars form in
-	rename_ex_variables_ll form all_vars form.evars conflicts 1 []
+	rename_ex_variables_ll form all_vars evars conflicts 1 []
 
 
 
@@ -334,8 +329,8 @@ let form1 = {
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
           BinOp ( Peq, Var 1, Var 2332 );
           BinOp ( Peq, UnOp ( Size, Var 1), Const (Int 4));
-          BinOp ( Peq, Var 2, Const (Ptr 0)) ];
-    evars = [ 2 ]
+          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+    (*evars = [ 2 ]*)
 }
 
 (*List.map (Expr.to_string) form1.pi;;*)
@@ -344,14 +339,14 @@ let form1 = {
 
 let pre_free = {
     sigma = [ Hpointsto (Var 2332, Undef) ];
-    pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)) ];
-    evars = []
+    pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)) ]
+    (*evars = []*)
 }
 
 let post_free = {
     sigma = [];
     pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)); UnOp ( Freed, Var 2332) ];
-    evars = []
+    (* evars = [] *)
 }
 
 let form2 = {
@@ -360,8 +355,8 @@ let form2 = {
     	  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
           BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, Var 2, Const (Ptr 0)) ];
-    evars = [ 2;3;4 ]
+          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+    (*evars = [ 2;3;4 ]*)
 }
 
 
