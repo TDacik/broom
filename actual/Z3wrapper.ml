@@ -72,13 +72,13 @@ let create_global_restrictions ctx names_z3 =
 	let l=Arithmetic.mk_add ctx [ (Arithmetic.mk_sub ctx [x;(Expr.mk_app ctx names_z3.base [x] )]); (Expr.mk_app ctx names_z3.len [x]) ] in
 	let r=Expr.mk_app ctx names_z3.len [ (Expr.mk_app ctx names_z3.base [x]) ] in
 	let eq = Boolean.mk_eq ctx l r in
-	let q=Quantifier.mk_exist ctx [(Integer.mk_sort ctx)] [ (Symbol.mk_string ctx "x")] eq 
+	let q=Quantifier.mk_exists ctx [(Integer.mk_sort ctx)] [ (Symbol.mk_string ctx "x")] eq 
 		(Some 1) [] [] (Some (Symbol.mk_string ctx "Q1")) (Some (Symbol.mk_string ctx "skid1")) in
 	[ Quantifier.expr_of_quantifier q]
 
-(* create conditions to guarantee SL * validity ... 
-	" a-> ... => alloc(base a) /\ a-base(a)+len(a) = len(base(a)
-	"x-> ... * y -> ..." => x!=y /\ [base(x)= base(y) => y + size(y)<=x \/ x+size(x)<=y] *)
+(* create conditions to guarantee SL * validity ... *)
+(*	" a-> ... => alloc(base a) /\ a-base(a)+len(a) = len(base(a) " *)
+(*	" x-> ... * y -> ... => x!=y "/\" [base(x)= base(y) => y + size(y)<=x "\/" x+size(x)<=y] " *)
 
 let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 	match sp_pred1 with
@@ -144,6 +144,7 @@ let formula_to_solver ctx form =
 
 (* Experiments *)
 
+(*
 let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (mk_context cfg)
 
@@ -152,4 +153,4 @@ let z3_form1=formula_to_solver ctx form1
 
 let solv = (mk_solver ctx None)
 check solv z3_form1
-
+*)
