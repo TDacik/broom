@@ -8,6 +8,13 @@ open Formula
 open Z3
 open Z3wrapper
 
+(** result of the rule application
+    form1 * form2 * M
+    or Fail
+**)
+type res =
+| Apply of Formula.t * Formula.t * Formula.t
+| Fail
 
 (**** MATCH 1 ****)
 
@@ -47,10 +54,10 @@ let find_match1 ctx solv z3_names form1 form2 =
 	find_match1_ll ctx solv z3_names form1 0 form2
 
 
-(* apply the match1 rule to i=(i1,i2)---i1^th pointsto on LHS and i2^th points-to on RHS,
+(* apply the match rule to i=(i1,i2)---i1^th pointsto on LHS and i2^th points-to on RHS,
    find_match1 must be used
 *)
-let apply_match1 i form1 form2 =
+let apply_match i form1 form2 =
 	let nequiv a b = not (a=b) in
 	let remove k form =
 		{ pi=form.pi;
@@ -61,11 +68,42 @@ let apply_match1 i form1 form2 =
 		(remove i1 form1), (remove i2 form2)
 		
 
-(*  Experiments
-let names_z3=get_sl_functions_z3 ctx in
-check_match1 ctx solv names_z3 form1 0 pre_free 0
+(* Try to apply match1 rule. The result is:
+	form1 - the LHS formula with removed matched part and added equality x=y
+	form2 - the RHS formula with removed matched part
+	M - the empty learned part
+*)
+let try_match1 ctx solv z3_names form1 form2 =
+	let m=find_match1 ctx solv z3_names form1 form2 in
+	match m with
+	| (-1,-1) -> Fail
+	| (i1,i2) ->
+		let (f1,f2)=apply_match (i1,i2) form1 form2 in
+		let y1=match (List.nth form1.sigma i1) with 
+			| Hpointsto (_, a) -> a in
+		let y2=match (List.nth form2.sigma i2) with 
+			| Hpointsto (_, a) -> a in
+		(* There is a problem in the cases, where one of the y1/y2 is Undef,
+		   We haveprobably to treat Undef in the solver as uninterpreted values *)
+		Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::f1.pi},
+			f2, 
+			{sigma=[]; pi=[]})
 
-find_match1_ll ctx solv names_z3 form1 0 pre_free
+(**** LEARN 1 ****)
+
+
+	
+
+(*  Experiments
+let cfg = [("model", "true"); ("proof", "false")]
+let ctx = (mk_context cfg)
+let solv = (Solver.mk_solver ctx None)
+let z3_names=get_sl_functions_z3 ctx
+
+
+check_match1 ctx solv z3_names form1 0 pre_free 0
+
+find_match1_ll ctx solv z3_names form1 0 pre_free
 
 *)
 
