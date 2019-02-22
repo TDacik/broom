@@ -91,8 +91,60 @@ let try_match1 ctx solv z3_names form1 form2 =
 
 (**** LEARN 1 ****)
 
-
+(* let x be: form2.sigma[i2]=x->_ 
+  we know that x!= y for all y->_ \in form1.sigma
+  now find a z->_ in form1.sigma such that base(z) = base(x) is valid *)
+let rec find_z ctx solv z3_names form1 z form2 i2 =
+	if (List.length form1.sigma) <= z
+		then -1
+	else
+	let rhs = 
+		match (List.nth form2.sigma i2) with 
+		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+	in
+	let lhs = 
+		match (List.nth form1.sigma z) with 
+		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+	in
+	let query = Boolean.mk_not ctx (
+		Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])) ::
+		(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
+	in
+	if (Solver.check solv query)=UNSATISFIABLE then z
+	else find_z ctx solv z3_names form1 (z+1) form2 i2
 	
+(* check whether we can apply learn1 on the form2.sigma[i2].
+   The result is -1: imposible
+   		 0...k: the index of "z"
+*)
+let check_learn1 ctx solv z3_names form1 form2 i2 =
+	let rhs = 
+		match (List.nth form2.sigma i2) with 
+		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+	in
+	(* create list of equalities between form2.sigma[i2] and all items in form1.sigma *)
+	let rec list_eq pointsto_list =
+		match pointsto_list with
+		| [] -> []
+		| first::rest ->
+			(Boolean.mk_eq ctx rhs 
+				( match first with 
+					| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a))
+			)
+			:: list_eq rest
+	in
+	(* problem if form1.sigma is empty list .... to be solved *)
+	let query1 = Boolean.mk_or ctx (list_eq form1.sigma) 
+		::
+		(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
+	in
+	(Solver.check solv query1)
+	if (Solver.check solv query1)=UNSATISFIABLE then
+		find_z ctx solv z3_names form1 0 form2 i2	
+	else -1
+		
+(* CORE dumped on: check_learn1 ctx solv z3_names post_free form2 0;;*)
+
 
 (*  Experiments
 let cfg = [("model", "true"); ("proof", "false")]
