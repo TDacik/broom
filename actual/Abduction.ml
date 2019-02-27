@@ -134,16 +134,49 @@ let check_learn1 ctx solv z3_names form1 form2 i2 =
 			:: list_eq rest
 	in
 	(* problem if form1.sigma is empty list .... to be solved *)
-	let query1 = Boolean.mk_or ctx (list_eq form1.sigma) 
-		::
-		(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
+	let query1 = match (list_eq form1.sigma) with
+		| [] -> List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)
+		| a -> (Boolean.mk_or ctx (list_eq form1.sigma))
+			::
+			(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
 	in
-	(Solver.check solv query1)
 	if (Solver.check solv query1)=UNSATISFIABLE then
 		find_z ctx solv z3_names form1 0 form2 i2	
 	else -1
 		
-(* CORE dumped on: check_learn1 ctx solv z3_names post_free form2 0;;*)
+
+(* try to apply learn1 rule *)
+let try_learn1 ctx solv z3_names form1 form2 =
+	(* first find index of the rule on RHS, which can be learned on LHS *)
+	let rec get_index i = 
+		if (List.length form2.sigma) <= i 
+		then (-1,-1)
+		else 
+			let res=check_learn1 ctx solv z3_names form1 form2 i in
+			if res=(-1)
+			then  get_index (i+1)
+			else (res,i) (* res - index of z, i -index of x*)
+	in
+	let nequiv a b = not (a=b) in
+	let remove k form =
+		{ pi=form.pi;
+		  sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
+	in
+	match (get_index 0) with
+	| (-1,-1) -> Fail
+	| (i1,i2) ->
+		let y1 = 
+			match (List.nth form1.sigma i1) with 
+			| Hpointsto (a, _) ->  a
+		in
+		let y2 = 
+			match (List.nth form2.sigma i2) with 
+			| Hpointsto (a, _) ->  a
+		in
+
+		Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
+			(remove i2 form2), 
+			{sigma=[List.nth form2.sigma i2]; pi=[]})
 
 
 (*  Experiments
@@ -154,6 +187,10 @@ let z3_names=get_sl_functions_z3 ctx
 
 
 check_match1 ctx solv z3_names form1 0 pre_free 0
+
+check_learn1 ctx solv z3_names pre_free form2 1;;
+
+try_learn1 ctx solv z3_names form1 form2;;
 
 find_match1_ll ctx solv z3_names form1 0 pre_free
 
