@@ -179,6 +179,50 @@ let try_learn1 ctx solv z3_names form1 form2 =
 			{sigma=[List.nth form2.sigma i2]; pi=[]})
 
 
+(* FINISH *)
+type finish_res =
+| Finish of Formula.t
+| NoFinish
+| FinFail
+
+let test_finish ctx solv z3_names form1 form2 =
+	if (List.length form2.sigma)>0 then NoFinish
+	else
+	let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
+	if (Solver.check solv query)=UNSATISFIABLE then FinFail
+	else Finish {pi=[]; sigma=form1.sigma}
+
+(* main biabduction function *)
+
+type abduction_res =
+| Bok of Formula.t * Formula.t
+| BFail
+
+let rec biabduction solv z3_names form1 form2 =
+	match (test_finish ctx solv z3_names form1 form2) with
+	| FinFail -> BFail
+	| Finish frame -> Bok ( {pi=[];sigma=[]} ,frame)
+	| NoFinish ->
+	(* try the particular rules *)
+	(* match 1 *)
+	match (try_match1 ctx solv z3_names form1 form2) with
+	| Apply (f1,f2,missing) -> 
+		(match biabduction solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		)
+	| Fail ->
+	(* learn 1 *)
+	match (try_learn1 ctx solv z3_names form1 form2) with
+	| Apply (f1,f2,missing) -> 
+		(match biabduction solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		)
+	| Fail ->
+
+		BFail
+
 (*  Experiments
 let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (mk_context cfg)
