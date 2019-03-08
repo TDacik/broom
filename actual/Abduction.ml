@@ -190,7 +190,7 @@ let test_finish ctx solv z3_names form1 form2 =
 	else
 	let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
 	if (Solver.check solv query)=UNSATISFIABLE then FinFail
-	else Finish {pi=[]; sigma=form1.sigma}
+	else Finish {pi=[]; sigma=form1.sigma} (* return FRAME, pi may be not empty --- TO be Checked *)
 
 (* main biabduction function *)
 
