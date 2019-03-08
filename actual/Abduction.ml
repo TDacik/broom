@@ -198,7 +198,7 @@ type abduction_res =
 | Bok of Formula.t * Formula.t
 | BFail
 
-let rec biabduction solv z3_names form1 form2 =
+let rec biabduction ctx solv z3_names form1 form2 =
 	match (test_finish ctx solv z3_names form1 form2) with
 	| FinFail -> BFail
 	| Finish frame -> Bok ( {pi=[];sigma=[]} ,frame)
@@ -207,7 +207,7 @@ let rec biabduction solv z3_names form1 form2 =
 	(* match 1 *)
 	match (try_match1 ctx solv z3_names form1 form2) with
 	| Apply (f1,f2,missing) -> 
-		(match biabduction solv z3_names f1 f2 with
+		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
 		)
@@ -215,7 +215,7 @@ let rec biabduction solv z3_names form1 form2 =
 	(* learn 1 *)
 	match (try_learn1 ctx solv z3_names form1 form2) with
 	| Apply (f1,f2,missing) -> 
-		(match biabduction solv z3_names f1 f2 with
+		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
 		)
