@@ -62,7 +62,8 @@ let rec expr_to_solver ctx func expr =
       		| Pminus -> Arithmetic.mk_sub ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
 		)
 	    | Exp.Void ->  Integer.mk_numeral_i ctx (-1)
-	    | Exp.Undef -> Integer.mk_numeral_i ctx (-2) (** !!! This may be a problem. We may create a fresh variable for this .... *)
+	    | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (Integer.mk_sort ctx)
+	    (**| Exp.Undef -> Integer.mk_numeral_i ctx (-2) !!! This may be a problem. We may create a fresh variable for this .... *)
 
 (* Global restrictions for base/len/size functions *)
 

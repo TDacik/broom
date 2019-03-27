@@ -135,7 +135,7 @@ let check_learn1 ctx solv z3_names form1 form2 i2 =
 	in
 	(* problem if form1.sigma is empty list .... to be solved *)
 	let query1 = match (list_eq form1.sigma) with
-		| [] -> List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)
+		| [] -> [(Boolean.mk_true ctx)]  (* there is no z, such that q is in the same base -> learn1 can not be applied *)
 		| a -> (Boolean.mk_or ctx (list_eq form1.sigma))
 			::
 			(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
@@ -190,7 +190,7 @@ let test_finish ctx solv z3_names form1 form2 =
 	else
 	let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
 	if (Solver.check solv query)=UNSATISFIABLE then FinFail
-	else Finish {pi=[]; sigma=form1.sigma} (* return FRAME, pi may be not empty --- TO be Checked *)
+	else Finish {pi=form1.pi; sigma=form1.sigma} (* return FRAME, pi may be not empty --- TO be Checked *)
 
 (* main biabduction function *)
 
@@ -204,16 +204,16 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	| Finish frame -> Bok ( {pi=[];sigma=[]} ,frame)
 	| NoFinish ->
 	(* try the particular rules *)
-	(* match 1 *)
-	match (try_match1 ctx solv z3_names form1 form2) with
+	(* learn 1 *)
+	match (try_learn1 ctx solv z3_names form1 form2) with
 	| Apply (f1,f2,missing) -> 
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
 		)
 	| Fail ->
-	(* learn 1 *)
-	match (try_learn1 ctx solv z3_names form1 form2) with
+	(* match 1 *)
+	match (try_match1 ctx solv z3_names form1 form2) with
 	| Apply (f1,f2,missing) -> 
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
