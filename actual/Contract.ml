@@ -7,6 +7,7 @@
 
 
 open State
+open Formula
 
 (** contract *)
 type contract = { 
@@ -27,17 +28,44 @@ let apply_contract ctx solv z3_names state c =
 		let missing= {pi=state.miss.pi @ miss.pi; sigma=state.miss.sigma @ miss.sigma } in
 		let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
 
-		CAppOk {miss=missing; miss_ex=state.miss_ex; act=actual; act_ex=state.act_ex  }
+		CAppOk {miss=missing; act=actual; lvars=state.lvars  }
 
 
-
+(********************************************)
 (* Experiments *)
+
+let pre_move = {
+    sigma = [ Hpointsto (Var 9, Var 10) ];
+    pi = [ BinOp ( Peq, Var 9, Var 2332) ]
+}
+let post_move = {
+    sigma = [ Hpointsto (Var 9, Var 10) ];
+    pi = [ BinOp ( Peq, Var 10, Var 2332) ]
+}
+
+let c_move={lhs=pre_move; rhs=post_move; cvars=[9;10]};;
+
+let pre_change = {
+    sigma = [ Hpointsto (Var 9, Var 10) ];
+    pi = [ BinOp ( Peq, Var 9, Var 2332);
+	   BinOp ( Peq, Var 9,  UnOp ( Base, Var 9)) ]
+}
+let post_change = {
+    sigma = [ Hpointsto (Var 9, Var 10) ];
+    pi = [ BinOp ( Peq, Var 10, Var 2332); 
+	   BinOp ( Peq, Var 9,  UnOp ( Base, Var 9)) ]
+}
+
+let c_change={lhs=pre_change; rhs=post_change; cvars=[9;10]};;
+
+
+
 
 (*
 
 
-let c={lhs=Formula.pre_free; rhs=Formula.post_free; cvars=[]};;
-let s={miss={sigma=[];pi=[]}; miss_ex=[]; act=Formula.form1; act_ex=[1;2]}
+let c_free={lhs=Formula.pre_free; rhs=Formula.post_free; cvars=[]};;
+let s={miss={sigma=[];pi=[]};  act=Formula.form1; lvars=[1;2]}
 
 open Z3
 open Z3wrapper
