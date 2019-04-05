@@ -51,12 +51,12 @@ let pre_change = {
 	   BinOp ( Peq, Var 9,  UnOp ( Base, Var 9)) ]
 }
 let post_change = {
-    sigma = [ Hpointsto (Var 9, Var 10) ];
-    pi = [ BinOp ( Peq, Var 10, Var 2332); 
+    sigma = [ Hpointsto (Var 9, Var 11) ];
+    pi = [ BinOp ( Peq, Var 9, Var 2332); 
 	   BinOp ( Peq, Var 9,  UnOp ( Base, Var 9)) ]
 }
 
-let c_change={lhs=pre_change; rhs=post_change; cvars=[9;10]};;
+let c_change={lhs=pre_change; rhs=post_change; cvars=[9;10;11]};;
 
 
 

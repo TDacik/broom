@@ -79,13 +79,13 @@ let try_match1 ctx solv z3_names form1 form2 =
 	| (-1,-1) -> Fail
 	| (i1,i2) ->
 		let (f1,f2)=apply_match (i1,i2) form1 form2 in
-		let y1=match (List.nth form1.sigma i1) with 
-			| Hpointsto (_, a) -> a in
-		let y2=match (List.nth form2.sigma i2) with 
-			| Hpointsto (_, a) -> a in
+		let x1,y1=match (List.nth form1.sigma i1) with 
+			| Hpointsto (a,b) -> (a,b) in
+		let x2,y2=match (List.nth form2.sigma i2) with 
+			| Hpointsto (a,b) -> (a,b) in
 		(* There is a problem in the cases, where one of the y1/y2 is Undef,
 		   We haveprobably to treat Undef in the solver as uninterpreted values *)
-		Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::f1.pi},
+		Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::((BinOp (Peq, x1,x2))::f1.pi)},
 			f2, 
 			{sigma=[]; pi=[]})
 
