@@ -155,7 +155,6 @@ let rec get_varmap f =
 	| [] -> []
 	| elm :: t -> ( match elm with
 		| Exp.BinOp ( Peq, Var fst, Var scd) -> ( fst, scd ) :: get_varmap t 
-		                                        (* odlisit prog od log vars *)
 		| _ -> get_varmap t)
 
 (* get all variables equivalent with variables in list "vlist" *)
@@ -248,7 +247,7 @@ let rec remove_redundant_eq pi =
 	| [] -> []
 	| first::rest ->
 		match first with
-		| Exp.BinOp (op,a,b) -> if a=b 
+		| Exp.BinOp (Peq,a,b) -> if a=b 
 			then remove_redundant_eq rest
 			else Exp.BinOp (op,a,b) :: (remove_redundant_eq rest)
 		| x -> x:: (remove_redundant_eq rest)
