@@ -20,6 +20,21 @@ type contract = {
        The pvarmap link program variables with contract variables representing the new positions *)
 }
 
+
+let rec pvarmap_to_string pvarmap =
+	match pvarmap with
+	| [] -> ""
+	| (a,b) :: rest -> "V"^(string_of_int a)^"->V"^(string_of_int b)^", " ^ pvarmap_to_string rest
+
+
+let to_string c =
+	"Contract local VARS: " ^ State.lvars_to_string c.cvars ^
+	"\nLHS: "^ Formula.to_string c.lhs ^ "\n"
+	^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
+	^ "Prog. VARS moves: "^ pvarmap_to_string c.pvarmap ^"\n"
+
+let print_contract c = print_string (to_string c)
+
 type contract_app_res =
 | CAppOk of State.state
 | CAppFail
