@@ -249,7 +249,7 @@ let rec remove_redundant_eq pi =
 		match first with
 		| Exp.BinOp (Peq,a,b) -> if a=b 
 			then remove_redundant_eq rest
-			else Exp.BinOp (op,a,b) :: (remove_redundant_eq rest)
+			else Exp.BinOp (Peq,a,b) :: (remove_redundant_eq rest)
 		| x -> x:: (remove_redundant_eq rest)
 
 let rec remove_unused_evars_ll evars vars =
