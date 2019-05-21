@@ -148,23 +148,23 @@ let contract_application ctx solv z3_names state c =
 (* Experiments *)
 
 let pre_move = {
-    sigma = [ Hpointsto (Var 1, Var 3) ];
+    sigma = [ Hpointsto (Var 1, 8, Var 3) ];
     pi = [ BinOp ( Peq, Var 1, Var 2332) ]
 }
 let post_move = {
-    sigma = [ Hpointsto (Var 1, Var 3) ];
+    sigma = [ Hpointsto (Var 1, 8, Var 3) ];
     pi = [ BinOp ( Peq, Var 3, Var 2) ]
 }
 
 let c_move={lhs=pre_move; rhs=post_move; cvars=[1;2;3]; pvarmap=[(2332,2)]}
 
 let pre_change = {
-    sigma = [ Hpointsto (Var 9, Var 10) ];
+    sigma = [ Hpointsto (Var 9, 8, Var 10) ];
     pi = [ BinOp ( Peq, Var 9, Var 2332);
 	   BinOp ( Peq, Var 9,  UnOp ( Base, Var 9)) ]
 }
 let post_change = {
-    sigma = [ Hpointsto (Var 9, Var 11) ];
+    sigma = [ Hpointsto (Var 9, 8, Var 11) ];
     pi = [ BinOp ( Peq, Var 9, Var 2332); 
 	   BinOp ( Peq, Var 9,  UnOp ( Base, Var 9))  ]
 }

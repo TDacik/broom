@@ -11,7 +11,7 @@ module Exp = struct
       | Void
       | Undef
     
-    and unop =  Base | Len | Size | Freed  
+    and unop =  Base | Len | Freed  
 
     (* aritmetic operation *)
     and binop = 
@@ -41,7 +41,6 @@ let unop_to_string o =
 	match o with
 	| Base -> "base"
 	| Len -> "len"
-	| Size -> "size"
 	| Freed -> "freed"
 
 let binop_to_string o =
@@ -70,7 +69,7 @@ end
 type pi = Exp.t list
 
 type heap_pred =
-  | Hpointsto of Exp.t * Exp.t (* bez off -> v pi / mozno interval a ine *)
+  | Hpointsto of Exp.t * int * Exp.t (* bez off -> v pi / mozno interval a ine *)
   (* todo *)
 
 (* spatial part *)
@@ -79,7 +78,7 @@ type sigma = heap_pred list
 let rec sigma_to_string s =
 	let pred_to_list a =
 		match a with
-		| Hpointsto (a,b) -> Exp.to_string a ^ " -> " ^ Exp.to_string b
+		| Hpointsto (a,l,b) -> Exp.to_string a ^ " -("^ (string_of_int l) ^ ")-> " ^ Exp.to_string b
 	in
 	match s with 
 	| [] -> ""
@@ -139,7 +138,7 @@ let rec find_vars_pi pi =
 let rec fin_vars_sigma sigma = 
 	match sigma with
 	| [] -> []
-	| Hpointsto (a, b)::rest ->
+	| Hpointsto (a,_, b)::rest ->
 		join_list_unique (find_vars_expr a)
 		(join_list_unique (find_vars_expr b) (fin_vars_sigma rest))
 
@@ -181,7 +180,7 @@ let rec get_eq_vars vlist equalities =
 let rec substitute_sigma var1 var2 sigma =
 	match sigma with
 		| [] -> []
-		| Hpointsto (a, b) ::rest ->
+		| Hpointsto (a,l, b) ::rest ->
 			let a_new = match (a=Exp.Var var2) with 
 				| true -> Exp.Var var1
 				| false -> a
@@ -190,7 +189,7 @@ let rec substitute_sigma var1 var2 sigma =
 				| true -> Exp.Var var1
 				| false -> b
 			in
-			Hpointsto (a_new,b_new) :: substitute_sigma var1 var2 rest
+			Hpointsto (a_new,l,b_new) :: substitute_sigma var1 var2 rest
 
 let rec substitute_expr var1 var2 expr =
 	match expr with 
@@ -323,11 +322,10 @@ let rename_ex_variables form evars conflicts =
 (******** EXPERIMENTS *******)
 
 let form1 = {
-    sigma = [ Hpointsto (Var 1, Var 2) ];
+    sigma = [ Hpointsto (Var 1, 8, Var 2) ];
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
           BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, UnOp ( Size, Var 1), Const (Int 4));
           BinOp ( Peq, Var 2, Const (Ptr 0)) ]
     (*evars = [ 2 ]*)
 }
@@ -337,7 +335,7 @@ let form1 = {
 (*to_string form1*)
 
 let pre_free = {
-    sigma = [ Hpointsto (Var 2332, Undef) ];
+    sigma = [ Hpointsto (Var 2332,8, Undef) ];
     pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)) ]
     (*evars = []*)
 }
@@ -349,7 +347,7 @@ let post_free = {
 }
 
 let form2 = {
-    sigma = [ Hpointsto (Var 1, Var 2); Hpointsto(Var 3, Var 4) ];
+    sigma = [ Hpointsto (Var 1,8, Var 2); Hpointsto(Var 3, 8, Var 4) ];
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
     	  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
@@ -359,7 +357,7 @@ let form2 = {
 }
 
 let form3 = {
-    sigma = [ Hpointsto (Var 1, Var 2); Hpointsto(Var 3, Var 4) ];
+    sigma = [ Hpointsto (Var 1, 8, Var 2); Hpointsto(Var 3, 8, Var 4) ];
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
           BinOp ( Peq, Var 1, Var 2332 );

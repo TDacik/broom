@@ -20,19 +20,34 @@ type res =
 
 (* Check whether match1 can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
 let check_match1 ctx solv z3_names form1 i1 form2 i2 =
+
 	let lhs = 
 		match (List.nth form1.sigma i1) with 
-		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) 
+	in
+	let lhs_size =
+		match (List.nth form1.sigma i1) with 
+		| Hpointsto (_, s ,_) -> s 
 	in
 	let rhs = 
 		match (List.nth form2.sigma i2) with 
-		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) 
 	in
-
-	let query = Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs) ::
-		(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
+	let rhs_size =
+		match (List.nth form2.sigma i2) with 
+		| Hpointsto (_, s ,_) -> s 
 	in
-	(Solver.check solv query)=UNSATISFIABLE
+	let query1=  
+		[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
+			(Boolean.mk_and ctx (formula_to_solver ctx form1))
+		]
+	in
+	let query2=  
+		[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+		]
+	in
+	(lhs_size=rhs_size) && (((Solver.check solv query1)=UNSATISFIABLE) || ((Solver.check solv query2)=UNSATISFIABLE))
 
 (* Find pair of points-to for match1. Return (-1,-1) if unposibble *) 
 let rec find_match1_ll ctx solv z3_names form1 i1 form2 =
@@ -80,9 +95,9 @@ let try_match1 ctx solv z3_names form1 form2 =
 	| (i1,i2) ->
 		let (f1,f2)=apply_match (i1,i2) form1 form2 in
 		let x1,y1=match (List.nth form1.sigma i1) with 
-			| Hpointsto (a,b) -> (a,b) in
+			| Hpointsto (a,_,b) -> (a,b) in
 		let x2,y2=match (List.nth form2.sigma i2) with 
-			| Hpointsto (a,b) -> (a,b) in
+			| Hpointsto (a,_,b) -> (a,b) in
 		(* There is a problem in the cases, where one of the y1/y2 is Undef,
 		   We haveprobably to treat Undef in the solver as uninterpreted values *)
 		Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::((BinOp (Peq, x1,x2))::f1.pi)},
@@ -100,17 +115,23 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
 	else
 	let rhs = 
 		match (List.nth form2.sigma i2) with 
-		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) (* SIZE missing *)
 	in
 	let lhs = 
 		match (List.nth form1.sigma z) with 
-		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_, _) -> (expr_to_solver ctx z3_names a) (* SIZE missing *)
 	in
-	let query = Boolean.mk_not ctx (
-		Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])) ::
-		(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
+	let query1= [ Boolean.mk_not ctx (
+			Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])); 
+			(Boolean.mk_and ctx (formula_to_solver ctx form1))
+			]
 	in
-	if (Solver.check solv query)=UNSATISFIABLE then z
+	let query2= [ Boolean.mk_not ctx (
+			Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])); 
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+			]
+	in
+	if ((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE) then z
 	else find_z ctx solv z3_names form1 (z+1) form2 i2
 	
 (* check whether we can apply learn1 on the form2.sigma[i2].
@@ -120,7 +141,7 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
 let check_learn1 ctx solv z3_names form1 form2 i2 =
 	let rhs = 
 		match (List.nth form2.sigma i2) with 
-		| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
 	in
 	(* create list of equalities between form2.sigma[i2] and all items in form1.sigma *)
 	let rec list_eq pointsto_list =
@@ -129,18 +150,26 @@ let check_learn1 ctx solv z3_names form1 form2 i2 =
 		| first::rest ->
 			(Boolean.mk_eq ctx rhs 
 				( match first with 
-					| Hpointsto (a, _) -> (expr_to_solver ctx z3_names a))
+					| Hpointsto (a,_, _) -> (expr_to_solver ctx z3_names a))
 			)
 			:: list_eq rest
 	in
 	(* problem if form1.sigma is empty list .... to be solved *)
 	let query1 = match (list_eq form1.sigma) with
 		| [] -> [(Boolean.mk_true ctx)]  (* there is no z, such that q is in the same base -> learn1 can not be applied *)
-		| a -> (Boolean.mk_or ctx (list_eq form1.sigma))
-			::
-			(List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2))
+		| a -> [
+			(Boolean.mk_or ctx (list_eq form1.sigma));
+			(Boolean.mk_and ctx (formula_to_solver ctx form1));
+			]
 	in
-	if (Solver.check solv query1)=UNSATISFIABLE then
+	let query2 = match (list_eq form1.sigma) with
+		| [] -> [(Boolean.mk_true ctx)]  (* there is no z, such that q is in the same base -> learn1 can not be applied *)
+		| a -> [
+			(Boolean.mk_or ctx (list_eq form1.sigma));
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+			]
+	in
+	if ((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE) then
 		find_z ctx solv z3_names form1 0 form2 i2	
 	else -1
 		
@@ -167,11 +196,11 @@ let try_learn1 ctx solv z3_names form1 form2 =
 	| (i1,i2) ->
 		let y1 = 
 			match (List.nth form1.sigma i1) with 
-			| Hpointsto (a, _) ->  a
+			| Hpointsto (a,_,_) ->  a
 		in
 		let y2 = 
 			match (List.nth form2.sigma i2) with 
-			| Hpointsto (a, _) ->  a
+			| Hpointsto (a,_,_) ->  a
 		in
 
 		Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
