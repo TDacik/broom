@@ -40,15 +40,39 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 	in
 	match level with
 	| 1 ->
-		let query=  
+		let query1 = 
 			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
 				(Boolean.mk_and ctx (formula_to_solver ctx form1))
 			]
 		in
-		(lhs_size=rhs_size) && ((Solver.check solv query)=UNSATISFIABLE) 
+		let query2 = 
+			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
+				(Boolean.mk_and ctx (formula_to_solver ctx form2))
+			]
+		in
+		(lhs_size=rhs_size) && (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
+	| 2 -> 
+		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(Boolean.mk_eq ctx lhs rhs)
+			]
+		in
+		let query2=[Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));                
+				(Boolean.mk_and ctx (formula_to_solver ctx form1))
+			]
+		in
+
+		(lhs_size=rhs_size) && ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
+	| 3 -> 
+		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(Boolean.mk_eq ctx lhs rhs)
+			]
+		in
+		(lhs_size=rhs_size) && ((Solver.check solv query)=SATISFIABLE) 
 	| _ -> false
 
-(* Find pair of points-to for match1. Return (-1,-1) if unposibble *) 
+(* Find pair of points-to for match. Return (-1,-1) if unposibble *) 
 let rec find_match_ll ctx solv z3_names form1 i1 form2 level=
 	let rec try_with_rhs i2 =
 		if (List.length form2.sigma) <= i2 
@@ -85,7 +109,7 @@ let apply_match i form1 form2 =
 (* Try to apply match rule. The result is:
 	form1 - the LHS formula with removed matched part and added equality x=y
 	form2 - the RHS formula with removed matched part
-	M - the empty learned part
+	M - the learned part
 *)
 let try_match ctx solv z3_names form1 form2 level =
 	let m=find_match ctx solv z3_names form1 form2 level in
@@ -99,9 +123,13 @@ let try_match ctx solv z3_names form1 form2 level =
 			| Hpointsto (a,_,b) -> (a,b) in
 		(* There is a problem in the cases, where one of the y1/y2 is Undef,
 		   We haveprobably to treat Undef in the solver as uninterpreted values *)
-		Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::((BinOp (Peq, x1,x2))::f1.pi)},
-			f2, 
-			{sigma=[]; pi=[]})
+		match level with
+		| 1 -> 	Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::((BinOp (Peq, x1,x2))::f1.pi)},
+				f2, 
+				{sigma=[]; pi=[]})
+		| _ -> 	Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::((BinOp (Peq, x1,x2))::f1.pi)},
+				f2, 
+				{sigma=[]; pi=[(BinOp (Peq, x1,x2))]})
 
 (**** LEARN 1 ****)
 
@@ -235,6 +263,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	(* learn 1 *)
 	match (try_learn1 ctx solv z3_names form1 form2) with
 	| Apply (f1,f2,missing) -> 
+		print_string "Learn1, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
@@ -243,6 +272,25 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	(* match 1 *)
 	match (try_match ctx solv z3_names form1 form2 1) with
 	| Apply (f1,f2,missing) -> 
+		print_string "Match1, ";
+		(match biabduction ctx solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		)
+	| Fail ->
+	(* match 2 *)
+	match (try_match ctx solv z3_names form1 form2 2) with
+	| Apply (f1,f2,missing) -> 
+		print_string "Match2, ";
+		(match biabduction ctx solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		)
+	| Fail ->
+	(* match 3 *)
+	match (try_match ctx solv z3_names form1 form2 3) with
+	| Apply (f1,f2,missing) -> 
+		print_string "Match3, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
