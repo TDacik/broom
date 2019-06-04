@@ -16,10 +16,11 @@ type res =
 | Apply of Formula.t * Formula.t * Formula.t
 | Fail
 
-(**** MATCH 1 ****)
+(**** MATCH rules ****)
+(* The level parameter gives the level of match, the only difference is in check_match function *)
 
-(* Check whether match1 can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
-let check_match1 ctx solv z3_names form1 i1 form2 i2 =
+(* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
+let check_match ctx solv z3_names form1 i1 form2 i2 level =
 
 	let lhs = 
 		match (List.nth form1.sigma i1) with 
@@ -37,24 +38,22 @@ let check_match1 ctx solv z3_names form1 i1 form2 i2 =
 		match (List.nth form2.sigma i2) with 
 		| Hpointsto (_, s ,_) -> s 
 	in
-	let query1=  
-		[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
-			(Boolean.mk_and ctx (formula_to_solver ctx form1))
-		]
-	in
-	let query2=  
-		[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
-			(Boolean.mk_and ctx (formula_to_solver ctx form2))
-		]
-	in
-	(lhs_size=rhs_size) && (((Solver.check solv query1)=UNSATISFIABLE) || ((Solver.check solv query2)=UNSATISFIABLE))
+	match level with
+	| 1 ->
+		let query=  
+			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
+				(Boolean.mk_and ctx (formula_to_solver ctx form1))
+			]
+		in
+		(lhs_size=rhs_size) && ((Solver.check solv query)=UNSATISFIABLE) 
+	| _ -> false
 
 (* Find pair of points-to for match1. Return (-1,-1) if unposibble *) 
-let rec find_match1_ll ctx solv z3_names form1 i1 form2 =
+let rec find_match_ll ctx solv z3_names form1 i1 form2 level=
 	let rec try_with_rhs i2 =
 		if (List.length form2.sigma) <= i2 
 		then -1
-		else (if (check_match1 ctx solv z3_names form1 i1 form2 i2) 
+		else (if (check_match ctx solv z3_names form1 i1 form2 i2 level) 
 			then i2
 			else -1)
 	in
@@ -62,15 +61,15 @@ let rec find_match1_ll ctx solv z3_names form1 i1 form2 =
 	then (-1,-1)
 	else
 		match (try_with_rhs 0) with
-		| -1 -> (find_match1_ll ctx solv z3_names form1 (i1+1) form2)
+		| -1 -> (find_match_ll ctx solv z3_names form1 (i1+1) form2 level)
 		| x -> (i1,x) 
 
-let find_match1 ctx solv z3_names form1 form2 =
-	find_match1_ll ctx solv z3_names form1 0 form2
+let find_match ctx solv z3_names form1 form2 level =
+	find_match_ll ctx solv z3_names form1 0 form2 level
 
 
 (* apply the match rule to i=(i1,i2)---i1^th pointsto on LHS and i2^th points-to on RHS,
-   find_match1 must be used
+   find_match must be used
 *)
 let apply_match i form1 form2 =
 	let nequiv a b = not (a=b) in
@@ -83,13 +82,13 @@ let apply_match i form1 form2 =
 		(remove i1 form1), (remove i2 form2)
 		
 
-(* Try to apply match1 rule. The result is:
+(* Try to apply match rule. The result is:
 	form1 - the LHS formula with removed matched part and added equality x=y
 	form2 - the RHS formula with removed matched part
 	M - the empty learned part
 *)
-let try_match1 ctx solv z3_names form1 form2 =
-	let m=find_match1 ctx solv z3_names form1 form2 in
+let try_match ctx solv z3_names form1 form2 level =
+	let m=find_match ctx solv z3_names form1 form2 level in
 	match m with
 	| (-1,-1) -> Fail
 	| (i1,i2) ->
@@ -242,7 +241,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
 		)
 	| Fail ->
 	(* match 1 *)
-	match (try_match1 ctx solv z3_names form1 form2) with
+	match (try_match ctx solv z3_names form1 form2 1) with
 	| Apply (f1,f2,missing) -> 
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
@@ -259,13 +258,13 @@ let solv = (Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
 
 
-check_match1 ctx solv z3_names form1 0 pre_free 0
+check_match ctx solv z3_names form1 0 pre_free 0 1
 
 check_learn1 ctx solv z3_names pre_free form2 1;;
 
 try_learn1 ctx solv z3_names form1 form2;;
 
-find_match1_ll ctx solv z3_names form1 0 pre_free
+find_match_ll ctx solv z3_names form1 0 pre_free
 
 *)
 
