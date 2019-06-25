@@ -104,13 +104,13 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [y; (Integer.mk_numeral_i ctx size_y) ]) x)]
 		in
 		let dist_fields x size_x y size_y = Boolean.mk_implies ctx (dist_l x y) (dist_r x size_x y size_y) in				
-		let two_vars_c al sp_rule = (* create a nonequality al != x, where x is the allocated nod in sp_rule *)
+		let two_sp_preds_c al sp_rule = 
 			match sp_rule with 
-			| Hpointsto (aa, size_aa, _) ->
+			| Hpointsto (aa, size_aa, _) ->(* create a nonequality al != x, where x is the allocated node in sp_rule *)
 				Boolean.mk_and ctx 
 				[(Boolean.mk_not ctx (Boolean.mk_eq ctx al (alloc aa)));
 				(dist_fields al size (alloc aa) size_aa)]
-			| Slseg (aa,bb,_) -> 
+			| Slseg (aa,bb,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
 				Boolean.mk_or ctx 
 				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
 							( Expr.mk_app ctx func.base [al]) 
@@ -119,7 +119,7 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 		in
 		let rec create_noneq to_parse =
 			match to_parse with
-			| first:: rest -> (two_vars_c (alloc a) first) :: create_noneq rest
+			| first:: rest -> (two_sp_preds_c (alloc a) first) :: create_noneq rest
 			| [] -> []
 		in
 		(Boolean.mk_and ctx [ local_c1; local_c3]) :: create_noneq rest_preds
@@ -133,13 +133,13 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			Boolean.mk_eq ctx x y]	in
 		let two_sp_preds_c al dst sp_rule = 
 			match sp_rule with 
-			| Hpointsto (aa, _, _) ->
+			| Hpointsto (aa, _, _) -> (* base(al) != base(aa) or Slseq is empty al=dst *)
 				Boolean.mk_or ctx 
 				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
 							( Expr.mk_app ctx func.base [al]) 
 							( Expr.mk_app ctx func.base [(alloc aa)] ));
 				Boolean.mk_eq ctx al dst ]
-			| Slseg (aa,bb,_) -> 
+			| Slseg (aa,bb,_) ->(* base(al) != base(aa) or one of the Slseqs is empty al=dst \/ aa=bb *) 
 				Boolean.mk_or ctx 
 				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
 							( Expr.mk_app ctx func.base [al]) 
@@ -153,8 +153,6 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 				| first:: rest -> (two_sp_preds_c x y first) :: sp_constraints rest
 				| [] -> []
 		in
-
-		 
 		c1:: (sp_constraints rest_preds)
 
 (* Creation of the Z3 formulae for a SL formulae *)
