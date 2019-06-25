@@ -65,30 +65,44 @@ let rec to_string e =
 
 end
 
+(************************************************************
+  type definition of Formula
+ ************************************************************)
 (* pure part *)
 type pi = Exp.t list
 
-type heap_pred =
+(* lambda *)
+and lambda = {
+	param: variable list;
+	form: t;
+}
+
+and heap_pred =
   | Hpointsto of Exp.t * int * Exp.t (* bez off -> v pi / mozno interval a ine *)
+  | Slseg of Exp.t * Exp.t * lambda
   (* todo *)
 
 (* spatial part *)
-type sigma = heap_pred list
+and sigma = heap_pred list
+
+
+(** formula *)
+and t = { 
+    sigma: sigma;  (** spatial part *)
+    pi: pi;  (** pure part *)
+}
 
 let rec sigma_to_string s =
 	let pred_to_list a =
 		match a with
 		| Hpointsto (a,l,b) -> Exp.to_string a ^ " -("^ (string_of_int l) ^ ")-> " ^ Exp.to_string b
+		| Slseg (a,b,_) -> "Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", lambdaX) "
 	in
 	match s with 
 	| [] -> ""
 	| first::rest -> pred_to_list first ^ " * " ^ sigma_to_string rest
 
-(** formula *)
-type t = { 
-    sigma: sigma;  (** spatial part *)
-    pi: pi;  (** pure part *)
-}
+
 
 let to_string f =
 	let rec evars_to_string ev =
@@ -104,6 +118,8 @@ let to_string f =
 	(*"[Ex. " ^ evars_to_string f.evars ^ "] " ^*)
 	sigma_to_string f.sigma ^ pi_to_string f.pi
 
+let print_formula f =
+	print_string (to_string f)
 
 (*** FIND ALL VARIABLES IN FORMULA ***)
 (* add missing elements of list l1 to l2 *)
@@ -135,16 +151,19 @@ let rec find_vars_pi pi =
 	|first::rest -> 
 		join_list_unique (find_vars_expr first) ( find_vars_pi rest)
 
-let rec fin_vars_sigma sigma = 
+let rec find_vars_sigma sigma = 
 	match sigma with
 	| [] -> []
 	| Hpointsto (a,_, b)::rest ->
 		join_list_unique (find_vars_expr a)
-		(join_list_unique (find_vars_expr b) (fin_vars_sigma rest))
+		(join_list_unique (find_vars_expr b) (find_vars_sigma rest))
+	| Slseg (a,b,_)::rest ->
+		join_list_unique (find_vars_expr a)
+		(join_list_unique (find_vars_expr b) (find_vars_sigma rest))
 
 (* This function provides a list of all variables used in the formula form *)
 let find_vars form =
-	join_list_unique (fin_vars_sigma form.sigma) (find_vars_pi form.pi)
+	join_list_unique (find_vars_sigma form.sigma) (find_vars_pi form.pi)
 
 (**** FORMULA SIMPLIFICATION ****)
 (* Function to simplify formula by removing equivalent existential variables *)
@@ -181,15 +200,13 @@ let rec substitute_sigma var1 var2 sigma =
 	match sigma with
 		| [] -> []
 		| Hpointsto (a,l, b) ::rest ->
-			let a_new = match (a=Exp.Var var2) with 
-				| true -> Exp.Var var1
-				| false -> a
-			in
-			let b_new = match (b=Exp.Var var2) with
-				| true -> Exp.Var var1
-				| false -> b
-			in
+			let a_new = if (a=Exp.Var var2) then Exp.Var var1 else a in
+			let b_new = if (b=Exp.Var var2) then Exp.Var var1 else b in
 			Hpointsto (a_new,l,b_new) :: substitute_sigma var1 var2 rest
+		| Slseg (a,b,l) ::rest ->
+			let a_new = if (a=Exp.Var var2) then Exp.Var var1 else a in
+			let b_new = if (b=Exp.Var var2) then Exp.Var var1 else b in
+			Slseg (a_new,b_new,l) :: substitute_sigma var1 var2 rest
 
 let rec substitute_expr var1 var2 expr =
 	match expr with 
@@ -364,6 +381,19 @@ let form3 = {
           BinOp ( Peq, Var 2, Const (Ptr 0)) ]
     (*evars = [ 2;3;4 ]*)
 }
+
+let form4=
+	let lambda= {param=[1;2] ;form={
+	    sigma = [ Hpointsto (Var 1, 8, Var 2) ]; pi=[] }}
+	in
+	{
+    	    sigma = [ Hpointsto (Var 1,8, Var 2); Slseg (Var 3, Var 4, lambda) ];
+	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    		  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
+	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
+	          BinOp ( Peq, Var 1, Var 2332 );
+	          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+	}
 
 
 
