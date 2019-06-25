@@ -79,9 +79,9 @@ let create_global_restrictions ctx names_z3 =
 (*	" x-> ... * y -> ... => x!=y "/\" [base(x)= base(y) => y + size_y<=x "\/" x+size_x<=y] " *)
 
 let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
+	let alloc x=(expr_to_solver ctx func x) in
 	match sp_pred1 with
 	| Hpointsto (a, size, _) -> (		
-		let alloc x=(expr_to_solver ctx func x) in
 		(* Create "local" constraints for a single points-to *)
 		(* local_c[123] = alloc(base a) 
 				/\ len(x) >=size*)
@@ -110,6 +110,12 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 				Boolean.mk_and ctx 
 				[(Boolean.mk_not ctx (Boolean.mk_eq ctx al (alloc aa)));
 				(dist_fields al size (alloc aa) size_aa)]
+			| Slseg (aa,bb,_) -> 
+				Boolean.mk_or ctx 
+				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
+							( Expr.mk_app ctx func.base [al]) 
+							( Expr.mk_app ctx func.base [(alloc aa)] ));
+				Boolean.mk_eq ctx (alloc aa) (alloc bb) ]
 		in
 		let rec create_noneq to_parse =
 			match to_parse with
@@ -118,6 +124,38 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 		in
 		(Boolean.mk_and ctx [ local_c1; local_c3]) :: create_noneq rest_preds
 		)
+	| Slseg (a,b,_) -> 
+		let x=alloc a in
+		let y=alloc b in
+		(* alloc base(x) or x=y *)
+		let c1 = Boolean.mk_or ctx 
+			[ Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]];
+			Boolean.mk_eq ctx x y]	in
+		let two_sp_preds_c al dst sp_rule = 
+			match sp_rule with 
+			| Hpointsto (aa, _, _) ->
+				Boolean.mk_or ctx 
+				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
+							( Expr.mk_app ctx func.base [al]) 
+							( Expr.mk_app ctx func.base [(alloc aa)] ));
+				Boolean.mk_eq ctx al dst ]
+			| Slseg (aa,bb,_) -> 
+				Boolean.mk_or ctx 
+				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
+							( Expr.mk_app ctx func.base [al]) 
+							( Expr.mk_app ctx func.base [(alloc aa)] ));
+				Boolean.mk_eq ctx al dst;
+				Boolean.mk_eq ctx (alloc aa) (alloc bb) ]
+				
+		in
+		let rec sp_constraints to_parse =
+			match to_parse with
+				| first:: rest -> (two_sp_preds_c x y first) :: sp_constraints rest
+				| [] -> []
+		in
+
+		 
+		c1:: (sp_constraints rest_preds)
 
 (* Creation of the Z3 formulae for a SL formulae *)
 
