@@ -62,17 +62,6 @@ let rec expr_to_solver ctx func expr =
 	    | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (Integer.mk_sort ctx)
 	    (**| Exp.Undef -> Integer.mk_numeral_i ctx (-2) !!! This may be a problem. We may create a fresh variable for this .... *)
 
-(* Global restrictions for base/len/size functions *)
-
-let create_global_restrictions ctx names_z3 =
-	(* forall x: (x - base(x)) + len(x) = len( base(x)) *)
-	let x=Quantifier.mk_bound ctx 0 (Integer.mk_sort ctx) in
-	let l=Arithmetic.mk_add ctx [ (Arithmetic.mk_sub ctx [x;(Expr.mk_app ctx names_z3.base [x] )]); (Expr.mk_app ctx names_z3.len [x]) ] in
-	let r=Expr.mk_app ctx names_z3.len [ (Expr.mk_app ctx names_z3.base [x]) ] in
-	let eq = Boolean.mk_eq ctx l r in
-	let q=Quantifier.mk_exists ctx [(Integer.mk_sort ctx)] [ (Symbol.mk_string ctx "x")] eq 
-		(Some 1) [] [] (Some (Symbol.mk_string ctx "Q1")) (Some (Symbol.mk_string ctx "skid1")) in
-	[ Quantifier.expr_of_quantifier q]
 
 (* create conditions to guarantee SL * validity ... *)
 (*	" a-> ... => alloc(base a)  " *)
@@ -80,6 +69,11 @@ let create_global_restrictions ctx names_z3 =
 
 let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 	let alloc x=(expr_to_solver ctx func x) in
+	let base_eq x y =
+		Boolean.mk_eq ctx 
+		  (Expr.mk_app ctx func.base [x])
+		  (Expr.mk_app ctx func.base [y])
+	in
 	match sp_pred1 with
 	| Hpointsto (a, size, _) -> (		
 		(* Create "local" constraints for a single points-to *)
@@ -91,19 +85,14 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			(Expr.mk_app ctx func.len [x])
 			(Integer.mk_numeral_i ctx size)
 		in
-		(* Create constrains for two points-to *)
-		(*  x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
-		let dist_l x y =
-			Boolean.mk_eq ctx 
-			  (Expr.mk_app ctx func.base [x])
-			  (Expr.mk_app ctx func.base [y])
-		in
-		let dist_r x size_x y size_y= 
+		(* Create constrains for two space predicates *)
+		(*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
+		let no_overlap x size_x y size_y= 
 			Boolean.mk_or ctx 
 			[(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [x; (Integer.mk_numeral_i ctx size_x) ]) y);
 			(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [y; (Integer.mk_numeral_i ctx size_y) ]) x)]
 		in
-		let dist_fields x size_x y size_y = Boolean.mk_implies ctx (dist_l x y) (dist_r x size_x y size_y) in				
+		let dist_fields x size_x y size_y = Boolean.mk_implies ctx (base_eq x y) (no_overlap x size_x y size_y) in				
 		let two_sp_preds_c al sp_rule = 
 			match sp_rule with 
 			| Hpointsto (aa, size_aa, _) ->(* create a nonequality al != x, where x is the allocated node in sp_rule *)
@@ -112,14 +101,12 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 				(dist_fields al size (alloc aa) size_aa)]
 			| Slseg (aa,bb,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
 				Boolean.mk_or ctx 
-				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
-							( Expr.mk_app ctx func.base [al]) 
-							( Expr.mk_app ctx func.base [(alloc aa)] ));
+				[ Boolean.mk_not ctx (base_eq al (alloc aa));
 				Boolean.mk_eq ctx (alloc aa) (alloc bb) ]
 		in
 		let rec create_noneq to_parse =
 			match to_parse with
-			| first:: rest -> (two_sp_preds_c (alloc a) first) :: create_noneq rest
+			| first:: rest -> (two_sp_preds_c x first) :: create_noneq rest
 			| [] -> []
 		in
 		(Boolean.mk_and ctx [ local_c1; local_c3]) :: create_noneq rest_preds
@@ -135,15 +122,11 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			match sp_rule with 
 			| Hpointsto (aa, _, _) -> (* base(al) != base(aa) or Slseq is empty al=dst *)
 				Boolean.mk_or ctx 
-				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
-							( Expr.mk_app ctx func.base [al]) 
-							( Expr.mk_app ctx func.base [(alloc aa)] ));
+				[ Boolean.mk_not ctx (base_eq al (alloc aa) );
 				Boolean.mk_eq ctx al dst ]
 			| Slseg (aa,bb,_) ->(* base(al) != base(aa) or one of the Slseqs is empty al=dst \/ aa=bb *) 
 				Boolean.mk_or ctx 
-				[ Boolean.mk_not ctx (Boolean.mk_eq ctx 
-							( Expr.mk_app ctx func.base [al]) 
-							( Expr.mk_app ctx func.base [(alloc aa)] ));
+				[ Boolean.mk_not ctx (base_eq al (alloc aa) );
 				Boolean.mk_eq ctx al dst;
 				Boolean.mk_eq ctx (alloc aa) (alloc bb) ]
 				
