@@ -396,7 +396,6 @@ let form4=
 	}
 
 
-
 (* in utop type: 
    #mod_use "Formula.ml" and then you can do e.g. Formula.simplify Formula.form1 
    #load "Formula.cmo" to load compiled version

@@ -157,6 +157,36 @@ let formula_to_solver ctx form =
 	List.append pi (List.append sigma [])
 	(*List.append pi (List.append sigma global_constr)*)
 
+
+(* check the lambda within the Slseq predicates,
+   returns **true** iff the lambda satisfy the basic properties *)
+let rec check_sp_predicate ctx solv pred =
+	let z3_names=get_sl_functions_z3 ctx in
+	match pred with
+	| Slseg(_,_,lambda) ->
+		(* basic checks, there must be two parameters, which are different *)
+		if not ((List.length lambda.param) = 2) || 
+			(List.nth lambda.param 0) = (List.nth lambda.param 1) then false
+		else 
+			let lambda_z3=formula_to_solver ctx lambda.form in
+			let x=expr_to_solver ctx z3_names (Exp.Var (List.nth lambda.param 0)) in
+			let y=expr_to_solver ctx z3_names (Exp.Var (List.nth lambda.param 1)) in
+			let not_alloc_base_x = Boolean.mk_not ctx
+				(Expr.mk_app ctx z3_names.alloc [Expr.mk_app ctx z3_names.base [x]]) in
+			let not_alloc_base_y = Boolean.mk_not ctx
+				(Expr.mk_app ctx z3_names.alloc [Expr.mk_app ctx z3_names.base [y]]) in
+			(* Check that 1: labda /\ not(alloc(y) is SAT and 2: lambda => alloc(x) *)
+			(Solver.check solv (not_alloc_base_y::lambda_z3))=SATISFIABLE &&
+			(Solver.check solv (not_alloc_base_x::lambda_z3))=UNSATISFIABLE &&
+			(check_all_lambdas ctx solv lambda.form.sigma)
+	| _ -> true
+
+and check_all_lambdas ctx solv sigma =
+	match sigma with
+	| [] -> true
+	| first::rest -> (check_sp_predicate ctx solv first) && (check_all_lambdas ctx solv rest)
+
+
 (* Experiments *)
 
 (*
@@ -168,4 +198,22 @@ let z3_form1=formula_to_solver ctx form1
 
 let solv = (mk_solver ctx None)
 check solv z3_form1
+
+------------------------------------
+let form5=
+	let lambda= {param=[1;2] ;form={
+	    sigma = [ Hpointsto (Var 1, 8, Var 2); Hpointsto (Var 2, 8, Var 3) ]; pi=[] }}
+	in
+	{
+    	    sigma = [ Hpointsto (Var 1,8, Var 2); Slseg (Var 3, Var 4, lambda) ];
+	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    		  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
+	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
+	          BinOp ( Peq, Var 1, Var 2332 );
+	          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+	}
+
+check_all_lambdas ctx solv form4.sigma;;
+check_all_lambdas ctx solv form5.sigma;;
+
 *)
