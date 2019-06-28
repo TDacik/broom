@@ -121,8 +121,6 @@ let try_match ctx solv z3_names form1 form2 level =
 			| Hpointsto (a,_,b) -> (a,b) in
 		let x2,y2=match (List.nth form2.sigma i2) with 
 			| Hpointsto (a,_,b) -> (a,b) in
-		(* There is a problem in the cases, where one of the y1/y2 is Undef,
-		   We haveprobably to treat Undef in the solver as uninterpreted values *)
 		match level with
 		| 1 -> 	Apply ( { sigma=f1.sigma; pi = (BinOp ( Peq, y1,y2))::((BinOp (Peq, x1,x2))::f1.pi)},
 				f2, 
