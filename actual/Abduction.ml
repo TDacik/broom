@@ -25,18 +25,22 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 	let lhs = 
 		match (List.nth form1.sigma i1) with 
 		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) 
+		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)
 	in
 	let lhs_size =
 		match (List.nth form1.sigma i1) with 
 		| Hpointsto (_, s ,_) -> s 
+		| Slseg _ -> -1 (* we do not speak about sizes before the slseg is unfolded *)
 	in
 	let rhs = 
 		match (List.nth form2.sigma i2) with 
 		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) 
+		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)
 	in
 	let rhs_size =
 		match (List.nth form2.sigma i2) with 
 		| Hpointsto (_, s ,_) -> s 
+		| Slseg _ -> -1 (* we do not speak about sizes before the slseg is unfolded *)
 	in
 	match level with
 	| 1 ->
@@ -50,7 +54,8 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 				(Boolean.mk_and ctx (formula_to_solver ctx form2))
 			]
 		in
-		(lhs_size=rhs_size) && (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
+		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		&& (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
 	| 2 -> 
 		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form1));
@@ -62,14 +67,16 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 			]
 		in
 
-		(lhs_size=rhs_size) && ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
+		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		&& ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
 	| 3 -> 
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_eq ctx lhs rhs)
 			]
 		in
-		(lhs_size=rhs_size) && ((Solver.check solv query)=SATISFIABLE) 
+		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		&& ((Solver.check solv query)=SATISFIABLE) 
 	| _ -> false
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *) 
@@ -92,10 +99,13 @@ let find_match ctx solv z3_names form1 form2 level =
 	find_match_ll ctx solv z3_names form1 0 form2 level
 
 
-(* apply the match rule to i=(i1,i2)---i1^th pointsto on LHS and i2^th points-to on RHS,
-   find_match must be used
+(* apply the match rule to i=(i1,i2)
+   pred_type=1 --- pointsto x pointsto
+   pred_type=2 --- pointsto x Slseg
+   pred_type=3 --- Slseg x pointsto
+   pred_type=4 --- Slseg x Slseg
 *)
-let apply_match i form1 form2 =
+let apply_match i pred_type form1 form2 =
 	let nequiv a b = not (a=b) in
 	let remove k form =
 		{ pi=form.pi;
@@ -103,7 +113,13 @@ let apply_match i form1 form2 =
 	in
 	match i with
 	| (i1,i2) ->
-		(remove i1 form1), (remove i2 form2)
+		match pred_type with
+		| 1 -> 	(remove i1 form1), (remove i2 form2)
+		| 2 ->  form1, (remove i2 form2) (* Tady je treba dodat unfold SLseg *)
+		| 3 -> (remove i1 form1), form2
+		| 4 -> (remove i1 form1), (remove i2 form2) (* tady je treba dodat match slseg *)
+	
+	
 		
 
 (* Try to apply match rule. The result is:
@@ -116,7 +132,7 @@ let try_match ctx solv z3_names form1 form2 level =
 	match m with
 	| (-1,-1) -> Fail
 	| (i1,i2) ->
-		let (f1,f2)=apply_match (i1,i2) form1 form2 in
+		let (f1,f2)=apply_match (i1,i2) 1 form1 form2 in
 		let x1,y1=match (List.nth form1.sigma i1) with 
 			| Hpointsto (a,_,b) -> (a,b) in
 		let x2,y2=match (List.nth form2.sigma i2) with 
