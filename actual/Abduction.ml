@@ -105,6 +105,8 @@ let find_match ctx solv z3_names form1 form2 level =
    pred_type=3 --- Slseg x pointsto
    pred_type=4 --- Slseg x Slseg
 *)
+
+(* !!! Need to be tested, case 4 not finished ***)
 let apply_match i pred_type form1 form2 =
 	let nequiv a b = not (a=b) in
 	let remove k form =
@@ -115,8 +117,8 @@ let apply_match i pred_type form1 form2 =
 	| (i1,i2) ->
 		match pred_type with
 		| 1 -> 	(remove i1 form1), (remove i2 form2)
-		| 2 ->  form1, (remove i2 form2) (* Tady je treba dodat unfold SLseg *)
-		| 3 -> (remove i1 form1), form2
+		| 2 ->  form1, (unfold_predicate form2 i2 (find_vars form1))
+		| 3 -> (unfold_predicate form1 i1 (find_vars form2)), form2
 		| 4 -> (remove i1 form1), (remove i2 form2) (* tady je treba dodat match slseg *)
 	
 	
@@ -127,6 +129,7 @@ let apply_match i pred_type form1 form2 =
 	form2 - the RHS formula with removed matched part
 	M - the learned part
 *)
+(* Need to add support for Slseg *)
 let try_match ctx solv z3_names form1 form2 level =
 	let m=find_match ctx solv z3_names form1 form2 level in
 	match m with

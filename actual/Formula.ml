@@ -333,6 +333,35 @@ let rename_ex_variables form evars conflicts =
 	let all_vars = find_vars form in
 	rename_ex_variables_ll form all_vars evars conflicts 1 []
 
+(***** Unfold predicate *******)
+
+let unfold_predicate form pnum conflicts =
+	let confl=join_list_unique conflicts (find_vars form) in
+	let nequiv a b = not (a=b) in
+	let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
+	let mem lst x =
+		let eq y= (x=y) in
+		List.exists eq lst
+	in
+	let rec get_fresh_var s confl=
+		if (mem confl s)
+		then get_fresh_var (s+1) confl
+		else s
+	in
+	let nomem lst x = not (mem lst x) in
+	match (List.nth form.sigma pnum) with
+	| Hpointsto _ -> form
+	| Slseg (a,b,lambda) ->
+		let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
+		let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
+		let new_a = (get_fresh_var (List.nth lambda.param 0) (confl @ added_vars) ) in
+		let new_b = (get_fresh_var (new_a + 1) (new_a::(confl @ added_vars))) in
+		let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
+		let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
+		simplify 
+			{sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda)]; pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] }
+			([new_a;new_b]@added_vars)
+
 
 
 
@@ -394,6 +423,19 @@ let form4=
 	          BinOp ( Peq, Var 1, Var 2332 );
 	          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
 	}
+let form5=
+	let lambda= {param=[1;3] ;form={
+	    sigma = [ Hpointsto (Var 1, 8, Var 2); Hpointsto (Var 2, 8, Var 3)  ]; pi=[] }}
+	in
+	{
+    	    sigma = [ Hpointsto (Var 1,8, Var 2); Slseg (Var 2, Var 4, lambda) ];
+	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    		  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
+	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
+	          BinOp ( Peq, Var 1, Var 2332 );
+	          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+	}
+
 
 
 (* in utop type: 
