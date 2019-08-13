@@ -335,6 +335,29 @@ let rename_ex_variables form evars conflicts =
 
 (***** Unfold predicate *******)
 
+let rec diffbase_ll sigma x = 
+	match sigma with 
+	| [] -> []
+	| first::rest -> 
+		match first with
+		| Hpointsto (a,_,_) -> 
+			let base_x=Exp.UnOp (Base, x) in
+			let base_a=Exp.UnOp (Base, a) in
+			Exp.BinOp (Pneq,base_a,base_x) :: diffbase_ll rest x
+		| Slseg _ -> diffbase_ll rest x
+	
+(* for the Slseg(x,_,_) predicate given by the index pnum 
+   and for each Hpointsto(y,_,_) create base(x) != base(y) *)
+let diffbase form pnum =
+	match (List.nth form.sigma pnum) with
+	| Hpointsto _ -> []
+	| Slseg (x,_,_) ->
+		let nequiv a b = not (a=b) in
+		let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
+		let sigma= remove pnum form.sigma in
+		diffbase_ll sigma x
+
+
 let unfold_predicate form pnum conflicts =
 	let confl=join_list_unique conflicts (find_vars form) in
 	let nequiv a b = not (a=b) in
@@ -359,7 +382,8 @@ let unfold_predicate form pnum conflicts =
 		let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
 		let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
 		simplify 
-			{sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda)]; pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] }
+			{sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda)]; 
+			 pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum) }
 			([new_a;new_b]@added_vars)
 
 
