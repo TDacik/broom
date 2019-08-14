@@ -179,75 +179,72 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
 	else
 	let rhs = 
 		match (List.nth form2.sigma i2) with 
-		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) (* SIZE missing *)
-		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a) (* <-- this line added for compatibility, to be checked*)
+		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) (* SIZE missing *) (* RHS can be Hpointsto only *)
 	in
-	let lhs = 
-		match (List.nth form1.sigma z) with 
-		| Hpointsto (a,_, _) -> (expr_to_solver ctx z3_names a) (* SIZE missing *)
-		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a) (* <-- this line added for compatibility, to be checked*)
-	in
-	let query1= [ Boolean.mk_not ctx (
+	match (List.nth form1.sigma z) with 
+		| Slseg (a,_,_) -> (find_z ctx solv z3_names form1 (z+1) form2 i2)
+		| Hpointsto (a,_, _) -> 
+		let lhs= (expr_to_solver ctx z3_names a) in (* SIZE missing *)
+		let query1= [ Boolean.mk_not ctx (
 			Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])); 
 			(Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs));
 			(Boolean.mk_and ctx (formula_to_solver ctx form1))
 			]
-	in
-	let query2= [ Boolean.mk_not ctx (
+		in
+		let query2= [ Boolean.mk_not ctx (
 			Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])); 
 			(Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs));
 			(Boolean.mk_and ctx (formula_to_solver ctx form2))
 			]
-	in
-	if ((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE) then z
-	else find_z ctx solv z3_names form1 (z+1) form2 i2
+		in
+		if ((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE) then z
+		else find_z ctx solv z3_names form1 (z+1) form2 i2
 	
 (* check whether we can apply learn on the form2.sigma[i2].
    The result is -1: imposible
    		 0...k: the index of "z" (if level=1)
 		 -3: possible (if level=3)
 *)
-let check_learn ctx solv z3_names form1 form2 i2 level =
-	let rhs = 
-		match (List.nth form2.sigma i2) with 
-		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
-		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a) (* <-- this line added for compatibility, to be checked*)
-	in
-	(* create list of equalities between form2.sigma[i2] and all items in form1.sigma *)
-	let rec list_eq pointsto_list =
-		match pointsto_list with
-		| [] -> []
-		| first::rest ->
-			(Boolean.mk_eq ctx rhs 
-				( match first with 
-					| Hpointsto (a,_, _) -> (expr_to_solver ctx z3_names a)
-					| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)) (* <-- this line added for compatibility, to be checked*)
-			)
-			:: list_eq rest
-	in
-	let query = match (list_eq form1.sigma) with
-		| [] -> [ (Boolean.mk_and ctx (formula_to_solver ctx form1)); 
-			  (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
-		| a -> [ (Boolean.mk_not ctx (Boolean.mk_or ctx a));
-			  (Boolean.mk_and ctx (formula_to_solver ctx form1)); 
-			  (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
-	in	
-	match level with
-	| 1 -> 	if ((Solver.check solv query)=SATISFIABLE) then
-			find_z ctx solv z3_names form1 0 form2 i2	
-		else -1
-	| 3 -> if ((Solver.check solv query)=SATISFIABLE) then -3 else -1
-	| _ -> -1
+let check_learn_pointsto ctx solv z3_names form1 form2 i2 level =
+	match (List.nth form2.sigma i2) with 
+	| Slseg _ -> -1 (* Slseg is skipped, only Hpointsto is allowed in this function *)
+	| Hpointsto (a,_,_) -> 
+		let rhs = (expr_to_solver ctx z3_names a) in
+		(* create list of equalities between form2.sigma[i2] and all items in form1.sigma *)
+		let rec list_eq pointsto_list =
+			match pointsto_list with
+			| [] -> []
+			| first::rest ->
+				(Boolean.mk_eq ctx rhs 
+					( match first with 
+						| Hpointsto (a,_, _) -> (expr_to_solver ctx z3_names a)
+						| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)) (* we may add alse base(rhs) = base(a) *)
+				)
+				:: list_eq rest
+		in
+		let query = match (list_eq form1.sigma) with
+			| [] -> [ (Boolean.mk_and ctx (formula_to_solver ctx form1)); 
+				  (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
+			| a -> [ (Boolean.mk_not ctx (Boolean.mk_or ctx a));
+				  (Boolean.mk_and ctx (formula_to_solver ctx form1)); 
+				  (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
+		in	
+		match level with
+		| 1 -> 	if ((Solver.check solv query)=SATISFIABLE) then
+				find_z ctx solv z3_names form1 0 form2 i2	
+			else -1
+		| 3 -> if ((Solver.check solv query)=SATISFIABLE) then -3 else -1
+		| _ -> -1
 		
 
-(* try to apply learn1 rule *)
-let try_learn ctx solv z3_names form1 form2 level=
+(* try to apply learn1 rule for pointsto *)
+let try_learn_pointsto ctx solv z3_names form1 form2 level=
 	(* first find index of the rule on RHS, which can be learned on LHS *)
 	let rec get_index i = 
 		if (List.length form2.sigma) <= i 
 		then (-1,-1)
 		else 
-			let res=check_learn ctx solv z3_names form1 form2 i level in
+			let res=check_learn_pointsto ctx solv z3_names form1 form2 i level in
 			if res=(-1)
 			then  get_index (i+1)
 			else (res,i) (* res - index of z, i - index of x*)
@@ -303,7 +300,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	| NoFinish ->
 	(* try the particular rules *)
 	(* learn 1 *)
-	match (try_learn ctx solv z3_names form1 form2 1) with
+	match (try_learn_pointsto ctx solv z3_names form1 form2 1) with
 	| Apply (f1,f2,missing) -> 
 		print_string "Learn1, ";
 		(match biabduction ctx solv z3_names f1 f2 with
@@ -339,7 +336,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
 		)
 	| Fail ->
 	(* learn 3 *)
-	match (try_learn ctx solv z3_names form1 form2 3) with
+	match (try_learn_pointsto ctx solv z3_names form1 form2 3) with
 	| Apply (f1,f2,missing) -> 
 		print_string "Learn3, ";
 		(match biabduction ctx solv z3_names f1 f2 with
