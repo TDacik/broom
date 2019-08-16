@@ -180,6 +180,8 @@ let c_change={lhs=pre_change; rhs=post_change; cvars=[9;10;11]; pvarmap=[]}
 let c_free={lhs=Formula.pre_free; rhs=Formula.post_free; cvars=[]; pvarmap=[]};;
 let s={miss={sigma=[];pi=[]};  act=Formula.form1; lvars=[1;2]}
 
+let s1={miss={sigma=[];pi=[]};  act=Formula.form5; lvars=[1;2;4]}
+
 open Z3
 open Z3wrapper
 let cfg = [("model", "true"); ("proof", "false")]
