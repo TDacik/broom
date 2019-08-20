@@ -58,7 +58,7 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 		&& (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
 	| 2 -> 
 		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
-				(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(Boolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
 			]
 		in
@@ -71,7 +71,7 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 		&& ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
 	| 3 -> 
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
-				(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(oolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
 			]
 		in
