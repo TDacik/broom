@@ -46,11 +46,11 @@ type contract_app_res =
 let apply_contract ctx solv z3_names state c =
 	match (Abduction.biabduction ctx solv z3_names state.act c.lhs) with
 	| BFail -> CAppFail
-	| Bok  (miss, fr) ->
+	| Bok  (miss, fr, l_vars) ->
 		let missing= {pi=state.miss.pi @ miss.pi; sigma=state.miss.sigma @ miss.sigma } in
 		let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
 
-		CAppOk {miss=missing; act=actual; lvars=(state.lvars @ c.cvars)  }
+		CAppOk {miss=missing; act=actual; lvars=(state.lvars @ c.cvars @ l_vars)  }
 
 (* to avoid conflicts, we rename the contract variables, which appear in state *)
 let rec rename_contract_vars_ll state c todovars seed =

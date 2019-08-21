@@ -9,11 +9,11 @@ open Z3
 open Z3wrapper
 
 (** result of the rule application
-    form1 * form2 * M
+    form1 * form2 * M * added_local_vars
     or Fail
 **)
 type res =
-| Apply of Formula.t * Formula.t * Formula.t
+| Apply of Formula.t * Formula.t * Formula.t * int list
 | Fail
 
 (**** MATCH rules ****)
@@ -106,7 +106,7 @@ let find_match ctx solv z3_names form1 form2 level =
    pred_type=3 --- Slseg x Slseg
 *)
 type apply_match_res =
-| ApplyOK of Formula.t * Formula.t 
+| ApplyOK of Formula.t * Formula.t * int list 
 | ApplyFail
 
 
@@ -120,9 +120,11 @@ let apply_match i pred_type form1 form2 =
 	match i with
 	| (i1,i2) ->
 		match pred_type with
-		| 0 -> ApplyOK ((remove i1 form1), (remove i2 form2))
-		| 1 -> ApplyOK (form1, (unfold_predicate form2 i2 (find_vars form1)))
-		| 2 -> ApplyOK ((unfold_predicate form1 i1 (find_vars form2)), form2)
+		| 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
+		| 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 (find_vars form1) in
+			ApplyOK (form1, new_form2, new_lvars)
+		| 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 (find_vars form2) in
+			ApplyOK (new_form1, form2, new_lvars)
 		| 3 -> 
 			let y1,ls1=match (List.nth form1.sigma i1) with 
 			| Slseg (_,b,f) -> b,f in
@@ -132,17 +134,17 @@ let apply_match i pred_type form1 form2 =
 				let lhs=(remove i1 form1) in
 				let rhs_tmp=(remove i2 form2) in
 				let rhs={sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
-				ApplyOK (lhs, rhs)
+				ApplyOK (lhs, rhs, [])
 
 			else ApplyFail
 
 
 (* Try to apply match rule. The result is:
-	form1 - the LHS formula with removed matched part and added equality x=y
+1:	form1 - the LHS formula with removed matched part and added equality x=y
 	form2 - the RHS formula with removed matched part
 	M - the learned part
+2:	unfolded Slseg in form1/form2 and added equality x=y
 *)
-(* Need to add support for Slseg *)
 let try_match ctx solv z3_names form1 form2 level =
 	let m=find_match ctx solv z3_names form1 form2 level in
 	match m with
@@ -156,16 +158,18 @@ let try_match ctx solv z3_names form1 form2 level =
 			| Slseg (a,b,_) -> (a,b,1) in
 		match apply_match (i1,i2) (type1+type2) form1 form2 with
 		| ApplyFail -> Fail
-		| ApplyOK (f1,f2) ->
+		| ApplyOK (f1,f2,added_lvars) ->
 			(* y1 = y2 is added only if Hpointsto is mathced with Hpointsto *)
 			let y_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, y1,y2))] else [] in
 			match level with
 			| 1 -> 	Apply ( { sigma=f1.sigma; pi = (BinOp (Peq, x1,x2))::(y_eq @ f1.pi)},
 					f2, 
-					{sigma=[]; pi=[]})
+					{sigma=[]; pi=[]}, 
+					added_lvars)
 			| _ -> 	Apply ( { sigma=f1.sigma; pi = (BinOp (Peq, x1,x2))::(y_eq @ f1.pi)},
 					f2, 
-					{sigma=[]; pi=[(BinOp (Peq, x1,x2))]})
+					{sigma=[]; pi=[(BinOp (Peq, x1,x2))]}, 
+					added_lvars)
 
 (**** LEARN - pointsto ****)
 
@@ -258,7 +262,8 @@ let try_learn_pointsto ctx solv z3_names form1 form2 level=
 	| (-3,i2) -> (* learn with level 3 *)
 		Apply ( { sigma=form1.sigma; pi = form1.pi},
 			(remove i2 form2), 
-			{sigma=[List.nth form2.sigma i2]; pi=[]})
+			{sigma=[List.nth form2.sigma i2]; pi=[]},
+			[])
 	| (i1,i2) -> (* learn with level 1 *)
 		let y1 = 
 			match (List.nth form1.sigma i1) with 
@@ -271,7 +276,8 @@ let try_learn_pointsto ctx solv z3_names form1 form2 level=
 
 		Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
 			(remove i2 form2), 
-			{sigma=[List.nth form2.sigma i2]; pi=[]})
+			{sigma=[List.nth form2.sigma i2]; pi=[]},
+			[])
 
 (**** LEARN - Slseg ****)
 
@@ -336,7 +342,8 @@ let try_learn_slseg ctx solv z3_names form1 form2 level=
 	| -1 -> Fail
 	| i -> Apply ( { sigma=form1.sigma; pi = form1.pi},
 			(remove i form2), 
-			{sigma=[List.nth form2.sigma i]; pi=[]})
+			{sigma=[List.nth form2.sigma i]; pi=[]},
+			[])
 
 
 (* FINISH *)
@@ -353,78 +360,79 @@ let test_finish ctx solv z3_names form1 form2 =
 	else Finish {pi=form1.pi; sigma=form1.sigma} (* return FRAME, pi may be not empty --- TO be Checked *)
 
 (* main biabduction function *)
+(* The result is:  "missing, frame, added_lvars" *)
 
 type abduction_res =
-| Bok of Formula.t * Formula.t
+| Bok of Formula.t * Formula.t * int list
 | BFail
 
 let rec biabduction ctx solv z3_names form1 form2 =
 	match (test_finish ctx solv z3_names form1 form2) with
 	| FinFail -> BFail
-	| Finish frame -> print_string "Finish true, "; Bok ( {pi=[];sigma=[]} ,frame)
+	| Finish frame -> print_string "Finish true, "; Bok ( {pi=[];sigma=[]} ,frame, [])
 	| NoFinish ->
 	(* try the particular rules *)
 	(* learn 1 pointsto *)
 	match (try_learn_pointsto ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Learn1-Pointsto, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars )
 		)
 	| Fail ->
 	(* learn 1 slseg *)
 	match (try_learn_slseg ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Learn1-Slseg, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
 	| Fail ->
 	(* match 1 *)
 	match (try_match ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Match1, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
 	| Fail ->
 	(* match 2 *)
 	match (try_match ctx solv z3_names form1 form2 2) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Match2, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
 	| Fail ->
 	(* match 3 *)
 	match (try_match ctx solv z3_names form1 form2 3) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Match3, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
 	| Fail ->
 	(* learn 3 -pointsto *)
 	match (try_learn_pointsto ctx solv z3_names form1 form2 3) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Learn3-Pointsto, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
 	| Fail ->
 	(* learn 2 - slseg *)
 	match (try_learn_slseg ctx solv z3_names form1 form2 2) with
-	| Apply (f1,f2,missing) -> 
+	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Learn3-Slseg, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
-		| Bok (miss,fr)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr)
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
 	| Fail ->
 

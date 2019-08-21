@@ -373,7 +373,7 @@ let unfold_predicate form pnum conflicts =
 	in
 	let nomem lst x = not (mem lst x) in
 	match (List.nth form.sigma pnum) with
-	| Hpointsto _ -> form
+	| Hpointsto _ -> form,[]
 	| Slseg (a,b,lambda) ->
 		let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
 		let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
@@ -381,10 +381,13 @@ let unfold_predicate form pnum conflicts =
 		let new_b = (get_fresh_var (new_a + 1) (new_a::(confl @ added_vars))) in
 		let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
 		let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
-		simplify 
+		let res_form=simplify 
 			{sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda)]; 
 			 pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum) }
-			([new_a;new_b]@added_vars)
+			([new_a;new_b]@added_vars) in
+		(* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)
+		let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
+		res_form, new_lvars
 
 
 
