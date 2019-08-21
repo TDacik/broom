@@ -31,7 +31,7 @@ module Exp = struct
    
 let const_to_string c=
 	match c with
-	| Ptr a -> ">" ^ string_of_int a
+	| Ptr a -> "Ptr:" ^ string_of_int a
 	| Int a -> string_of_int a
 	| Bool a -> "B" ^  string_of_bool a
 	| String a -> a
@@ -457,7 +457,7 @@ let form5=
     		  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
 	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
 	          BinOp ( Peq, Var 1, Var 2332 );
-	          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+	          BinOp ( Peq, Var 4, Const (Ptr 0)) ]
 	}
 
 

@@ -154,7 +154,11 @@ let formula_to_solver ctx form =
 	let names_z3=get_sl_functions_z3 ctx in
 	let pi= pi_to_solver ctx names_z3 form.pi in
 	let sigma= sigma_to_solver ctx names_z3 form.sigma in
-	List.append pi (List.append sigma [])
+	let null_not_alloc=Boolean.mk_not ctx (Expr.mk_app ctx names_z3.alloc [Integer.mk_numeral_i ctx 0]) in
+	let base0=Boolean.mk_eq ctx 
+		(Integer.mk_numeral_i ctx 0)
+		(Expr.mk_app ctx names_z3.base [Integer.mk_numeral_i ctx 0]) in
+	List.append pi (List.append sigma [null_not_alloc; base0])
 	(*List.append pi (List.append sigma global_constr)*)
 
 
