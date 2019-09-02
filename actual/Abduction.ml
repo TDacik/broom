@@ -56,7 +56,16 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 		in
 		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
 		&& (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
-	| 2 -> 
+	| 2 ->
+		let query = 
+			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
+				(Boolean.mk_and ctx (formula_to_solver ctx form1));
+				(Boolean.mk_and ctx (formula_to_solver ctx form2))
+			]
+		in
+		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		&& ((Solver.check solv query)=UNSATISFIABLE)
+	| 3 -> 
 		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
@@ -69,7 +78,7 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 
 		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
 		&& ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
-	| 3 -> 
+	| 4 -> 
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
@@ -372,24 +381,6 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	| Finish frame -> print_string "Finish true, "; Bok ( {pi=[];sigma=[]} ,frame, [])
 	| NoFinish ->
 	(* try the particular rules *)
-	(* learn 1 pointsto *)
-	match (try_learn_pointsto ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Learn1-Pointsto, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars )
-		)
-	| Fail ->
-	(* learn 1 slseg *)
-	match (try_learn_slseg ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Learn1-Slseg, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
 	(* match 1 *)
 	match (try_match ctx solv z3_names form1 form2 1) with
 	| Apply (f1,f2,missing,n_lvars) -> 
@@ -412,6 +403,33 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	match (try_match ctx solv z3_names form1 form2 3) with
 	| Apply (f1,f2,missing,n_lvars) -> 
 		print_string "Match3, ";
+		(match biabduction ctx solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
+		)
+	| Fail ->
+	(* learn 1 pointsto *)
+	match (try_learn_pointsto ctx solv z3_names form1 form2 1) with
+	| Apply (f1,f2,missing,n_lvars) -> 
+		print_string "Learn1-Pointsto, ";
+		(match biabduction ctx solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars )
+		)
+	| Fail ->
+	(* learn 1 slseg *)
+	match (try_learn_slseg ctx solv z3_names form1 form2 1) with
+	| Apply (f1,f2,missing,n_lvars) -> 
+		print_string "Learn1-Slseg, ";
+		(match biabduction ctx solv z3_names f1 f2 with
+		| BFail -> BFail
+		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
+		)
+	| Fail ->
+	(* match 4 *)
+	match (try_match ctx solv z3_names form1 form2 4) with
+	| Apply (f1,f2,missing,n_lvars) -> 
+		print_string "Match4, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)

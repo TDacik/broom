@@ -456,8 +456,7 @@ let form5=
 	in
 	{
     	    sigma = [ Hpointsto (Var 1,8, Var 2); Slseg (Var 2, Var 4, lambda) ];
-	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    		  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
+	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));  
 	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
 	          BinOp ( Peq, Var 1, Var 2332 );
 	          BinOp ( Peq, Var 4, Const (Ptr 0)) ]
