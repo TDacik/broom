@@ -377,84 +377,46 @@ type abduction_res =
 
 let rec biabduction ctx solv z3_names form1 form2 =
 	match (test_finish ctx solv z3_names form1 form2) with
-	| FinFail -> BFail
+	| FinFail -> 
+		print_string "Finish fail"; BFail
 	| Finish frame -> print_string "Finish true, "; Bok ( {pi=[];sigma=[]} ,frame, [])
 	| NoFinish ->
-	(* try the particular rules *)
-	(* match 1 *)
-	match (try_match ctx solv z3_names form1 form2 1) with
+	(* Here is a given list of possible rules and the order in which they are going to be applied *)
+	let rules=[
+		(try_match,1,"Match1");
+		(try_match,2,"Match2");
+		(try_match,3,"Match3");
+		(try_learn_pointsto,1,"Learn1-Pointsto");
+		(try_learn_slseg,1,"Learn1-Slseg");
+		(try_match,4,"Match4");
+		(try_learn_pointsto,3,"Learn3-Pointsto");
+		(try_learn_slseg,2,"Learn2-Slseg")
+	] in
+	(* try the rules till an applicable if founded *)
+	let rec try_rules todo=
+		match todo with
+		| (func_name,rule_arg,rule_name) :: rest -> 
+			(match (func_name ctx solv z3_names form1 form2 rule_arg) with
+			| Apply (f1,f2,missing,n_lvars) -> 
+				print_string (rule_name ^", ");
+				Apply (f1,f2,missing,n_lvars)
+			| Fail ->
+				try_rules rest
+			)
+		| [] -> Fail
+	in
+	match try_rules rules with
 	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Match1, ";
 		(match biabduction ctx solv z3_names f1 f2 with
 		| BFail -> BFail
 		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
 		)
-	| Fail ->
-	(* match 2 *)
-	match (try_match ctx solv z3_names form1 form2 2) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Match2, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
-	(* match 3 *)
-	match (try_match ctx solv z3_names form1 form2 3) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Match3, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
-	(* learn 1 pointsto *)
-	match (try_learn_pointsto ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Learn1-Pointsto, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars )
-		)
-	| Fail ->
-	(* learn 1 slseg *)
-	match (try_learn_slseg ctx solv z3_names form1 form2 1) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Learn1-Slseg, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
-	(* match 4 *)
-	match (try_match ctx solv z3_names form1 form2 4) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Match4, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
-	(* learn 3 -pointsto *)
-	match (try_learn_pointsto ctx solv z3_names form1 form2 3) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Learn3-Pointsto, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
-	(* learn 2 - slseg *)
-	match (try_learn_slseg ctx solv z3_names form1 form2 2) with
-	| Apply (f1,f2,missing,n_lvars) -> 
-		print_string "Learn3-Slseg, ";
-		(match biabduction ctx solv z3_names f1 f2 with
-		| BFail -> BFail
-		| Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
-		)
-	| Fail ->
+	| Fail -> 
+		print_string "No applicable rule"; BFail
+	
 
-		BFail
+
+
 
 (*  Experiments
 let cfg = [("model", "true"); ("proof", "false")]
