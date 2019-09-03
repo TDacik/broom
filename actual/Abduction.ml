@@ -355,18 +355,18 @@ let try_learn_slseg ctx solv z3_names form1 form2 level=
 			[])
 
 
-(* FINISH *)
-type finish_res =
+(* Test SAT of (form1 /\ form2) and check finish *)
+type sat_test_res =
 | Finish of Formula.t
 | NoFinish
-| FinFail
+| SatFail
 
-let test_finish ctx solv z3_names form1 form2 =
-	if (List.length form2.sigma)>0 then NoFinish
-	else
+let test_sat ctx solv z3_names form1 form2 =
 	let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
-	if (Solver.check solv query)=UNSATISFIABLE then FinFail
-	else Finish {pi=form1.pi; sigma=form1.sigma} (* return FRAME, pi may be not empty --- TO be Checked *)
+	if (Solver.check solv query)=UNSATISFIABLE then SatFail
+	else
+	if (List.length form2.sigma)>0 then NoFinish
+	else Finish {pi=form1.pi; sigma=form1.sigma} (* return FRAME, pi may be not empty --- To be Checked *)
 
 (* main biabduction function *)
 (* The result is:  "missing, frame, added_lvars" *)
@@ -376,9 +376,13 @@ type abduction_res =
 | BFail
 
 let rec biabduction ctx solv z3_names form1 form2 =
-	match (test_finish ctx solv z3_names form1 form2) with
-	| FinFail -> 
-		print_string "Finish fail"; BFail
+	(* First test SAT of form1 and form2. 
+	   Postponing SAT to the end of biabduction may lead to hidden conflicts.
+	   The conflicts may be removed by application of a match rule.
+	 *)
+	match (test_sat ctx solv z3_names form1 form2) with
+	| SatFail -> 
+		print_string "SAT fail"; BFail
 	| Finish frame -> print_string "Finish true, "; Bok ( {pi=[];sigma=[]} ,frame, [])
 	| NoFinish ->
 	(* Here is a given list of possible rules and the order in which they are going to be applied *)

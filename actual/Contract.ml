@@ -189,7 +189,12 @@ let ctx = (mk_context cfg)
 let solv = (Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
 
+--------------------------------------------------
 
+let tmp=match contract_application ctx solv z3_names s1 c_move with
+| CAppOk x -> x;;
+
+let s2=simplify tmp;;
 
 
 *)
