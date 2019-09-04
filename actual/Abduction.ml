@@ -394,7 +394,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
 		(try_learn_slseg,1,"Learn1-Slseg");
 		(try_match,4,"Match4");
 		(try_learn_pointsto,3,"Learn3-Pointsto");
-		(try_learn_slseg,2,"Learn2-Slseg")
+		(try_learn_slseg,2,"Learn3-Slseg")
 	] in
 	(* try the rules till an applicable if founded *)
 	let rec try_rules todo=
