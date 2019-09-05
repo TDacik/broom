@@ -22,25 +22,35 @@ type res =
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
 let check_match ctx solv z3_names form1 i1 form2 i2 level =
 
-	let lhs = 
+	let lhs_ll,flag_l = 
 		match (List.nth form1.sigma i1) with 
-		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) 
-		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a),0
+		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a),1
 	in
 	let lhs_size =
 		match (List.nth form1.sigma i1) with 
 		| Hpointsto (_, s ,_) -> s 
 		| Slseg _ -> -1 (* we do not speak about sizes before the slseg is unfolded *)
 	in
-	let rhs = 
+	let rhs_ll,flag_r = 
 		match (List.nth form2.sigma i2) with 
-		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a) 
-		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a),0
+		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a),1
 	in
 	let rhs_size =
 		match (List.nth form2.sigma i2) with 
 		| Hpointsto (_, s ,_) -> s 
 		| Slseg _ -> -1 (* we do not speak about sizes before the slseg is unfolded *)
+	in
+	(* Note that if one site contains list segment and the other one points-to then we compare bases
+	   within the SMT queries *)
+	let lhs=if (flag_l+flag_r)=1
+		then (Expr.mk_app ctx z3_names.base [lhs_ll])
+		else lhs_ll
+	in
+	let rhs=if (flag_l+flag_r)=1 
+		then (Expr.mk_app ctx z3_names.base [rhs_ll])
+		else rhs_ll
 	in
 	match level with
 	| 1 ->
