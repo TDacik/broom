@@ -429,7 +429,52 @@ let rec biabduction ctx solv z3_names form1 form2 =
 		print_string "No applicable rule"; BFail
 	
 
+(* check entailment using match1 rules *)
 
+type entailment_slseg_remove =
+| RemOk of Formula.pi
+| RemFail
+
+let rec check_entailment_finish ctx solv z3_names form1 form2 evars=
+	if (List.length form1.sigma)>0 then -1
+	else
+	let rec remove_slseg_form2 f2 = 
+		match f2.sigma with
+		| [] -> RemOk f2.pi
+		| Hpointsto _ :: _ -> RemFail
+		| Slseg (a,b,_) :: rest ->
+			match (remove_slseg_form2 {pi=f2.pi; sigma=rest}) with
+			| RemFail -> RemFail
+			| RemOk f2_new -> RemOk (Exp.BinOp ( Peq, a, b):: f2_new)
+	in	
+	match (remove_slseg_form2 form2) with
+	| RemFail -> 0
+	| RemOk x -> 
+		(* Form 1 and form2 contains only pure parts. We can check implication. *)
+		(* !!! TODO: here one should existentially quantify all evars in form1 and form2 *)
+		let query = (Boolean.mk_not ctx (Boolean.mk_and ctx (formula_to_solver ctx {pi=x; sigma=[]}))) 
+			:: (formula_to_solver ctx form1)
+		in
+		if (Solver.check solv query)=UNSATISFIABLE then 1
+		else 0
+
+let rec entailment_ll ctx solv z3_names form1 form2 evars=
+(* check entailment between form1 and form2 using match1 rules *)
+	match (check_entailment_finish ctx solv z3_names form1 form2 evars) with
+	| 0 -> false
+	| 1 -> true
+	| -1 ->
+		match (try_match ctx solv z3_names form1 form2 1) with
+			| Apply (f1,f2,_,_) -> 
+				print_string "Match, ";
+				(entailment_ll ctx solv z3_names f1 f2 evars)
+			| Fail -> false
+
+let rec entailment ctx solv z3_names form1 form2 evars=
+	(* TODO: we have to rename variables to get disjoint list of evars in both sites *)
+	let query=(formula_to_solver ctx form1) @ (formula_to_solver ctx form2) in
+	(Solver.check solv query)=SATISFIABLE && (entailment_ll ctx solv z3_names form1 form2 evars)
+	
 
 
 (*  Experiments
