@@ -365,6 +365,7 @@ let try_learn_slseg ctx solv z3_names form1 form2 level=
 			[])
 
 
+(****************************************************)
 (* Test SAT of (form1 /\ form2) and check finish *)
 type sat_test_res =
 | Finish of Formula.t
@@ -429,6 +430,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
 		print_string "No applicable rule"; BFail
 	
 
+(****************************************************)
 (* check entailment using match1 rules *)
 
 type entailment_slseg_remove =
@@ -438,6 +440,7 @@ type entailment_slseg_remove =
 let rec check_entailment_finish ctx solv z3_names form1 form2 evars=
 	if (List.length form1.sigma)>0 then -1
 	else
+	(* First all Slseg(x,y,_) are replaced by x=y --- i.e. empty list *)
 	let rec remove_slseg_form2 f2 = 
 		match f2.sigma with
 		| [] -> RemOk f2.pi
@@ -450,11 +453,20 @@ let rec check_entailment_finish ctx solv z3_names form1 form2 evars=
 	match (remove_slseg_form2 form2) with
 	| RemFail -> 0
 	| RemOk x -> 
-		(* Form 1 and form2 contains only pure parts. We can check implication. *)
-		(* !!! TODO: here one should existentially quantify all evars in form1 and form2 *)
-		let query = (Boolean.mk_not ctx (Boolean.mk_and ctx (formula_to_solver ctx {pi=x; sigma=[]}))) 
-			:: (formula_to_solver ctx form1)
-		in
+		(* form1 and form2(= x) contains now only pure parts. We want to check implication:
+		   (\ex. evars form1) -> (\ex. evars form2) 
+		  In the implementation, we are checking UNSAT of [ form1 /\ not (\ex. evars form2) ]
+		*)
+		
+		let get_z3_cons a=Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (Arithmetic.Integer.mk_sort ctx) in
+		let evars_z3=List.map get_z3_cons evars in
+		let f2=Boolean.mk_and ctx (formula_to_solver ctx {pi=x; sigma=[]}) in
+		let f2_q=match evars_z3 with
+			| [] -> f2
+			| ev -> Quantifier.expr_of_quantifier
+				(Quantifier.mk_exists_const ctx ev f2 (Some 1) [] [] 
+				(Some (Symbol.mk_string ctx "Q1")) (Some (Symbol.mk_string ctx "skid1"))) in
+		let query = (Boolean.mk_not ctx f2_q) :: (formula_to_solver ctx form1) in
 		if (Solver.check solv query)=UNSATISFIABLE then 1
 		else 0
 
@@ -471,9 +483,17 @@ let rec entailment_ll ctx solv z3_names form1 form2 evars=
 			| Fail -> false
 
 let rec entailment ctx solv z3_names form1 form2 evars=
-	(* TODO: we have to rename variables to get disjoint list of evars in both sites *)
-	let query=(formula_to_solver ctx form1) @ (formula_to_solver ctx form2) in
-	(Solver.check solv query)=SATISFIABLE && (entailment_ll ctx solv z3_names form1 form2 evars)
+	(* get fresh names for the evars to avoid conflicts in the entailment query *)
+	let conflicts1=find_vars form1 in
+	let form2_rename,evars2=match (rename_ex_variables form2 evars conflicts1) with 
+		| f -> f
+	in
+	let conflicts2=find_vars form2_rename in
+	let form1_rename,evars1=match (rename_ex_variables form1 evars conflicts2) with 
+		| f -> f
+	in
+	let query=(formula_to_solver ctx form1_rename) @ (formula_to_solver ctx form2_rename) in
+	(Solver.check solv query)=SATISFIABLE && (entailment_ll ctx solv z3_names form1_rename form2_rename (evars@evars1@evars2))
 	
 
 
