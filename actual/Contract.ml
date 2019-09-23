@@ -9,6 +9,7 @@
 
 open State
 open Formula
+open Z3wrapper
 
 (** contract *)
 type contract = { 
@@ -100,11 +101,12 @@ let rec rename_contract_vars_ll state c todovars seed =
 
 exception State_lhs_contains_forbidden_vars
 
-(* for each tuple (a,b) \in pvarmap 
+(* RENAMING AFTER CONTRACT APPLICATION
+   for each tuple (a,b) \in pvarmap 
   * rename all occurences of a by a fresh lvar
   * rename all occurences of b by a
 *)
-let rec post_contract_application state pvarmap seed=
+let rec post_contract_application_vars state pvarmap seed=
 	let mem l x =
 		let eq y= (x=y) in
 		List.exists eq l
@@ -131,9 +133,69 @@ let rec post_contract_application state pvarmap seed=
 					miss= state.miss;
 					lvars=new_lvars @ [new_var];
 				} in
-			(post_contract_application new_state rest (new_var+1))
+			(post_contract_application_vars new_state rest (new_var+1))
+
+(* REMOVE THE FREED PARTS *)
+
+exception Conflict_between_freed_and_slseg
+
+let remove_freed_parts ctx solv z3_names form =
+	let rec get_freed pure =
+		match pure with
+		| [] -> []
+		| first:: rest ->
+			match first with
+			| Exp.UnOp (Freed,a) -> a:: (get_freed rest)
+			| _ -> get_freed rest
+	in
+	let rec cut_freed pure =
+		match pure with
+		| [] -> []
+		| first:: rest ->
+			match first with
+			| Exp.UnOp (Freed,a) ->  cut_freed rest
+			| _ -> first :: (cut_freed rest)
+	in
+	let form_z3=formula_to_solver ctx {sigma=form.sigma; pi=cut_freed form.pi} in
+	let check_eq_base_ll a base =
+		let query=Boolean.mk_not ctx 
+			(Boolean.mk_eq ctx 
+				(expr_to_solver ctx z3_names base) 
+				(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names a)])
+			)
+			:: form_z3
+		in
+		(Solver.check solv query)=UNSATISFIABLE
+	in
+	let rec check_eq_base a base_list =
+		match base_list with
+		| [] -> false
+		| first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
+	in
+	let rec cut_spatial sp base_list=
+		match sp with
+		| [] -> []
+		| Hpointsto (a,b,c) :: rest ->
+			if (check_eq_base a base_list)
+			then (cut_spatial rest base_list)
+			else Hpointsto (a,b,c) ::(cut_spatial rest base_list)
+		| Slseg (a,b,c) :: rest ->
+			if (check_eq_base a base_list)
+			then raise Conflict_between_freed_and_slseg
+			else Slseg (a,b,c) ::(cut_spatial rest base_list)
+			
+	in
+
+	{sigma=(cut_spatial form.sigma (get_freed form.pi)) ; pi=form.pi}
 
 
+(* after contract application do the following thing
+  1: rename variables according to pvarmap
+  2: for each freed(x) predicate in pure part remove the spatial predicates with the equal base
+*)
+let post_contract_application state ctx solv z3_names pvarmap =
+	let step1=post_contract_application_vars state pvarmap 1 in
+	{miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=step1.lvars}
 
 (* Do
   1) rename conflicting contract variables, 2) apply the contract using biabduction, 3) apply post contract renaming *)
@@ -142,7 +204,7 @@ let contract_application ctx solv z3_names state c =
 	match (apply_contract ctx solv z3_names state c_rename) with
 	| CAppFail -> CAppFail
 	| CAppOk s_applied -> 
-		CAppOk (post_contract_application s_applied c_rename.pvarmap 1)
+		CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap)
 
 (********************************************)
 (* Experiments *)
