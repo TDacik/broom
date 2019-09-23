@@ -9,6 +9,7 @@
 
 open State
 open Formula
+open Z3
 open Z3wrapper
 
 (** contract *)
