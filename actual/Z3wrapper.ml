@@ -78,9 +78,13 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 	| Hpointsto (a, size, _) -> (		
 		(* Create "local" constraints for a single points-to *)
 		(* local_c[123] = alloc(base a) 
+				/\ base(x) = base(base(x))
 				/\ len(x) >=size*)
 		let x=alloc a in
 		let local_c1= Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]] in
+		let local_c2= Boolean.mk_eq ctx 
+				(Expr.mk_app ctx func.base [x]) 
+				(Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x])]) in
 		let local_c3 = Arithmetic.mk_ge ctx
 			(Expr.mk_app ctx func.len [x])
 			(Integer.mk_numeral_i ctx size)
@@ -109,8 +113,7 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			| first:: rest -> (two_sp_preds_c x first) :: create_noneq rest
 			| [] -> []
 		in
-		(Boolean.mk_and ctx [ local_c1; local_c3]) :: create_noneq rest_preds
-		)
+		(Boolean.mk_and ctx [ local_c1; local_c2; local_c3]) :: create_noneq rest_preds) 
 	| Slseg (a,b,_) -> 
 		let x=alloc a in
 		let y=alloc b in
@@ -118,6 +121,9 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 		let c1 = Boolean.mk_or ctx 
 			[ Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]];
 			Boolean.mk_eq ctx x y]	in
+		let c2= Boolean.mk_eq ctx 
+				(Expr.mk_app ctx func.base [x]) 
+				(Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x])]) in			
 		let two_sp_preds_c al dst sp_rule = 
 			match sp_rule with 
 			| Hpointsto (aa, _, _) -> (* base(al) != base(aa) or Slseq is empty al=dst *)
@@ -136,7 +142,7 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 				| first:: rest -> (two_sp_preds_c x y first) :: sp_constraints rest
 				| [] -> []
 		in
-		c1:: (sp_constraints rest_preds)
+		[c1;c2] @ (sp_constraints rest_preds)
 
 (* Creation of the Z3 formulae for a SL formulae *)
 

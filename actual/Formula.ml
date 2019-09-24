@@ -375,10 +375,11 @@ let unfold_predicate form pnum conflicts =
 	match (List.nth form.sigma pnum) with
 	| Hpointsto _ -> form,[]
 	| Slseg (a,b,lambda) ->
+		let confl1=confl @ (find_vars lambda.form) in
 		let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
 		let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
-		let new_a = (get_fresh_var (List.nth lambda.param 0) (confl @ added_vars) ) in
-		let new_b = (get_fresh_var (new_a + 1) (new_a::(confl @ added_vars))) in
+		let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
+		let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
 		let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
 		let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
 		let res_form=simplify 
