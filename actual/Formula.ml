@@ -78,8 +78,8 @@ and lambda = {
 }
 
 and heap_pred =
-  | Hpointsto of Exp.t * int * Exp.t (* bez off -> v pi / mozno interval a ine *)
-  | Slseg of Exp.t * Exp.t * lambda
+  | Hpointsto of Exp.t * Exp.t * Exp.t (* source, size_of_field, destination *)
+  | Slseg of Exp.t * Exp.t * lambda    (* source, destination, lambda *)
   (* todo *)
 
 (* spatial part *)
@@ -95,7 +95,7 @@ and t = {
 let rec sigma_to_string s =
 	let pred_to_list a =
 		match a with
-		| Hpointsto (a,l,b) -> Exp.to_string a ^ " -("^ (string_of_int l) ^ ")-> " ^ Exp.to_string b
+		| Hpointsto (a,l,b) -> Exp.to_string a ^ " -("^ (Exp.to_string l) ^ ")-> " ^ Exp.to_string b
 		| Slseg (a,b,_) -> "Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", lambdaX) "
 	in
 	match s with 
@@ -395,8 +395,10 @@ let unfold_predicate form pnum conflicts =
 
 (******** EXPERIMENTS *******)
 
+let ptr_size=Exp.Const (Int 8)
+
 let form1 = {
-    sigma = [ Hpointsto (Var 1, 8, Var 2) ];
+    sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ];
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
           BinOp ( Peq, Var 1, Var 2332 );
@@ -409,7 +411,7 @@ let form1 = {
 (*to_string form1*)
 
 let pre_free = {
-    sigma = [ Hpointsto (Var 2332,8, Undef) ];
+    sigma = [ Hpointsto (Var 2332,ptr_size, Undef) ];
     pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)) ]
     (*evars = []*)
 }
@@ -421,7 +423,7 @@ let post_free = {
 }
 
 let form2 = {
-    sigma = [ Hpointsto (Var 1,8, Var 2); Hpointsto(Var 3, 8, Var 4) ];
+    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(Var 3, ptr_size, Var 4) ];
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
     	  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
@@ -431,7 +433,7 @@ let form2 = {
 }
 
 let form3 = {
-    sigma = [ Hpointsto (Var 1, 8, Var 2); Hpointsto(Var 3, 8, Var 4) ];
+    sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto(Var 3, ptr_size, Var 4) ];
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
           BinOp ( Peq, Var 1, Var 2332 );
@@ -441,10 +443,10 @@ let form3 = {
 
 let form4=
 	let lambda= {param=[1;2] ;form={
-	    sigma = [ Hpointsto (Var 1, 8, Var 2) ]; pi=[] }}
+	    sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[] }}
 	in
 	{
-    	    sigma = [ Hpointsto (Var 1,8, Var 2); Slseg (Var 3, Var 4, lambda) ];
+    	    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Slseg (Var 3, Var 4, lambda) ];
 	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
     		  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
 	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
@@ -453,10 +455,10 @@ let form4=
 	}
 let form5=
 	let lambda= {param=[1;3] ;form={
-	    sigma = [ Hpointsto (Var 1, 8, Var 2); Hpointsto (Var 2, 8, Var 3)  ]; pi=[] }}
+	    sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (Var 2, ptr_size, Var 3)  ]; pi=[] }}
 	in
 	{
-    	    sigma = [ Hpointsto (Var 1,8, Var 2); Slseg (Var 2, Var 4, lambda) ];
+    	    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Slseg (Var 2, Var 4, lambda) ];
 	    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));  
 	          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
 	          BinOp ( Peq, Var 1, Var 2332 );

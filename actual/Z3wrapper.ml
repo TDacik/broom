@@ -87,14 +87,14 @@ let rec spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 				(Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x])]) in
 		let local_c3 = Arithmetic.mk_ge ctx
 			(Expr.mk_app ctx func.len [x])
-			(Integer.mk_numeral_i ctx size)
+			(expr_to_solver ctx func size)
 		in
 		(* Create constrains for two space predicates *)
 		(*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
 		let no_overlap x size_x y size_y= 
 			Boolean.mk_or ctx 
-			[(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [x; (Integer.mk_numeral_i ctx size_x) ]) y);
-			(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [y; (Integer.mk_numeral_i ctx size_y) ]) x)]
+			[(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [x; (expr_to_solver ctx func size_x) ]) y);
+			(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [y; (expr_to_solver ctx func size_y) ]) x)]
 		in
 		let dist_fields x size_x y size_y = Boolean.mk_implies ctx (base_eq x y) (no_overlap x size_x y size_y) in				
 		let two_sp_preds_c al sp_rule = 

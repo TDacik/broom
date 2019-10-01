@@ -21,7 +21,7 @@ type res =
 
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
 let check_match ctx solv z3_names form1 i1 form2 i2 level =
-
+	let ff = Boolean.mk_false ctx in
 	let lhs_ll,flag_l = 
 		match (List.nth form1.sigma i1) with 
 		| Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a),0
@@ -29,8 +29,8 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 	in
 	let lhs_size =
 		match (List.nth form1.sigma i1) with 
-		| Hpointsto (_, s ,_) -> s 
-		| Slseg _ -> -1 (* we do not speak about sizes before the slseg is unfolded *)
+		| Hpointsto (_, s ,_) -> (expr_to_solver ctx z3_names s) 
+		| Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
 	in
 	let rhs_ll,flag_r = 
 		match (List.nth form2.sigma i2) with 
@@ -39,8 +39,8 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 	in
 	let rhs_size =
 		match (List.nth form2.sigma i2) with 
-		| Hpointsto (_, s ,_) -> s 
-		| Slseg _ -> -1 (* we do not speak about sizes before the slseg is unfolded *)
+		| Hpointsto (_, s ,_) -> (expr_to_solver ctx z3_names s) 
+		| Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
 	in
 	(* Note that if one site contains list segment and the other one points-to then we compare bases
 	   within the SMT queries *)
@@ -54,6 +54,17 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 	in
 	match level with
 	| 1 ->
+		let query_size = 
+			if ((lhs_size=ff)||(rhs_size=ff)) then true
+			else
+				let qq =[
+					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
+					Boolean.mk_or ctx
+						[(Boolean.mk_and ctx (formula_to_solver ctx form1));
+						(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+				] in
+			(Solver.check solv qq)=UNSATISFIABLE
+		in
 		let query1 = 
 			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
 				(Boolean.mk_and ctx (formula_to_solver ctx form1))
@@ -64,18 +75,40 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 				(Boolean.mk_and ctx (formula_to_solver ctx form2))
 			]
 		in
-		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		query_size
 		&& (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
 	| 2 ->
+		let query_size = 
+			if ((lhs_size=ff)||(rhs_size=ff)) then true
+			else
+				let qq =[
+					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
+					(Boolean.mk_and ctx (formula_to_solver ctx form1));
+					(Boolean.mk_and ctx (formula_to_solver ctx form1))
+				] in
+			(Solver.check solv qq)=UNSATISFIABLE
+		in
 		let query = 
 			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
 				(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2))
 			]
 		in
-		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		query_size
 		&& ((Solver.check solv query)=UNSATISFIABLE)
 	| 3 -> 
+		let query_size = 
+			if ((lhs_size=ff)||(rhs_size=ff)) then true
+			else
+				let qq =[
+					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
+					Boolean.mk_or ctx
+						[(Boolean.mk_and ctx (formula_to_solver ctx form1));
+						(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+				] in
+			(Solver.check solv qq)=UNSATISFIABLE
+		in
+
 		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
@@ -85,17 +118,25 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 				(Boolean.mk_and ctx (formula_to_solver ctx form1))
 			]
 		in
-
-		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
+		query_size
 		&& ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
 	| 4 -> 
+		let query_size = 
+			if ((lhs_size=ff)||(rhs_size=ff)) then true
+			else
+				let qq =[
+					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
+					(Boolean.mk_and ctx (formula_to_solver ctx form1));
+					(Boolean.mk_and ctx (formula_to_solver ctx form1))
+				] in
+			(Solver.check solv qq)=UNSATISFIABLE
+		in
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
 			]
 		in
-		((lhs_size=rhs_size)||(lhs_size=(-1))||(rhs_size=(-1)))
-		&& ((Solver.check solv query)=SATISFIABLE) 
+		query_size && ((Solver.check solv query)=SATISFIABLE) 
 	| _ -> false
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *) 
