@@ -57,13 +57,15 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 		let query_size = 
 			if ((lhs_size=ff)||(rhs_size=ff)) then true
 			else
-				let qq =[
+				let qq1 =[
 					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-					Boolean.mk_or ctx
-						[(Boolean.mk_and ctx (formula_to_solver ctx form1));
-						(Boolean.mk_and ctx (formula_to_solver ctx form1))]
-				] in
-			(Solver.check solv qq)=UNSATISFIABLE
+						(Boolean.mk_and ctx (formula_to_solver ctx form1)) ] 
+				in
+				let qq2 =[
+					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
+						(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+				in
+			((Solver.check solv qq1)=UNSATISFIABLE) || ((Solver.check solv qq2)=UNSATISFIABLE)
 		in
 		let query1 = 
 			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
@@ -84,7 +86,7 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 				let qq =[
 					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
 					(Boolean.mk_and ctx (formula_to_solver ctx form1));
-					(Boolean.mk_and ctx (formula_to_solver ctx form1))
+					(Boolean.mk_and ctx (formula_to_solver ctx form2))
 				] in
 			(Solver.check solv qq)=UNSATISFIABLE
 		in
@@ -100,15 +102,16 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 		let query_size = 
 			if ((lhs_size=ff)||(rhs_size=ff)) then true
 			else
-				let qq =[
+				let qq1 =[
 					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-					Boolean.mk_or ctx
-						[(Boolean.mk_and ctx (formula_to_solver ctx form1));
-						(Boolean.mk_and ctx (formula_to_solver ctx form1))]
-				] in
-			(Solver.check solv qq)=UNSATISFIABLE
+						(Boolean.mk_and ctx (formula_to_solver ctx form1)) ] 
+				in
+				let qq2 =[
+					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
+						(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+				in
+			((Solver.check solv qq1)=UNSATISFIABLE) || ((Solver.check solv qq2)=UNSATISFIABLE)
 		in
-
 		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2));
 				(Boolean.mk_eq ctx lhs rhs)
