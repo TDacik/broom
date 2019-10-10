@@ -61,24 +61,15 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
 						(Boolean.mk_and ctx (formula_to_solver ctx form1)) ] 
 				in
-				let qq2 =[
-					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-						(Boolean.mk_and ctx (formula_to_solver ctx form2))]
-				in
-			((Solver.check solv qq1)=UNSATISFIABLE) || ((Solver.check solv qq2)=UNSATISFIABLE)
+			((Solver.check solv qq1)=UNSATISFIABLE) 
 		in
 		let query1 = 
 			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
 				(Boolean.mk_and ctx (formula_to_solver ctx form1))
 			]
 		in
-		let query2 = 
-			[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);                
-				(Boolean.mk_and ctx (formula_to_solver ctx form2))
-			]
-		in
 		query_size
-		&& (((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE))
+		&& ((Solver.check solv query1)=UNSATISFIABLE)
 	| 2 ->
 		let query_size = 
 			if ((lhs_size=ff)||(rhs_size=ff)) then true
@@ -106,11 +97,7 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
 						(Boolean.mk_and ctx (formula_to_solver ctx form1)) ] 
 				in
-				let qq2 =[
-					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-						(Boolean.mk_and ctx (formula_to_solver ctx form2))]
-				in
-			((Solver.check solv qq1)=UNSATISFIABLE) || ((Solver.check solv qq2)=UNSATISFIABLE)
+			((Solver.check solv qq1)=UNSATISFIABLE) 
 		in
 		let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
 				(Boolean.mk_and ctx (formula_to_solver ctx form2));
@@ -257,13 +244,7 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
 			(Boolean.mk_and ctx (formula_to_solver ctx form1))
 			]
 		in
-		let query2= [ Boolean.mk_not ctx (
-			Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs])); 
-			(Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs));
-			(Boolean.mk_and ctx (formula_to_solver ctx form2))
-			]
-		in
-		if ((Solver.check solv query1)=UNSATISFIABLE)||((Solver.check solv query2)=UNSATISFIABLE) then z
+		if ((Solver.check solv query1)=UNSATISFIABLE) then z
 		else find_z ctx solv z3_names form1 (z+1) form2 i2
 	
 (* check whether we can apply learn on the form2.sigma[i2].
