@@ -389,7 +389,85 @@ let try_learn_slseg ctx solv z3_names form1 form2 level=
 			{sigma=[List.nth form2.sigma i]; pi=[]},
 			[])
 
+(******* SPLIT rules ******)
 
+let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
+	let ff = Boolean.mk_false ctx in
+	let lhs,lhs_size = 
+		match (List.nth form1.sigma i1) with 
+		| Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+		| Slseg (_) -> ff,ff
+	in
+	let rhs,rhs_size = 
+		match (List.nth form2.sigma i2) with 
+		| Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+		| Slseg (_) -> ff,ff	
+	in
+	if ((lhs=ff)||(rhs=ff))
+	then false
+	else		
+	(* we should check that the destination is NULL or UNDEF *)
+	match level with
+	| 1 ->
+		let query=[
+			Boolean.mk_not ctx (
+				Boolean.mk_and ctx [
+				(Arithmetic.mk_le ctx lhs rhs);
+				(Arithmetic.mk_ge ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
+				(Arithmetic.mk_gt ctx lhs_size rhs_size)
+				] ); 
+			(Boolean.mk_and ctx (formula_to_solver ctx form1))
+		] in
+		(Solver.check solv query)=UNSATISFIABLE
+
+let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
+	let ff = Boolean.mk_false ctx in
+	let lhs,lhs_size = 
+		match (List.nth form1.sigma i1) with 
+		| Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+		| Slseg (_) -> ff,ff
+	in
+	let rhs,rhs_size = 
+		match (List.nth form2.sigma i2) with 
+		| Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+		| Slseg (_) -> ff,ff	
+	in
+	if ((lhs=ff)||(rhs=ff))
+	then false
+	else		
+	(* we should check that the destination is NULL or UNDEF *)
+	match level with
+	| 1 ->
+		let query=[
+			Boolean.mk_not ctx (
+				Boolean.mk_and ctx [
+				(Arithmetic.mk_ge ctx lhs rhs);
+				(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
+				(Arithmetic.mk_lt ctx lhs_size rhs_size)
+				] ); 
+			(Boolean.mk_and ctx (formula_to_solver ctx form1))
+		] in
+		(Solver.check solv query)=UNSATISFIABLE
+
+let rec find_split_ll ctx solv z3_names form1 i1 form2 level=
+	let rec try_with_rhs i2 =
+		if (List.length form2.sigma) <= i2 
+		then -1,-1
+		else (if (check_split_left ctx solv z3_names form1 i1 form2 i2 level) 
+			then i2,1
+			else ( if (check_split_right ctx solv z3_names form1 i1 form2 i2 level)
+				then i2,2
+				else -1,-1))
+	in
+	if (List.length form1.sigma) <= i1 
+	then (-1,-1,-1)
+	else
+		match (try_with_rhs 0) with
+		| -1,_ -> (find_split_ll ctx solv z3_names form1 (i1+1) form2 level)
+		| x,lr -> (i1,x,lr) 
+
+let find_split ctx solv z3_names form1 form2 level =
+	find_split_ll ctx solv z3_names form1 0 form2 level
 (****************************************************)
 (* Test SAT of (form1 /\ form2) and check finish *)
 type sat_test_res =

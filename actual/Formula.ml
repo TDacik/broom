@@ -465,6 +465,16 @@ let form5=
 	          BinOp ( Peq, Var 4, Const (Ptr 0)) ]
 	}
 
+let form6 = {
+    sigma = [ Hpointsto (Var 1,Exp.Const (Int 16), Var 2) ];
+    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    	  BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
+          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+          BinOp ( Peq, Var 1, Var 2332 );
+          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+    (*evars = [ 2;3;4 ]*)
+}
+
 
 
 (* in utop type: 
