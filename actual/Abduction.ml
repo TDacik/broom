@@ -468,6 +468,61 @@ let rec find_split_ll ctx solv z3_names form1 i1 form2 level=
 
 let find_split ctx solv z3_names form1 form2 level =
 	find_split_ll ctx solv z3_names form1 0 form2 level
+
+
+let try_split ctx solv z3_names form1 form2 level =
+	let m=find_split ctx solv z3_names form1 form2 level in
+	let nequiv a b = not (a=b) in
+	let remove k form =
+		{ pi=form.pi;
+		  sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
+	in
+	match m with
+	| (-1,-1,-1) -> Fail
+	| (i1,i2,leftright) ->
+		let x1,s1,y1=match (List.nth form1.sigma i1) with 
+			| Hpointsto (a,s,b) -> (a,s,b) in 
+		let x2,s2,y2=match (List.nth form2.sigma i2) with 
+			| Hpointsto (a,s,b) -> (a,s,b) in
+
+		match leftright with
+		| 1 -> (* split left *) 
+			Fail
+		| 2 -> 	(* split right *)
+			let size_first=(Exp.BinOp (Pminus,x1,x2)) in
+			let size_last=(Exp.BinOp(Pminus,s2,Exp.BinOp(Pplus,s1,size_first))) in
+			let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
+			let form2_new=remove i2 form2 in
+			let sigma2_new=[Hpointsto (x2,size_first,y2);
+					Hpointsto (x1,s1,y2);
+					Hpointsto (ptr_last,size_last,y2)] in
+			Apply ({sigma=form1.sigma;pi=(BinOp ( Peq, y1,y2))::form1.pi},
+				{sigma=sigma2_new@form2_new.sigma; pi=form2.pi},
+				{sigma=[]; pi=[(BinOp ( Peq, y1,y2))]},
+				[])
+
+(*
+		let x1,y1,type1=match (List.nth form1.sigma i1) with 
+			| Hpointsto (a,_,b) -> (a,b,0) 
+			| Slseg (a,b,_) -> (a,b,2) in
+		let x2,y2,type2=match (List.nth form2.sigma i2) with 
+			| Hpointsto (a,_,b) -> (a,b,0)
+			| Slseg (a,b,_) -> (a,b,1) in
+		match apply_match (i1,i2) (type1+type2) form1 form2 with
+		| ApplyFail -> Fail
+		| ApplyOK (f1,f2,added_lvars) ->
+			let y_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, y1,y2))] else [] in
+			match level with
+			| 1 -> 	Apply ( { sigma=f1.sigma; pi = (BinOp (Peq, x1,x2))::(y_eq @ f1.pi)},
+					f2, 
+					{sigma=[]; pi=[]}, 
+					added_lvars)
+			| _ -> 	Apply ( { sigma=f1.sigma; pi = (BinOp (Peq, x1,x2))::(y_eq @ f1.pi)},
+					f2, 
+					{sigma=[]; pi=[(BinOp (Peq, x1,x2))]}, 
+					added_lvars)
+
+*)
 (****************************************************)
 (* Test SAT of (form1 /\ form2) and check finish *)
 type sat_test_res =
