@@ -389,14 +389,15 @@ let try_learn_slseg ctx solv z3_names form1 form2 level=
 			{sigma=[List.nth form2.sigma i]; pi=[]},
 			[])
 
+(************************************************************)
 (******* SPLIT rules ******)
 
 let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
 	let ff = Boolean.mk_false ctx in
-	let lhs,lhs_size = 
+	let lhs,lhs_size,lhs_dest = 
 		match (List.nth form1.sigma i1) with 
-		| Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
-		| Slseg (_) -> ff,ff
+		| Hpointsto (a,s ,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s),b
+		| Slseg (_) -> ff,ff,Exp.Const	(Int 0)
 	in
 	let rhs,rhs_size = 
 		match (List.nth form2.sigma i2) with 
@@ -406,7 +407,9 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
 	if ((lhs=ff)||(rhs=ff))
 	then false
 	else		
-	(* we should check that the destination is NULL or UNDEF *)
+	let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,lhs_dest, Const (Int 0)));
+		(Boolean.mk_and ctx (formula_to_solver ctx form1))
+		] in
 	match level with
 	| 1 ->
 		let query=[
@@ -418,7 +421,21 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
 				] ); 
 			(Boolean.mk_and ctx (formula_to_solver ctx form1))
 		] in
-		(Solver.check solv query)=UNSATISFIABLE
+		(Solver.check solv query)=UNSATISFIABLE &&
+		((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+	| 2 ->
+		let query=[
+			Boolean.mk_not ctx (
+				Boolean.mk_and ctx [
+				(Arithmetic.mk_le ctx lhs rhs);
+				(Arithmetic.mk_ge ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
+				(Arithmetic.mk_gt ctx lhs_size rhs_size)
+				] ); 
+			(Boolean.mk_and ctx (formula_to_solver ctx form1));
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+		] in
+		(Solver.check solv query)=UNSATISFIABLE &&
+		((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
 
 let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
 	let ff = Boolean.mk_false ctx in
@@ -436,6 +453,9 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
 	then false
 	else		
 	(* we should check that the destination is NULL or UNDEF *)
+	let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,rhs_dest, Const (Int 0)));
+		(Boolean.mk_and ctx (formula_to_solver ctx form2))
+		] in
 	match level with
 	| 1 ->
 		let query=[
@@ -447,11 +467,22 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
 				] ); 
 			(Boolean.mk_and ctx (formula_to_solver ctx form1))
 		] in
-		let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,rhs_dest, Const (Int 0)));
-			(Boolean.mk_and ctx (formula_to_solver ctx form2))
-			] in
 		(Solver.check solv query)=UNSATISFIABLE && 
 		((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+	| 2 ->
+		let query=[
+			Boolean.mk_not ctx (
+				Boolean.mk_and ctx [
+				(Arithmetic.mk_ge ctx lhs rhs);
+				(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
+				(Arithmetic.mk_lt ctx lhs_size rhs_size)
+				] ); 
+			(Boolean.mk_and ctx (formula_to_solver ctx form1));
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+		] in
+		(Solver.check solv query)=UNSATISFIABLE && 
+		((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+
 
 let rec find_split_ll ctx solv z3_names form1 i1 form2 level=
 	let rec try_with_rhs i2 =
@@ -491,7 +522,66 @@ let try_split ctx solv z3_names form1 form2 level =
 
 		match leftright with
 		| 1 -> (* split left *) 
-			Fail
+			(* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
+			let size_first=
+				let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
+				let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
+				      (Boolean.mk_and ctx (formula_to_solver ctx form2));
+				      (expr_to_solver ctx z3_names 
+				      		(BinOp(Pneq,tmp_size_first,Const (Int 0))))
+				    ]
+				in 
+				if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int 0))
+				else tmp_size_first
+			in
+			(* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
+			let size_last=
+				let tmp_size_last=
+					if size_first=(Const (Int 0)) 
+					then (Exp.BinOp(Pminus,s1,s2))
+					else (Exp.BinOp(Pminus,s1,Exp.BinOp(Pplus,s2,size_first))) in
+				let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
+				      (Boolean.mk_and ctx (formula_to_solver ctx form2));
+				      (expr_to_solver ctx z3_names
+				      		(BinOp(Pneq,tmp_size_last,Const (Int 0))))
+				    ]
+				in 
+				if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int 0))
+				else tmp_size_last 
+			in
+			let ptr_last=(Exp.BinOp(Pplus,x2,s2)) in
+			let split_dest=
+				let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y1, Const (Int 0)));
+					(Boolean.mk_and ctx (formula_to_solver ctx form1))
+				] in
+				if (Solver.check solv query_null)=UNSATISFIABLE then Exp.Const (Int 0) else Exp.Undef
+			in
+			let sigma1_new,pi_tmp1, pi_tmp2= (* compute the splitted part of sigma and new pi*)
+				if size_first=(Const (Int 0)) then
+					[ Hpointsto (x1,s2,split_dest);
+					  Hpointsto (ptr_last,size_last,split_dest)],
+					 [ Exp.BinOp(Peq,x1,x2) ],
+					 [ Exp.BinOp(Pless,s2,s1) ]
+				else if  size_last=(Const (Int 0)) then 
+					[Hpointsto (x1,size_first,split_dest);
+					 Hpointsto (x2,s2,split_dest)],
+					 [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1))],
+					 [Exp.BinOp(Pless,s2,s1) ]
+				else [Hpointsto (x1,size_first,split_dest);
+					Hpointsto (x2,s2,split_dest);
+					Hpointsto (ptr_last,size_last,split_dest)],
+					[],
+					[Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ]
+			in
+			let new_pi=
+				if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
+				else pi_tmp1 @ pi_tmp2
+			in
+			Apply (	{sigma=sigma1_new@ (remove i1 form1).sigma; pi=form1.pi @ new_pi},
+				form2,
+				{sigma=[]; pi=new_pi},
+				[])
+
 		| 2 -> 	(* split right *)
 			(* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
 			let size_first=
@@ -527,20 +617,31 @@ let try_split ctx solv z3_names form1 form2 level =
 				] in
 				if (Solver.check solv query_null)=UNSATISFIABLE then Exp.Const (Int 0) else Exp.Undef
 			in
-			let sigma2_new= (* compute the splitted part of sigma *)
+			let sigma2_new,pi_tmp1,pi_tmp2= (* compute the splitted part of sigma *)
 				if size_first=(Const (Int 0)) then
 					[ Hpointsto (x1,s1,split_dest);
-					  Hpointsto (ptr_last,size_last,split_dest)]
+					  Hpointsto (ptr_last,size_last,split_dest)],
+					 [ Exp.BinOp(Peq,x1,x2) ],
+					 [ Exp.BinOp(Pless,s1,s2) ]
 				else if  size_last=(Const (Int 0)) then 
 					[Hpointsto (x2,size_first,split_dest);
-					 Hpointsto (x1,s1,split_dest)]
+					 Hpointsto (x1,s1,split_dest)],
+					 [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1))],
+					 [Exp.BinOp(Pless,s1,s2) ]
 				else [Hpointsto (x2,size_first,split_dest);
 					Hpointsto (x1,s1,split_dest);
-					Hpointsto (ptr_last,size_last,split_dest)]
+					Hpointsto (ptr_last,size_last,split_dest)],
+					[],
+					[Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ]
 			in
-			Apply (form1,
+			let new_pi=
+				if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
+				else pi_tmp1 @ pi_tmp2
+			in
+
+			Apply ({sigma=form1.sigma; pi=form1.pi @ new_pi},
 				{sigma=sigma2_new@ (remove i2 form2).sigma; pi=form2.pi},
-				{sigma=[]; pi=[]},
+				{sigma=[]; pi=new_pi},
 				[])
 
 (****************************************************)
