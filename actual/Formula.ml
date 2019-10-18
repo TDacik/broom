@@ -196,18 +196,6 @@ let rec get_eq_vars vlist equalities =
 	| _ -> join_list_unique eq (get_eq_vars (join_list_unique eq vlist) equalities)
 
 
-let rec substitute_sigma var1 var2 sigma =
-	match sigma with
-		| [] -> []
-		| Hpointsto (a,l, b) ::rest ->
-			let a_new = if (a=Exp.Var var2) then Exp.Var var1 else a in
-			let b_new = if (b=Exp.Var var2) then Exp.Var var1 else b in
-			Hpointsto (a_new,l,b_new) :: substitute_sigma var1 var2 rest
-		| Slseg (a,b,l) ::rest ->
-			let a_new = if (a=Exp.Var var2) then Exp.Var var1 else a in
-			let b_new = if (b=Exp.Var var2) then Exp.Var var1 else b in
-			Slseg (a_new,b_new,l) :: substitute_sigma var1 var2 rest
-
 let rec substitute_expr var1 var2 expr =
 	match expr with 
      	| Exp.Var a ->
@@ -219,6 +207,20 @@ let rec substitute_expr var1 var2 expr =
       	| BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
       	| Void -> Void
       	| Undef -> Undef
+
+let rec substitute_sigma var1 var2 sigma =
+	match sigma with
+		| [] -> []
+		| Hpointsto (a,l, b) ::rest ->
+			let a_new = substitute_expr var1 var2 a in
+			let b_new = substitute_expr var1 var2 b in
+			let l_new = substitute_expr var1 var2 l in
+			Hpointsto (a_new,l_new,b_new) :: substitute_sigma var1 var2 rest
+		| Slseg (a,b,l) ::rest ->
+			let a_new = substitute_expr var1 var2 a in
+			let b_new = substitute_expr var1 var2 b in
+			Slseg (a_new,b_new,l) :: substitute_sigma var1 var2 rest
+
 
 let rec substitute_pi var1 var2 pi =
 	match pi with

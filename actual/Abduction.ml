@@ -580,7 +580,9 @@ let try_split ctx solv z3_names form1 form2 level =
 				if size_first=(Const (Int 0)) then
 					[ Hpointsto (x1,s2,split_dest);
 					  Hpointsto (ptr_last,size_last,split_dest)],
-					 [ Exp.BinOp(Peq,x1,x2) ; BinOp ( Plesseq, s1, UnOp ( Len, x1))],
+					 [ Exp.BinOp(Peq,x1,x2) ; 
+					   BinOp ( Plesseq, s1, UnOp ( Len, x1));
+					   BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last))],
 					 [ Exp.BinOp(Pless,s2,s1) ]
 				else if  size_last=(Const (Int 0)) then 
 					[Hpointsto (x1,size_first,split_dest);
@@ -592,7 +594,9 @@ let try_split ctx solv z3_names form1 form2 level =
 				else [Hpointsto (x1,size_first,split_dest);
 					Hpointsto (x2,s2,split_dest);
 					Hpointsto (ptr_last,size_last,split_dest)],
-					[BinOp ( Plesseq, s1, UnOp ( Len, x1)); BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
+					[BinOp ( Plesseq, s1, UnOp ( Len, x1)); 
+					  BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
+					  BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last))],
 					[Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ]
 			in
 			let new_pi=
