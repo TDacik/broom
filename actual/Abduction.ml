@@ -436,6 +436,16 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
 		] in
 		(Solver.check solv query)=UNSATISFIABLE &&
 		((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+	| 4 ->
+		let query=[
+			(Arithmetic.mk_le ctx lhs rhs);
+			(Arithmetic.mk_ge ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
+			(Arithmetic.mk_gt ctx lhs_size rhs_size);
+			(Boolean.mk_and ctx (formula_to_solver ctx form1));
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+		] in
+		(Solver.check solv query)=SATISFIABLE &&
+		((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
 
 let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
 	let ff = Boolean.mk_false ctx in
@@ -481,6 +491,16 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
 			(Boolean.mk_and ctx (formula_to_solver ctx form2))
 		] in
 		(Solver.check solv query)=UNSATISFIABLE && 
+		((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+	| 4 ->
+		let query=[
+			(Arithmetic.mk_ge ctx lhs rhs);
+			(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
+			(Arithmetic.mk_lt ctx lhs_size rhs_size);
+			(Boolean.mk_and ctx (formula_to_solver ctx form1));
+			(Boolean.mk_and ctx (formula_to_solver ctx form2))
+		] in
+		(Solver.check solv query)=SATISFIABLE && 
 		((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
 
 
@@ -560,17 +580,19 @@ let try_split ctx solv z3_names form1 form2 level =
 				if size_first=(Const (Int 0)) then
 					[ Hpointsto (x1,s2,split_dest);
 					  Hpointsto (ptr_last,size_last,split_dest)],
-					 [ Exp.BinOp(Peq,x1,x2) ],
+					 [ Exp.BinOp(Peq,x1,x2) ; BinOp ( Plesseq, s1, UnOp ( Len, x1))],
 					 [ Exp.BinOp(Pless,s2,s1) ]
 				else if  size_last=(Const (Int 0)) then 
 					[Hpointsto (x1,size_first,split_dest);
 					 Hpointsto (x2,s2,split_dest)],
-					 [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1))],
+					 [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
+					 	BinOp ( Plesseq, s1, UnOp ( Len, x1)); 
+						BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
 					 [Exp.BinOp(Pless,s2,s1) ]
 				else [Hpointsto (x1,size_first,split_dest);
 					Hpointsto (x2,s2,split_dest);
 					Hpointsto (ptr_last,size_last,split_dest)],
-					[],
+					[BinOp ( Plesseq, s1, UnOp ( Len, x1)); BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
 					[Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ]
 			in
 			let new_pi=
@@ -621,17 +643,19 @@ let try_split ctx solv z3_names form1 form2 level =
 				if size_first=(Const (Int 0)) then
 					[ Hpointsto (x1,s1,split_dest);
 					  Hpointsto (ptr_last,size_last,split_dest)],
-					 [ Exp.BinOp(Peq,x1,x2) ],
+					 [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2)) ],
 					 [ Exp.BinOp(Pless,s1,s2) ]
 				else if  size_last=(Const (Int 0)) then 
 					[Hpointsto (x2,size_first,split_dest);
 					 Hpointsto (x1,s1,split_dest)],
-					 [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1))],
+					 [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
+					 	BinOp ( Plesseq, s2, UnOp ( Len, x2));
+						BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
 					 [Exp.BinOp(Pless,s1,s2) ]
 				else [Hpointsto (x2,size_first,split_dest);
 					Hpointsto (x1,s1,split_dest);
 					Hpointsto (ptr_last,size_last,split_dest)],
-					[],
+					[BinOp ( Plesseq, s2, UnOp ( Len, x2)); BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
 					[Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ]
 			in
 			let new_pi=
@@ -678,11 +702,14 @@ let rec biabduction ctx solv z3_names form1 form2 =
 	(* Here is a given list of possible rules and the order in which they are going to be applied *)
 	let rules=[
 		(try_match,1,"Match1");
+		(try_split,1,"Split1");
 		(try_match,2,"Match2");
+		(try_split,2,"Split2");
 		(try_match,3,"Match3");
 		(try_learn_pointsto,1,"Learn1-Pointsto");
 		(try_learn_slseg,1,"Learn1-Slseg");
 		(try_match,4,"Match4");
+		(try_split,4,"Split4");
 		(try_learn_pointsto,3,"Learn3-Pointsto");
 		(try_learn_slseg,2,"Learn3-Slseg")
 	] in
