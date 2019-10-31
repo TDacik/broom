@@ -117,7 +117,7 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
 				let qq =[
 					Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
 					(Boolean.mk_and ctx (formula_to_solver ctx form1));
-					(Boolean.mk_and ctx (formula_to_solver ctx form1))
+					(Boolean.mk_and ctx (formula_to_solver ctx form2))
 				] in
 			(Solver.check solv qq)=UNSATISFIABLE
 		in
@@ -200,25 +200,36 @@ let try_match ctx solv z3_names form1 form2 level =
 	match m with
 	| (-1,-1) -> Fail
 	| (i1,i2) ->
-		let x1,y1,type1=match (List.nth form1.sigma i1) with 
-			| Hpointsto (a,_,b) -> (a,b,0) 
-			| Slseg (a,b,_) -> (a,b,2) in
-		let x2,y2,type2=match (List.nth form2.sigma i2) with 
-			| Hpointsto (a,_,b) -> (a,b,0)
-			| Slseg (a,b,_) -> (a,b,1) in
+		let x1,y1,type1,size1=match (List.nth form1.sigma i1) with 
+			| Hpointsto (a,size,b) -> (a,b,0,size) 
+			| Slseg (a,b,_) -> (a,b,2,Exp.Void) in
+		let x2,y2,type2,size2=match (List.nth form2.sigma i2) with 
+			| Hpointsto (a,size,b) -> (a,b,0,size)
+			| Slseg (a,b,_) -> (a,b,1,Exp.Void) in
 		match apply_match (i1,i2) (type1+type2) form1 form2 with
 		| ApplyFail -> Fail
 		| ApplyOK (f1,f2,added_lvars) ->
+			(* x1 = x2 if equal predicate types match. Othervice base(x1) = base(x2) is added. *)
+			let x_eq=if ((type1+type2)=0 || (type1+type2=3)) 
+				then [(Exp.BinOp ( Peq, x1,x2))]
+				else [(Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,x2)))]
+			in
 			(* y1 = y2 is added only if Hpointsto is mathced with Hpointsto *)
 			let y_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, y1,y2))] else [] in
+			(* size1 = size2 is added if Hpointsto is mathced with Hpointsto *)
+			let size_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, size1,size2))] else [] in
 			match level with
-			| 1 -> 	Apply ( { sigma=f1.sigma; pi = (BinOp (Peq, x1,x2))::(y_eq @ f1.pi)},
+			| 1 -> 	Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
 					f2, 
 					{sigma=[]; pi=[]}, 
 					added_lvars)
-			| _ -> 	Apply ( { sigma=f1.sigma; pi = (BinOp (Peq, x1,x2))::(y_eq @ f1.pi)},
+			| 3 -> 	Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
 					f2, 
-					{sigma=[]; pi=[(BinOp (Peq, x1,x2))]}, 
+					{sigma=[]; pi=x_eq}, 
+					added_lvars)
+			| _ -> 	Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ size_eq @ f1.pi},
+					f2, 
+					{sigma=[]; pi=x_eq @ size_eq}, 
 					added_lvars)
 
 (**** LEARN - pointsto ****)
