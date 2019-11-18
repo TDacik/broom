@@ -2,7 +2,7 @@ fancy introduction...
 
 ## Building from sources
 
-For JSON dumper see [code-listener/README](../blob/master/code-listener/README)
+For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 
 ### Ocaml dependences
      - atd
