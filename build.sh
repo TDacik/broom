@@ -20,7 +20,7 @@ export GCC_HOST="${GCC_HOST:-/usr/bin/gcc}"
 
     status_update "Copying ATD"
     make -C json atd
-    mkdir -p ../src/CL
+    mkdir -p ../src/cl
     cp json_build/*.ml* ../src/cl
 
 )
