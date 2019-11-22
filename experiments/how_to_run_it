@@ -1,0 +1,27 @@
+(* Not always: *)
+./make.sh
+utop -init utop.ocamlinit
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Running Json within the utop
+
+utop
+#require "atdgen-runtime";;
+#mod_use "State.ml";;
+#mod_use "Loc.ml";;
+#mod_use "Operand.ml";;
+#mod_use "Fnc.ml";;
+#mod_use "Var.ml";;
+#mod_use "Type.ml";;
+#mod_use "Storage.ml";;
+#use "Program.ml";;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Loading Json from file via Ag_util:
+
+let p = AGU.Json.from_file Storage.read_t "../tests/sll1.json"
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
