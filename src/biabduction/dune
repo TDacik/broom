@@ -1,0 +1,7 @@
+(library
+  (name biabd)
+  (public_name bi.biabd)
+  (wrapped false)
+  (libraries core z3)
+  (inline_tests (backend qtest.lib))
+)

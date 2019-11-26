@@ -1,5 +1,11 @@
-;; This declares the ContractGenerator executable implemented by ContractGenerator.ml
 (executable
-	(name ContractGenerator)
-	(public_name bi)
-	(libraries CL))
+  (name ContractGenerator)
+  (public_name bi)
+  (libraries CL)
+  (modules ContractGenerator))
+
+(executable
+  (name biabductor)
+  (public_name bi)
+  (libraries core z3 biabd)
+  (modules biabductor))

@@ -16,7 +16,10 @@ bug-reports: "https://pajda.fit.vutbr.cz/rogalew/bi-work/issues"
 
 depends: [
   "atd"
+  "core"
   "cppo"
   "dune"
   "ocaml"
+  "qtest"
+  "z3"
 ]
