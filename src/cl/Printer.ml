@@ -4,47 +4,97 @@ open Operand
 open Var
 open Fnc
 
+type uid = int
+
+(* TODO: use exceptions *)
+
+(* internal location *)
+#define ILOC (Printf.sprintf "%s:%i" __FILE__ __LINE__)
+
+let error loc msg = Printf.eprintf "%s: error: %s\n" loc msg
+
 let empty_output = Printf.printf ""
 
-let error msg = Printf.eprintf "error: %s\n" msg
-
-let get_fnc_name f =
-	let op_data = f.Fnc.def.data in
-	match op_data with
-		| OpCst { cst_data } -> ( match cst_data with
-			| CstFnc {uid; name; is_extern; loc} -> ( match name with
-				| Some x -> x
-				| None -> "" )
-				(* Option.is_none / Option.is_some *)
-			| _ -> raise Not_found )
-		| _ -> raise Not_found
 
 
-(* Print function's name from association list *)
-let print_name_fnc fncmap uid =
-	let f = List.assoc uid fncmap in
-	let str = get_fnc_name f in
-		Printf.printf "%s\n" str
 
-let variable_to_string uid accs = "var"                  (* TODO: variable *)
+let loc_to_string loc =
+	match loc with
+	| Some (file, line, column, is_sysp) ->
+		Printf.sprintf "%s:%i:%i: " file line column
+	| None -> ""
 
-let const_ptr_to_string ptr accs =
+(* TODO type *)
+let type_to_string uid = ""
+
+let var_to_string uid =
+	let v = Util.get_var uid in
+	let uid_str = Printf.sprintf "%i" uid in
+	let scope = (match v.code with
+		| VAR_GL -> "S"
+		| VAR_LC -> "F"
+		| _ -> "") in
+	match v.name with
+		| Some name ->  "%m" ^ scope ^ uid_str ^ ":" ^ name
+		| None -> "%r" ^ scope ^ uid_str
+
+(* Get CL operand as string *)
+let rec operand_to_string op =
+	match op.Operand.data with
+		| OpVar uid -> op_var_to_string uid op.accessor
+		| OpCst { cst_data } -> constant_to_string cst_data op.accessor
+		| OpVoid -> "void"
+
+(* TODO: structure acc -> *)
+and back_accessors accs =
+	match accs with
+	| [] -> ""
+	(* | fst::snd::tl -> (match fst.acc_data with
+		| Deref -> (match snd.acc_data) with
+			| Item uid -> "->"; back_accessors snd::tl )
+		| _ -> ) *)
+	| ac::tl -> (match ac.acc_data with
+		| DerefArray idx -> let rest = back_accessors tl in 
+			let str_idx = operand_to_string idx in
+			"[" ^ str_idx ^ "]" ^ rest
+		| Item uid -> let rest = back_accessors tl in
+			"." ^ rest
+		| Ref -> error ILOC "invalid reference accessor"; "&"
+		| _ -> error ILOC "unsupported accessor"; "")
+
+and middle_var uid accs =
+	let var = var_to_string uid in
+	let rest = back_accessors accs in
+		var ^ rest
+
+and front_accessors uid accs =
+	match accs with
+	| [] -> middle_var uid []
+	| ac::tl -> ( match ac.acc_data with
+		| Ref -> let rest = front_accessors uid tl in "&" ^ rest
+		| Deref -> let rest = front_accessors uid tl in "*" ^ rest
+		| _ -> middle_var uid (ac::tl) )
+
+and op_var_to_string uid accs =
+	front_accessors uid accs
+
+and const_ptr_to_string ptr accs =
 	let str_acc = ( match accs with
+		| [] -> ""
 		| ac::[] -> ( match ac.acc_data with
 			| Deref -> "*"
-			| _ -> error "unexpected accessor by constant pointer"; "" )
-		| _ -> error "too much accessors by constant pointer"; "" ) in
+			| _ -> error ILOC "unexpected accessor by constant pointer"; "" )
+		| _ -> error ILOC "too much accessors by constant pointer"; "" ) in
 	if ptr==0 then "NULL" else Printf.sprintf "%s0x%x" str_acc ptr
 
-(* Get CL constant as string *)
-let constant_to_string data accs =
+and constant_to_string data accs =
 	match data with
 	| CstPtr ptr -> const_ptr_to_string ptr accs
 	| CstStruct | CstUnion | CstArray ->
-		error "unsupported compound literal"; "?"
+		error ILOC "unsupported compound literal"; "?"
 	| CstFnc {uid; name; is_extern; loc} -> ( match name with
 		| Some x -> x
-		| None -> error "anonymous function"; "" )
+		| None -> error ILOC "anonymous function"; "" )
 	| CstInt i -> Int64.to_string i                 (* TODO: test unsigned *)
 	| CstEnum e -> Printf.sprintf "%i" e            (* TODO: test unsigned *)
 	| CstChar c -> "\'" ^ Printf.sprintf "%c" c ^ "\'"
@@ -52,12 +102,9 @@ let constant_to_string data accs =
 	| CstReal f -> Printf.sprintf "%g" f
 	| CstString str -> "\"" ^ String.escaped str ^ "\""
 
-(* Get CL operand as string *)
-let operand_to_string op =
-	match op.Operand.data with
-		| OpVar uid -> variable_to_string uid op.accessor
-		| OpCst { cst_data } -> constant_to_string cst_data op.accessor
-		| OpVoid -> "void"
+
+
+let get_fnc_name f = operand_to_string f.Fnc.def
 
 (* Print unary CL instruction *)
 let print_unary_insn code dst src =
@@ -108,25 +155,29 @@ let print_binary_insn code dst src1 src2 =
 	let str_src2 = operand_to_string src2 in
 		Printf.printf "\t\t%s := (%s %s %s)\n" str_dst str_src1 binop str_src2
 
-let rec print_list_op args =
+(* Print list of elms separated by ',' calling 'to_string' on each elm *)
+let rec print_list to_string args =
 	match args with
 	| [] -> ()
-	| lst::[] -> let str_arg = variable_to_string lst [] in
+	| lst::[] -> let str_arg = to_string lst in
 		Printf.printf "%s" str_arg
-	| hd::tl ->  let str_arg = variable_to_string hd [] in 
-		Printf.printf "%s," str_arg;
-		print_list_op tl
+	| hd::tl ->  let str_arg = to_string hd in 
+		Printf.printf "%s, " str_arg;
+		print_list to_string tl
 
 (* Print call instruction; ops = dst, called, ?args+ *)
 let print_call_insn ops =
 	match ops with
 	| hd::snd::args ->
-		let str_dst = operand_to_string hd in
 		let str_called = operand_to_string snd in
-			Printf.printf "\t\t%s = %s(" str_dst str_called;
-			print_list_op args;
-			Printf.printf ")\n"
-	| _ -> error "wrong call instruction"
+		if not (Util.is_void hd)
+			then let str_dst = operand_to_string hd in
+				Printf.printf "\t\t%s := " str_dst
+			else Printf.printf "\t\t";
+		Printf.printf "%s(" str_called;
+		print_list operand_to_string args;
+		Printf.printf ")\n"
+	| _ -> error ILOC "wrong call instruction"
 
 (* Print CL instruction *)
 let print_insn insn =
@@ -135,40 +186,43 @@ let print_insn insn =
 	| InsnJMP uid -> Printf.printf "\t\tgoto L%i\n" uid
 	| InsnCOND (cond, tg_then, tg_else) -> let op = operand_to_string cond in
 		Printf.printf "\t\tif (%s)\n\t\t\tgoto L%i\n\t\telse\n\t\t\tgoto L%i\n"  op tg_then tg_else
-	| InsnRET ret -> let op = operand_to_string ret in
-		Printf.printf "\t\tret %s\n" op
+	| InsnRET ret -> if not (Util.is_void ret)
+		then let op = operand_to_string ret in
+			Printf.printf "\t\treturn %s\n" op
+		else Printf.printf "\t\treturn\n"
 	| InsnCLOBBER var -> let op = operand_to_string var in
 		Printf.printf "\t\tclobber %s\n" op
 	| InsnABORT -> Printf.printf "\t\tabort\n"
 	| InsnUNOP (code, dst, src) -> print_unary_insn code dst src
 	| InsnBINOP (code, dst, src1, src2) -> print_binary_insn code dst src1 src2
 	| InsnCALL ops -> print_call_insn ops
-	| InsnSWITCH _ -> error "unsupported switch instruction"
+	| InsnSWITCH _ -> error ILOC "unsupported switch instruction"
 	| InsnLABEL _ -> empty_output (* unused *)
 
-(* Print basic block of function *)
-let print_bb bb =
-	Printf.printf "\tL%i:\n" bb.uid;
-	List.iter print_insn bb.insns
+let get_contract insn = ("pre", "post")
 
-let is_fnc_static f =
-	let scope = f.Fnc.def.scope in
-		scope == CL_SCOPE_STATIC
+let custom_fnc insn =
+	let (pre, post) = get_contract insn in
+		Printf.printf "%s\n" pre;
+		print_insn insn;
+		Printf.printf "%s\n" post
+
+let print_block apply_on bb =
+	Printf.printf "\tL%i:\n" bb.uid;
+	List.iter apply_on bb.insns
+
+let rec print_cfg apply_on_insn cfg =
+	match cfg with
+	| [] -> ()
+	| bb::tl -> print_block apply_on_insn bb; print_cfg apply_on_insn tl
 
 (* Print function *)
-let print_fnc (uid, f) =
-	if is_fnc_static f then Printf.printf "static ";
+let print_fnc ?apply_on_insn:(apply = print_insn) (uid, f) =
+	if Util.is_fnc_static f then Printf.printf "static ";
 	let str = get_fnc_name f in
 		Printf.printf "%s(" str;
-		print_list_op f.args;
+		print_list var_to_string f.args;
 		Printf.printf "):\n";
 	match f.cfg with
-		| Some bbs -> List.iter print_bb bbs
+		| Some bbs -> print_cfg apply bbs
 		| None -> ()
-
-(* Print variable's name from association list *)
-let print_name_var vmap uid = 
-	let v = List.assoc uid vmap in
-	( match v.Var.name with
-		| Some x -> Printf.printf "%s\n" x
-		| None -> Printf.printf "\n" )

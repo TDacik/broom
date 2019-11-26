@@ -6,6 +6,7 @@ For JSON dumper see [code-listener/README](https://github.com/versokova/predator
 
 ### Ocaml dependences
      - atd
+     - cppo
      - dune
      - ppx_compare, ppx_deriving
      - z3
