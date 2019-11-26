@@ -1,2 +1,7 @@
 .DS_Store
-src/CL/*
+src/cl/Fnc.ml*
+src/cl/Loc.ml*
+src/cl/Operand.ml*
+src/cl/Storage.ml*
+src/cl/Type.ml*
+src/cl/Var.ml*
