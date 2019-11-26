@@ -199,14 +199,6 @@ let print_insn insn =
 	| InsnSWITCH _ -> error ILOC "unsupported switch instruction"
 	| InsnLABEL _ -> empty_output (* unused *)
 
-let get_contract insn = ("pre", "post")
-
-let custom_fnc insn =
-	let (pre, post) = get_contract insn in
-		Printf.printf "%s\n" pre;
-		print_insn insn;
-		Printf.printf "%s\n" post
-
 let print_block apply_on bb =
 	Printf.printf "\tL%i:\n" bb.uid;
 	List.iter apply_on bb.insns

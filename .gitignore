@@ -5,3 +5,8 @@ src/cl/Operand.ml*
 src/cl/Storage.ml*
 src/cl/Type.ml*
 src/cl/Var.ml*
+
+# temporary
+*.cmi
+*.cmo
+*.cppo.*
