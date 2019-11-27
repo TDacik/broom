@@ -1,0 +1,22 @@
+opam-version: "1.2.2"
+
+name: "CL"
+
+synopsis: ""
+description: ""
+
+maintainer: ""
+authors: [
+  ""
+  ""
+]
+
+homepage: "https://pajda.fit.vutbr.cz/rogalew/bi-work"
+bug-reports: "https://pajda.fit.vutbr.cz/rogalew/bi-work/issues"
+
+depends: [
+  "atd"
+  "cppo"
+  "dune"
+  "ocaml"
+]

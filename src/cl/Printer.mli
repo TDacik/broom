@@ -3,7 +3,7 @@
 type uid = int
 
 (** [loc_to_string loc] gets CL code location as string *)
-val loc_to_string: Loc.t -> string
+val loc_to_string: Loc.t option -> string
 
 (** [type_to_string uid] gets CL type as string *)
 val type_to_string: uid -> string

@@ -1,0 +1,5 @@
+;; This declares the ContractGenerator executable implemented by ContractGenerator.ml
+(executable
+	(name ContractGenerator)
+	(public_name cl)
+	(libraries CL))

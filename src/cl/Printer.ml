@@ -20,12 +20,12 @@ let empty_output = Printf.printf ""
 
 let loc_to_string loc =
 	match loc with
-	| Some (file, line, column, is_sysp) ->
+	| Some (file, line, column, _) ->
 		Printf.sprintf "%s:%i:%i: " file line column
 	| None -> ""
 
 (* TODO type *)
-let type_to_string uid = ""
+let type_to_string _ (* uid *) = ""
 
 let var_to_string uid =
 	let v = Util.get_var uid in
@@ -57,7 +57,7 @@ and back_accessors accs =
 		| DerefArray idx -> let rest = back_accessors tl in 
 			let str_idx = operand_to_string idx in
 			"[" ^ str_idx ^ "]" ^ rest
-		| Item uid -> let rest = back_accessors tl in
+		| Item _ (* uid *) -> let rest = back_accessors tl in
 			"." ^ rest
 		| Ref -> error ILOC "invalid reference accessor"; "&"
 		| _ -> error ILOC "unsupported accessor"; "")
@@ -92,7 +92,7 @@ and constant_to_string data accs =
 	| CstPtr ptr -> const_ptr_to_string ptr accs
 	| CstStruct | CstUnion | CstArray ->
 		error ILOC "unsupported compound literal"; "?"
-	| CstFnc {uid; name; is_extern; loc} -> ( match name with
+	| CstFnc fnc -> ( match fnc.name with
 		| Some x -> x
 		| None -> error ILOC "anonymous function"; "" )
 	| CstInt i -> Int64.to_string i                 (* TODO: test unsigned *)
@@ -209,7 +209,7 @@ let rec print_cfg apply_on_insn cfg =
 	| bb::tl -> print_block apply_on_insn bb; print_cfg apply_on_insn tl
 
 (* Print function *)
-let print_fnc ?apply_on_insn:(apply = print_insn) (uid, f) =
+let print_fnc ?apply_on_insn:(apply = print_insn) (_, f) =
 	if Util.is_fnc_static f then Printf.printf "static ";
 	let str = get_fnc_name f in
 		Printf.printf "%s(" str;

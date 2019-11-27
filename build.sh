@@ -24,7 +24,7 @@ make -C json check CTEST="ctest -j${NCPU}" \
 
 status_update "Copying ATD"
 make -C json atd
-mkdir -p ../src/cl
-cp json_build/*.ml* ../src/cl
+mkdir -p ../src/CL
+cp json_build/*.ml* ../src/CL
 
 cd ..
