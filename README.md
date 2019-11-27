@@ -19,8 +19,8 @@ For JSON dumper see [code-listener/README](https://github.com/versokova/predator
 
 opam install atd core cppo z3 dune qtest
 eval `opam config env`
-export LD_LIBRARY_PATH=`opam config var z3:lib`
-dune build
+export LD_LIBRARY_PATH=`opam config var z3:lib` # for OSX set $DYLD_LIBRARY_PATH
+dune build src/biabductor.exe src/ContractGenerator.exe
 ```
 
 To run the tests:
