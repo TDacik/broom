@@ -1,5 +1,6 @@
 (* Pretty printer for Code Listener Storage *)
 
+open Type
 open Operand
 open Var
 open Fnc
@@ -9,9 +10,12 @@ type uid = int
 (* TODO: use exceptions *)
 
 (* internal location *)
-#define ILOC (Printf.sprintf "%s:%i" __FILE__ __LINE__)
+#define ILOC (Printf.sprintf "%s:%i:" __FILE__ __LINE__)
 
-let error loc msg = Printf.eprintf "%s: error: %s\n" loc msg
+let error loc msg = Printf.eprintf "%s error: %s\n" loc msg
+
+(* TODO: only if develop mode *)
+let internal_error loc msg = failwith (loc ^ " " ^ msg)
 
 let empty_output = Printf.printf ""
 
@@ -38,12 +42,42 @@ let var_to_string uid =
 		| Some name ->  "%m" ^ scope ^ uid_str ^ ":" ^ name
 		| None -> "%r" ^ scope ^ uid_str
 
+(* next 2 functions move to Util *)
+(* Get (name, off) of type item on index id - for structured types *)
+let get_item items id =
+	let i = Array.get items id in
+	let iname = (match i.item_name with
+		| Some x -> x
+		| None -> "<anon_item>") in
+	(iname, i.item_offset)
+
+let get_accessor_item ac =
+	match ac.acc_data with
+	| Item id -> let actype = Util.get_type ac.acc_typ in
+		(match actype.code with
+		| TypeStruct elms | TypeUnion elms -> get_item elms id
+		| _ -> internal_error ILOC "not structure")
+	| _ -> internal_error ILOC "not item accessor"
+
 (* Get CL operand as string *)
 let rec operand_to_string op =
 	match op.Operand.data with
 		| OpVar uid -> op_var_to_string uid op.accessor
 		| OpCst { cst_data } -> constant_to_string cst_data op.accessor
 		| OpVoid -> "void"
+
+(* TODO: chained items [+8].next.prev => not working *)
+(* and item_accessors accs (* str *) off =
+	match accs with
+	| [] -> ""
+	| ac::tl -> (match ac.acc_data with
+		| Item _ ->
+			let rest = item_accessors tl off
+			and (item_name, ioff) = get_accessor_item ac in
+			let new_off = off + ioff in
+			let off_str = Printf.sprintf "%i" new_off in
+			".[+" ^ off_str ^ "]" ^ item_name ^ rest
+		| _ -> back_accessors (ac::tl) ) *)
 
 (* TODO: structure acc -> *)
 and back_accessors accs =
@@ -57,8 +91,14 @@ and back_accessors accs =
 		| DerefArray idx -> let rest = back_accessors tl in 
 			let str_idx = operand_to_string idx in
 			"[" ^ str_idx ^ "]" ^ rest
-		| Item _ (* uid *) -> let rest = back_accessors tl in
-			"." ^ rest
+		| Item _ (* num *) -> let rest = back_accessors tl
+			and (item_name, off) = get_accessor_item ac in
+			let off_str = Printf.sprintf "%i" off in
+			".[+" ^ off_str ^ "]" ^ item_name ^ rest
+		| Offset off -> let rest = back_accessors tl
+			and id_str = Printf.sprintf "%i" off
+			and sign = (if off >= 0 then "+" else "") in
+			".<" ^ sign ^ id_str ^ ">" ^ rest
 		| Ref -> error ILOC "invalid reference accessor"; "&"
 		| _ -> error ILOC "unsupported accessor"; "")
 
