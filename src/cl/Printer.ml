@@ -66,18 +66,18 @@ let rec operand_to_string op =
 		| OpCst { cst_data } -> constant_to_string cst_data op.accessor
 		| OpVoid -> "void"
 
-(* TODO: chained items [+8].next.prev => not working *)
-(* and item_accessors accs (* str *) off =
+(* Return chained item accessors with corresponding offset
+   e.g. (".next.prev", 8, rest of accessors) for '[+8].next.prev' *)
+and item_accessors accs =
 	match accs with
-	| [] -> ""
+	| [] -> ("", 0, accs)
 	| ac::tl -> (match ac.acc_data with
 		| Item _ ->
-			let rest = item_accessors tl off
-			and (item_name, ioff) = get_accessor_item ac in
+			let (item_name, ioff) = get_accessor_item ac in
+			let (rest, off, rest_tl) = item_accessors tl in
 			let new_off = off + ioff in
-			let off_str = Printf.sprintf "%i" new_off in
-			".[+" ^ off_str ^ "]" ^ item_name ^ rest
-		| _ -> back_accessors (ac::tl) ) *)
+			(item_name ^ rest, new_off, rest_tl)
+		| _ -> ("", 0, accs) )
 
 (* TODO: structure acc -> *)
 and back_accessors accs =
@@ -91,10 +91,11 @@ and back_accessors accs =
 		| DerefArray idx -> let rest = back_accessors tl in 
 			let str_idx = operand_to_string idx in
 			"[" ^ str_idx ^ "]" ^ rest
-		| Item _ (* num *) -> let rest = back_accessors tl
-			and (item_name, off) = get_accessor_item ac in
+		| Item _ (* num *) ->
+			let (names, off, rest_tl) = item_accessors accs in
+			let rest = back_accessors rest_tl in
 			let off_str = Printf.sprintf "%i" off in
-			".[+" ^ off_str ^ "]" ^ item_name ^ rest
+			".[+" ^ off_str ^ "]" ^ names ^ rest
 		| Offset off -> let rest = back_accessors tl
 			and id_str = Printf.sprintf "%i" off
 			and sign = (if off >= 0 then "+" else "") in
