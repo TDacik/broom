@@ -1,21 +1,14 @@
 (* Pretty printer for Code Listener Storage *)
 
-open Type
 open Operand
 open Var
 open Fnc
-
-type uid = int
 
 (* TODO: use exceptions *)
 
 (* internal location *)
 #define ILOC (Printf.sprintf "%s:%i:" __FILE__ __LINE__)
 
-let error loc msg = Printf.eprintf "%s error: %s\n" loc msg
-
-(* TODO: only if develop mode *)
-let internal_error loc msg = failwith (loc ^ " " ^ msg)
 
 let empty_output = Printf.printf ""
 
@@ -42,23 +35,6 @@ let var_to_string uid =
 		| Some name ->  "%m" ^ scope ^ uid_str ^ ":" ^ name
 		| None -> "%r" ^ scope ^ uid_str
 
-(* next 2 functions move to Util *)
-(* Get (name, off) of type item on index id - for structured types *)
-let get_item items id =
-	let i = Array.get items id in
-	let iname = (match i.item_name with
-		| Some x -> x
-		| None -> "<anon_item>") in
-	(iname, i.item_offset)
-
-let get_accessor_item ac =
-	match ac.acc_data with
-	| Item id -> let actype = Util.get_type ac.acc_typ in
-		(match actype.code with
-		| TypeStruct elms | TypeUnion elms -> get_item elms id
-		| _ -> internal_error ILOC "not structure")
-	| _ -> internal_error ILOC "not item accessor"
-
 (* Get CL operand as string *)
 let rec operand_to_string op =
 	match op.Operand.data with
@@ -73,7 +49,7 @@ and item_accessors accs =
 	| [] -> ("", 0, accs)
 	| ac::tl -> (match ac.acc_data with
 		| Item _ ->
-			let (item_name, ioff) = get_accessor_item ac in
+			let (item_name, ioff) = Util.get_accessor_item ac in
 			let (rest, off, rest_tl) = item_accessors tl in
 			let new_off = off + ioff in
 			(item_name ^ rest, new_off, rest_tl)
@@ -100,8 +76,8 @@ and back_accessors accs =
 			and id_str = Printf.sprintf "%i" off
 			and sign = (if off >= 0 then "+" else "") in
 			".<" ^ sign ^ id_str ^ ">" ^ rest
-		| Ref -> error ILOC "invalid reference accessor"; "&"
-		| _ -> error ILOC "unsupported accessor"; "")
+		| Ref -> Util.error ILOC "invalid reference accessor"; "&"
+		| _ -> Util.error ILOC "unsupported accessor"; "")
 
 and middle_var uid accs =
 	let var = var_to_string uid in
@@ -124,18 +100,18 @@ and const_ptr_to_string ptr accs =
 		| [] -> ""
 		| ac::[] -> ( match ac.acc_data with
 			| Deref -> "*"
-			| _ -> error ILOC "unexpected accessor by constant pointer"; "" )
-		| _ -> error ILOC "too much accessors by constant pointer"; "" ) in
+			| _ -> Util.error ILOC "unexpected accessor by constant pointer"; "" )
+		| _ -> Util.error ILOC "too much accessors by constant pointer"; "" ) in
 	if ptr==0 then "NULL" else Printf.sprintf "%s0x%x" str_acc ptr
 
 and constant_to_string data accs =
 	match data with
 	| CstPtr ptr -> const_ptr_to_string ptr accs
 	| CstStruct | CstUnion | CstArray ->
-		error ILOC "unsupported compound literal"; "?"
+		Util.error ILOC "unsupported compound literal"; "?"
 	| CstFnc fnc -> ( match fnc.name with
 		| Some x -> x
-		| None -> error ILOC "anonymous function"; "" )
+		| None -> Util.error ILOC "anonymous function"; "" )
 	| CstInt i -> Int64.to_string i                 (* TODO: test unsigned *)
 	| CstEnum e -> Printf.sprintf "%i" e            (* TODO: test unsigned *)
 	| CstChar c -> "\'" ^ Printf.sprintf "%c" c ^ "\'"
@@ -218,7 +194,7 @@ let print_call_insn ops =
 		Printf.printf "%s(" str_called;
 		print_list operand_to_string args;
 		Printf.printf ")\n"
-	| _ -> error ILOC "wrong call instruction"
+	| _ -> Util.error ILOC "wrong call instruction"
 
 (* Print CL instruction *)
 let print_insn insn =
@@ -237,7 +213,7 @@ let print_insn insn =
 	| InsnUNOP (code, dst, src) -> print_unary_insn code dst src
 	| InsnBINOP (code, dst, src1, src2) -> print_binary_insn code dst src1 src2
 	| InsnCALL ops -> print_call_insn ops
-	| InsnSWITCH _ -> error ILOC "unsupported switch instruction"
+	| InsnSWITCH _ -> Util.error ILOC "unsupported switch instruction"
 	| InsnLABEL _ -> empty_output (* unused *)
 
 let print_block apply_on bb =

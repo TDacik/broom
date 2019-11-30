@@ -1,19 +1,13 @@
 (** Interface of Pretty printer for Code Listener Storage *)
 
-type uid = int
-
-(* move to Util *)
-(** [get_accessor_item acc] *)
-val get_accessor_item : Operand.cl_accessor -> (string * int)
-
 (** [loc_to_string loc] gets CL code location as string *)
 val loc_to_string: Loc.t option -> string
 
 (** [type_to_string uid] gets CL type as string *)
-val type_to_string: uid -> string
+val type_to_string: Loc.cl_uid -> string
 
 (** [var_to_string uid] gets CL operand as string *)
-val var_to_string: uid -> string
+val var_to_string: Loc.cl_uid -> string
 
 (** [operand_to_string op] gets CL operand as string *)
 val operand_to_string: Operand.t -> string
@@ -31,4 +25,4 @@ val print_block: (Fnc.insn -> unit) -> Fnc.block -> unit
 
 (** [print_fnc ?apply_on_insn (uid,f)] prints function and applies
 	'apply_on_insn' on each instruction *)
-val print_fnc: ?apply_on_insn:(Fnc.insn -> unit) -> (uid * Fnc.t) -> unit
+val print_fnc: ?apply_on_insn:(Fnc.insn -> unit) -> (Loc.cl_uid * Fnc.t) -> unit
