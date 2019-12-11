@@ -2,6 +2,7 @@
   (name biabd)
   (public_name bi.biabd)
   (wrapped false)
-  (libraries core z3)
+  (flags :standard)
+  (libraries core z3 CL)
   (inline_tests (backend qtest.lib))
 )

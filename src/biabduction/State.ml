@@ -6,13 +6,8 @@ type state = {
     lvars: int list;
 }
 
-let rec lvars_to_string lvars =
-  match lvars with
-  | [] -> ""
-  | first::rest -> "V" ^ string_of_int first ^ ", " ^ lvars_to_string rest
-
 let to_string state =
-  "EXISTS: " ^ lvars_to_string state.lvars 
+  "EXISTS: " ^ CL.Util.list_to_string string_of_int state.lvars 
   ^ "\nMISS: " ^ Formula.to_string state.miss 
   ^ "\nACTUAL: " ^ Formula.to_string state.act ^ "\n"
   

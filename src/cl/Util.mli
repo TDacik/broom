@@ -18,6 +18,14 @@ val get_type: Loc.cl_uid -> Type.t
 (** [get_var uid] gets variable from association list in storage *)
 val get_var: Loc.cl_uid -> Var.t
 
+(** [list_to_string to_string args] gets string of elms separated by ',' calling
+	[to_string] on each elm *)
+val list_to_string: ('a -> string) -> 'a list -> string
+
+(** [print_list to_string args] prints list of elms separated by ',' calling
+	[to_string] on each elm *)
+val print_list: ('a -> string) -> 'a list -> unit
+
 (** [is_viod op] if operand is void *)
 val is_void: Operand.t -> bool
 

@@ -172,16 +172,6 @@ let print_binary_insn code dst src1 src2 =
 	let str_src2 = operand_to_string src2 in
 		Printf.printf "\t\t%s := (%s %s %s)\n" str_dst str_src1 binop str_src2
 
-(* Print list of elms separated by ',' calling 'to_string' on each elm *)
-let rec print_list to_string args =
-	match args with
-	| [] -> ()
-	| lst::[] -> let str_arg = to_string lst in
-		Printf.printf "%s" str_arg
-	| hd::tl ->  let str_arg = to_string hd in 
-		Printf.printf "%s, " str_arg;
-		print_list to_string tl
-
 (* Print call instruction; ops = dst, called, ?args+ *)
 let print_call_insn ops =
 	match ops with
@@ -192,7 +182,7 @@ let print_call_insn ops =
 				Printf.printf "\t\t%s := " str_dst
 			else Printf.printf "\t\t";
 		Printf.printf "%s(" str_called;
-		print_list operand_to_string args;
+		Util.print_list operand_to_string args;
 		Printf.printf ")\n"
 	| _ -> Util.error ILOC "wrong call instruction"
 
@@ -230,7 +220,7 @@ let print_fnc ?apply_on_insn:(apply = print_insn) (_, f) =
 	if Util.is_fnc_static f then Printf.printf "static ";
 	let str = get_fnc_name f in
 		Printf.printf "%s(" str;
-		print_list var_to_string f.args;
+		Util.print_list var_to_string f.args;
 		Printf.printf "):\n";
 	match f.cfg with
 		| Some bbs -> print_cfg apply bbs

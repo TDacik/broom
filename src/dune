@@ -1,7 +1,7 @@
 (executable
   (name ContractGenerator)
   (public_name bi)
-  (libraries CL)
+  (libraries CL biabd)
   (modules ContractGenerator))
 
 (executable

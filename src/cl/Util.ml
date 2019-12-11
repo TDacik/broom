@@ -21,6 +21,22 @@ let get_type uid = List.assoc uid stor.Storage.types
 
 let get_var uid = List.assoc uid stor.Storage.vars
 
+let rec list_to_string to_string args =
+	match args with
+	| [] -> ""
+	| lst::[] -> to_string lst
+	| hd::tl -> (to_string hd) ^ ", " ^ (list_to_string to_string tl)
+
+(* Print list of elms separated by ',' calling 'to_string' on each elm *)
+let rec print_list to_string args =
+	match args with
+	| [] -> ()
+	| lst::[] -> let str_arg = to_string lst in
+		Printf.printf "%s" str_arg
+	| hd::tl ->  let str_arg = to_string hd in
+		Printf.printf "%s, " str_arg;
+		print_list to_string tl
+
 let is_void op =
 	match op.Operand.data with
 	| OpVoid -> true

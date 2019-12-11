@@ -1,5 +1,3 @@
-type variable = int
-
 (* NOTE: original name Expr was renamed to Exp due to name collision with Z3.Expr *)
 module Exp = struct (*$< Exp *)
     type t =
@@ -24,16 +22,20 @@ module Exp = struct (*$< Exp *)
 
     and const_val =
         Ptr of int
-      | Int of int
+      | Int of Int64.t
       | Bool of bool
       | String of string
       | Float of float
 
-let const_to_string c=
+    and variable = int
+
+let variable_to_string v = "V" ^ string_of_int v
+
+let const_to_string c =
   match c with
-  | Ptr a -> "Ptr:" ^ string_of_int a
-  | Int a -> string_of_int a
-  | Bool a -> "B" ^  string_of_bool a
+  | Ptr a -> if a==0 then "NULL" else Printf.sprintf "0x%x" a
+  | Int a -> Int64.to_string a
+  | Bool a -> string_of_bool a
   | String a -> a
   | Float a ->  string_of_float a
 
@@ -54,27 +56,30 @@ let binop_to_string o =
 
 let rec to_string e =
   match e with
-  | Var a -> "V" ^ string_of_int a
+  | Var a -> variable_to_string a
   | Const a -> const_to_string a
   | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string a ^ ")"
   | BinOp (op,a,b) -> "(" ^ to_string a ^ binop_to_string op ^  to_string b ^ ")"
   | Void -> "Void"
   | Undef -> "Undef"
-(*$T to_string
-  to_string (Const (Bool false)) = "Bfalse"
- *)
 
 end (*$>*)
 
 (************************************************************
   type definition of Formula
  ************************************************************)
+(** formula *)
+type t = {
+    sigma: sigma;  (** spatial part *)
+    pi: pi;  (** pure part *)
+}
+
 (* pure part *)
-type pi = Exp.t list
+and pi = Exp.t list
 
 (* lambda *)
 and lambda = {
-  param: variable list;
+  param: Exp.variable list;
   form: t;
 }
 
@@ -87,11 +92,8 @@ and heap_pred =
 and sigma = heap_pred list
 
 
-(** formula *)
-and t = {
-    sigma: sigma;  (** spatial part *)
-    pi: pi;  (** pure part *)
-}
+let lvariables_to_string lvars =
+  CL.Util.list_to_string Exp.variable_to_string lvars
 
 let rec sigma_to_string s =
   let pred_to_list a =
@@ -102,8 +104,6 @@ let rec sigma_to_string s =
   match s with
   | [] -> ""
   | first::rest -> pred_to_list first ^ " * " ^ sigma_to_string rest
-
-
 
 let to_string f =
   (*let rec evars_to_string ev =
@@ -119,7 +119,7 @@ let to_string f =
   (*"[Ex. " ^ evars_to_string f.evars ^ "] " ^*)
   sigma_to_string f.sigma ^ pi_to_string f.pi
 
-let print_formula f =
+let print f =
   print_string (to_string f)
 
 (*** FIND ALL VARIABLES IN FORMULA ***)
@@ -139,12 +139,12 @@ let rec join_list_unique l1 l2 =
 
 let rec find_vars_expr expr =
   match expr with
-       | Exp.Var a -> [a]
-        | Const _ -> []
-        | UnOp (_,a) -> find_vars_expr a
-        | BinOp (_,a,b) -> List.append (find_vars_expr a) (find_vars_expr b)
-        | Void -> []
-        | Undef -> []
+  | Exp.Var a -> [a]
+  | Const _ -> []
+  | UnOp (_,a) -> find_vars_expr a
+  | BinOp (_,a,b) -> List.append (find_vars_expr a) (find_vars_expr b)
+  | Void -> []
+  | Undef -> []
 
 let rec find_vars_pi pi =
   match pi with
@@ -392,99 +392,3 @@ let unfold_predicate form pnum conflicts =
     (* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)
     let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
     res_form, new_lvars
-
-
-
-
-(******** EXPERIMENTS *******)
-
-let ptr_size=Exp.Const (Int 8)
-
-let form1 = {
-    sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ];
-    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
-          BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
-    (*evars = [ 2 ]*)
-}
-
-(*List.map (Expr.to_string) form1.pi;;*)
-
-(*to_string form1*)
-
-let pre_free = {
-    sigma = [ Hpointsto (Var 2332,ptr_size, Undef) ];
-    pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)) ]
-    (*evars = []*)
-}
-
-let post_free = {
-    sigma = [];
-    pi = [ BinOp ( Peq, Var 2332, UnOp ( Base, Var 2332)); UnOp ( Freed, Var 2332) ];
-    (* evars = [] *)
-}
-
-let form2 = {
-    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(Var 3, ptr_size, Var 4) ];
-    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-        BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
-          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
-          BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
-    (*evars = [ 2;3;4 ]*)
-}
-
-let form3 = {
-    sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto(Var 3, ptr_size, Var 4) ];
-    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
-          BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
-    (*evars = [ 2;3;4 ]*)
-}
-
-let form4=
-  let lambda= {param=[1;2] ;form={
-      sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[] }}
-  in
-  {
-          sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Slseg (Var 3, Var 4, lambda) ];
-      pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-          BinOp ( Peq, Var 1, UnOp ( Base, Var 3));
-            BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
-            BinOp ( Peq, Var 1, Var 2332 );
-            BinOp ( Peq, Var 2, Const (Ptr 0)) ]
-  }
-let form5=
-  let lambda= {param=[1;3] ;form={
-      sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (Var 2, ptr_size, Var 3)  ]; pi=[] }}
-  in
-  {
-          sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Slseg (Var 2, Var 4, lambda) ];
-      pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-            BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8));
-            BinOp ( Peq, Var 1, Var 2332 );
-            BinOp ( Peq, Var 4, Const (Ptr 0)) ]
-  }
-
-let form6 = {
-    sigma = [ Hpointsto (Var 1,Exp.Const (Int 16), Var 23) ];
-    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-          BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
-          BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, Var 23, Const (Ptr 0)) ]
-    (*evars = [ 2;3;4 ]*)
-}
-
-let form7 = {
-    sigma = [ Hpointsto (Var 4,ptr_size, Var 5) ];
-    pi = [ BinOp (Peq,Var 4,BinOp(Pplus, Var 1, Const (Int 4))) ]
-    (*evars = [ 2;3;4 ]*)
-}
-
-
-(* in utop type:
-   #mod_use "Formula.ml" and then you can do e.g. Formula.simplify Formula.form1
-   #load "Formula.cmo" to load compiled version
-   open Formula and then you can do e.g. simplify form1 *)
