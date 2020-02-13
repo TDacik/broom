@@ -10,48 +10,54 @@ type res =
   The pointsto is provided by index "i1" to the list form.sigma
 *) 
 
-let rec get_eq_base ctx solv z3_names form i1 index =
+let rec get_eq_base ctx solv z3_names form a1 index =
 	if index=(List.length form.sigma) then []
 	else
 	let ff = Boolean.mk_false ctx in
-	let a1 = match (List.nth form.sigma i1) with
-		| Slseg _ -> ff
-		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
-	in
 	let a2 = match (List.nth form.sigma index) with
 		| Slseg _ -> ff
 		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
 	in
-	if (a2=ff)||(i1=index) then (get_eq_base ctx solv z3_names form i1 (index+1))
+	if (a2=ff) then (get_eq_base ctx solv z3_names form a1 (index+1))
 	else
-		(* form -> base(a1) = base(a2) *)
+		(* form -> base(a1) = base(a2) /\ a1 != a2 *)
 		let query=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
-			(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2])))
+			(Boolean.mk_not ctx 
+				(Boolean.mk_and ctx [
+					(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
+					(Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2))
+				])
+			)
 		] in
-		if (Solver.check solv query)=UNSATISFIABLE then index :: (get_eq_base ctx solv z3_names form i1 (index+1))
-		else  (get_eq_base ctx solv z3_names form i1 (index+1))
+		if (Solver.check solv query)=UNSATISFIABLE then index :: (get_eq_base ctx solv z3_names form a1 (index+1))
+		else  (get_eq_base ctx solv z3_names form a1 (index+1))
 
 
 (* Check that points-to on i1 and i2 can have (=SAT) equal distance from base of the block *)
 let check_eq_dist_from_base ctx solv z3_names form i1 i2 =
 	let ff = Boolean.mk_false ctx in
-	let a1 = match (List.nth form.sigma i1) with
-		| Slseg _ -> ff
-		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
+	let a1,l1 = match (List.nth form.sigma i1) with
+		| Slseg _ -> ff,ff
+		| Hpointsto (a,l,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l)
 	in
-	let a2 = match (List.nth form.sigma i2) with
-		| Slseg _ -> ff
-		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
+	let a2,l2 = match (List.nth form.sigma i2) with
+		| Slseg _ -> ff,ff
+		| Hpointsto (a,l,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l)
 	in
 	if ((a1=ff) || (a2=ff)) then false
 	else
 	(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+	let query1 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
 		Boolean.mk_eq ctx 
 			(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
 			(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
 	] in
-	((Solver.check solv query2)=SATISFIABLE)
+	(* SAT l1=l2 *)
+	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		Boolean.mk_eq ctx l1 l2
+	] in
+
+	((Solver.check solv query1)=SATISFIABLE)&&((Solver.check solv query2)=SATISFIABLE)
 
 
 (* The input is a formula and two lists of indexes to form.sigma,
@@ -84,6 +90,35 @@ let rec match_pointsto_from_two_blocks ctx solv z3_names form l1 l2 =
 		| MatchFail -> MatchFail
 		| MatchOK a -> MatchOK ((i1,i2) :: a)
 
+
+(* NOT FINISHED !!! *)
+let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto x1 x2 =
+	match pairs_of_pto with
+	| [] -> true
+	| (i1,i2)::rest ->
+		(* Slseg can not present here *)
+		print_string ((string_of_int i1)^(string_of_int i2)^(string_of_int (List.length form.sigma)));
+		let b1 = match (List.nth form.sigma i1) with
+			| Hpointsto (_,_,b) -> b
+		in
+		let b2 = match (List.nth form.sigma i2) with
+			| Hpointsto (_,_,b) -> b
+		in
+		print_string ((Exp.to_string b1)^(Exp.to_string b2)^"\n");
+		let vars_b1 = find_vars_expr b1 in
+		let vars_b2 = find_vars_expr b2 in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 in
+		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in
+		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
+		if (pt_refs_b1=[] && pt_refs_b1=[]) then false
+		else 	
+			let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
+			] in
+			print_string "***\n";
+			((Solver.check solv query)=SATISFIABLE)
+
+
 let try_pointsto_to_lseg ctx solv z3_names form i1 i2 =
 (* try to abstract two pointsto predicates into a list segment *)
 	let ff = Boolean.mk_false ctx in
@@ -115,9 +150,11 @@ let try_pointsto_to_lseg ctx solv z3_names form i1 i2 =
 	if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then false
 	else
 	(* check all pointsto with equal bases to a1/a2 *)
-	let a1_block=get_eq_base ctx solv z3_names form i1 0 in
-	let a2_block=get_eq_base ctx solv z3_names form i2 0 in
-	(List.length a1_block) = (List.length a2_block)
+	let a1_block=get_eq_base ctx solv z3_names form a1 0 in
+	let a2_block=get_eq_base ctx solv z3_names form a2 0 in
+	match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
+	| MatchFail -> false
+	| MatchOK matchres -> true
 
 (***** Experiments *****)
 let form_abstr1 = {
@@ -126,8 +163,16 @@ let form_abstr1 = {
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2))
         ]
-    (*evars = [ 2;3;4 ]*)
 }
 
+let form_abstr2 = {
+    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
+    	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 10)];
+    pi = [ BinOp ( Peq, Var 1, UnOp ( Base, BinOp ( Pplus, Var 1, ptr_size)));
+    	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+        BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
+	BinOp ( Peq, Var 2, UnOp ( Base, BinOp ( Pplus, Var 2, ptr_size)))
+        ]
+}
 
 
