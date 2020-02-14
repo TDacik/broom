@@ -46,12 +46,16 @@ let is_fnc_static f =
 	let scope = f.Fnc.def.scope in
 		scope == CL_SCOPE_STATIC
 
+let get_type_size uid =
+	let typ = get_type uid in
+	typ.size
+
 let get_type_item items id =
 	let i = Array.get items id in
 	let iname = (match i.item_name with
 		| Some x -> x
 		| None -> "<anon_item>") in
-	(iname, i.item_offset)
+	(iname, i.item_offset, i.item_typ)
 
 let get_accessor_item ac =
 	match ac.acc_data with

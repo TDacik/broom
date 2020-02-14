@@ -49,7 +49,7 @@ and item_accessors accs =
 	| [] -> ("", 0, accs)
 	| ac::tl -> (match ac.acc_data with
 		| Item _ ->
-			let (item_name, ioff) = Util.get_accessor_item ac in
+			let (item_name, ioff, _) = Util.get_accessor_item ac in
 			let (rest, off, rest_tl) = item_accessors tl in
 			let new_off = off + ioff in
 			(item_name ^ rest, new_off, rest_tl)

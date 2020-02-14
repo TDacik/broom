@@ -2,6 +2,7 @@
 module Exp = struct (*$< Exp *)
     type t =
       | Var of variable
+      | CVar of int
       | Const of const_val
       (* todo | Interval... *)
       | UnOp of unop * t
@@ -57,6 +58,7 @@ let binop_to_string o =
 let rec to_string e =
   match e with
   | Var a -> variable_to_string a
+  | CVar a -> "C" ^ string_of_int a
   | Const a -> const_to_string a
   | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string a ^ ")"
   | BinOp (op,a,b) -> "(" ^ to_string a ^ binop_to_string op ^  to_string b ^ ")"
@@ -91,6 +93,7 @@ and heap_pred =
 (* spatial part *)
 and sigma = heap_pred list
 
+let empty = {sigma = []; pi = []}
 
 let lvariables_to_string lvars =
   CL.Util.list_to_string Exp.variable_to_string lvars
@@ -103,6 +106,7 @@ let rec sigma_to_string s =
   in
   match s with
   | [] -> ""
+  | first::[] -> pred_to_list first
   | first::rest -> pred_to_list first ^ " * " ^ sigma_to_string rest
 
 let to_string f =
@@ -114,10 +118,11 @@ let to_string f =
   let rec pi_to_string p =
     match p with
     | [] -> ""
+    | first::[] -> Exp.to_string first
     | first::rest -> Exp.to_string first ^ " & " ^  pi_to_string rest
   in
   (*"[Ex. " ^ evars_to_string f.evars ^ "] " ^*)
-  sigma_to_string f.sigma ^ pi_to_string f.pi
+  sigma_to_string f.sigma ^ " & " ^ pi_to_string f.pi (* TODO: empty pi | sig *)
 
 let print f =
   print_string (to_string f)
@@ -140,6 +145,7 @@ let rec join_list_unique l1 l2 =
 let rec find_vars_expr expr =
   match expr with
   | Exp.Var a -> [a]
+  | CVar a -> [a] (* FIXME *)
   | Const _ -> []
   | UnOp (_,a) -> find_vars_expr a
   | BinOp (_,a,b) -> List.append (find_vars_expr a) (find_vars_expr b)
@@ -199,15 +205,16 @@ let rec get_eq_vars vlist equalities =
 
 let rec substitute_expr var1 var2 expr =
   match expr with
-       | Exp.Var a ->
+  | Exp.Var a ->
     if (a=var2)
     then Exp.Var var1
     else Exp.Var a
-        | Const a -> Const a
-        | UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
-        | BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
-        | Void -> Void
-        | Undef -> Undef
+  | CVar _ -> assert false (* TODO *)
+  | Const a -> Const a
+  | UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
+  | BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
+  | Void -> Void
+  | Undef -> Undef
 
 let rec substitute_sigma var1 var2 sigma =
   match sigma with

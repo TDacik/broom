@@ -31,9 +31,11 @@ val is_void: Operand.t -> bool
 
 val is_fnc_static: Fnc.t -> bool
 
-(** [get_type_item items id] gets (name, offset) of type item on index [id] -
-	for structured types only *)
-val get_type_item: Type.cl_type_item array -> int -> (string * int)
+val get_type_size : Loc.cl_uid -> int
+
+(** [get_type_item items id] gets (name, offset, typ) of type item on index
+	[id] - for structured types only *)
+val get_type_item: Type.cl_type_item array -> int -> (string * int * Loc.cl_uid)
 
 (** [get_accessor_item acc] *)
-val get_accessor_item : Operand.cl_accessor -> (string * int)
+val get_accessor_item : Operand.cl_accessor -> (string * int * Loc.cl_uid)

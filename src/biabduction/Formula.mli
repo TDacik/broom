@@ -1,6 +1,7 @@
 module Exp : sig
   type t =
       | Var of variable
+      | CVar of int
       | Const of const_val
       (* todo | Interval... *)
       | UnOp of unop * t
@@ -53,6 +54,8 @@ and heap_pred =
   | Slseg of Exp.t * Exp.t * lambda    (** source, destination, lambda *)
 
 and sigma = heap_pred list
+
+val empty : t
 
 val lvariables_to_string : Exp.variable list -> string
 
