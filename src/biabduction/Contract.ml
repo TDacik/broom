@@ -16,7 +16,7 @@ type extend_formula = {
 type t = {
     lhs: formula;
     rhs: formula;
-    cvars: int; (* variable list; TODO: use int as number of cvars count from 1 *)
+    cvars: int;
     pvarmap: (variable * variable) list;
 }
 
@@ -95,6 +95,15 @@ let operand_to_exformula op ef =
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> assert false
 
+(* return value in special contract variable with uid 0 *)
+let contract_for_ret ret =
+	let ef_ret = operand_to_exformula ret empty_exformula in
+	let lhs = ef_ret.f in
+	let assign = Exp.BinOp ( Peq, CVar 0, ef_ret.root) in
+	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
+	{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}
+
+(* TODO: add replace for dst *)
 let contract_for_assign dst src =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_src = operand_to_exformula src {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
@@ -105,8 +114,8 @@ let contract_for_assign dst src =
 
 let get_contract insn =
 	match insn.code with
-	(* | InsnRET ret -> []
-	| InsnCLOBBER var -> []
+	| InsnRET ret -> (contract_for_ret ret)::[]
+	(* | InsnCLOBBER var -> []
 	| InsnABORT -> []
 	| InsnBINOP (code, dst, src1, src2) -> []
 	| InsnCALL ops -> [] *)
