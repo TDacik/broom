@@ -110,13 +110,14 @@ let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto x1 x2 =
 		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 in
 		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
-		if (pt_refs_b1=[] && pt_refs_b1=[]) then false
+		if not (pt_refs_b1=[] && pt_refs_b1=[]) then false
 		else 	
 			let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
 				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
 			] in
 			print_string "***\n";
-			((Solver.check solv query)=SATISFIABLE)
+			if ((Solver.check solv query)=SATISFIABLE) then (check_matched_pointsto ctx solv z3_names form rest x1 x2)
+			else false
 
 
 let try_pointsto_to_lseg ctx solv z3_names form i1 i2 =
@@ -175,4 +176,14 @@ let form_abstr2 = {
         ]
 }
 
+let form_abstr3 = {
+    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
+    	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 10)];
+    pi = [
+    	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+        BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+        ]
+}
 

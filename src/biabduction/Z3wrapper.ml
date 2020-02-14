@@ -95,18 +95,33 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     in
     (* Create constrains for two space predicates *)
     (*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
+    (* fit_len: x<=y<x+len(x) \/ y<=x<y+len(y) => base(x) = base(y) *)
     let no_overlap x size_x y size_y=
       Boolean.mk_or ctx
       [(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [x; (expr_to_solver ctx func size_x) ]) y);
       (Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [y; (expr_to_solver ctx func size_y) ]) x)]
     in
     let dist_fields x size_x y size_y = Boolean.mk_implies ctx (base_eq x y) (no_overlap x size_x y size_y) in
-    let two_sp_preds_c al sp_rule =
+    let fit_len x y = Boolean.mk_implies ctx 
+		(Boolean.mk_or ctx [
+			Boolean.mk_and ctx [
+				Arithmetic.mk_le ctx x y;
+				Arithmetic.mk_lt ctx y (Arithmetic.mk_add ctx [x; Expr.mk_app ctx func.len [x]])
+			];
+			Boolean.mk_and ctx [
+				Arithmetic.mk_le ctx y x;
+				Arithmetic.mk_lt ctx x (Arithmetic.mk_add ctx [y; Expr.mk_app ctx func.len [y]])
+			]
+		])
+    		(base_eq x y) 
+    in
+    let two_sp_preds_c al sp_rule = 
       match sp_rule with
       | Hpointsto (aa, size_aa, _) ->(* create a nonequality al != x, where x is the allocated node in sp_rule *)
         Boolean.mk_and ctx
         [(Boolean.mk_not ctx (Boolean.mk_eq ctx al (alloc aa)));
-        (dist_fields al size (alloc aa) size_aa)]
+        (dist_fields al size (alloc aa) size_aa);
+	(fit_len al (alloc aa))]
       | Slseg (aa,bb,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
         Boolean.mk_or ctx
         [ Boolean.mk_not ctx (base_eq al (alloc aa));
