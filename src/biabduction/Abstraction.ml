@@ -92,7 +92,7 @@ let rec match_pointsto_from_two_blocks ctx solv z3_names form l1 l2 =
 
 
 (* NOT FINISHED !!! *)
-let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto x1 x2 =
+let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases =
 	match pairs_of_pto with
 	| [] -> true
 	| (i1,i2)::rest ->
@@ -108,16 +108,26 @@ let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto x1 x2 =
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
 		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 in
-		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in
+		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in (* <-- bug, eq_base miss b1->_, need a swithch *)
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
-		if not (pt_refs_b1=[] && pt_refs_b1=[]) then false
-		else 	
-			let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
 				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
 			] in
-			print_string "***\n";
-			if ((Solver.check solv query)=SATISFIABLE) then (check_matched_pointsto ctx solv z3_names form rest x1 x2)
+		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
+		| _,_,[],[] -> 
+			(* b1 and b2 does not points to an fixed allocated block --- i.e. only integers or undef *) 
+			print_string "***V1\n";
+			if ((Solver.check solv query)=SATISFIABLE) then (check_matched_pointsto ctx solv z3_names form rest block_bases)
 			else false
+		| [x1],[x2],f1::_,f2::_ ->
+			(* b1 and b2 contaisn only a single variable pointing to an allocated block *)
+			print_string ("V2: "^(string_of_int f1)^":"^(string_of_int f2)^ "\n");
+			
+			check_eq_dist_from_base ctx solv z3_names form f1 f2
+		| _ ->
+			(* complicated pattern -> stop abstraction *)
+			print_string "fail\n"; false
+			
 
 
 let try_pointsto_to_lseg ctx solv z3_names form i1 i2 =
