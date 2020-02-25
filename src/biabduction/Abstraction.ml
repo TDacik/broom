@@ -123,15 +123,61 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
 		else check_block_bases ctx solv z3_names form v1 v2 rest
 
+(* check that the pairs_of_pointsto can be folded into the list segment,
+   incl_ref_blocks - include referenced blocks --- 
+   	v1 -> v2 * v1+8 -> v10 * v10 -> null * v2 -> v3 *  v2+8->v11 * v11->null 
+	/\ base(v1)=v1, base(v2)=v2,base(v10)=v10, base(v11)=v11)
+   We call check_matched_pointsto with pairs_of_pto=[(0,3);(1,3)].
+	incl_ref_blocks=1: "v10 -> null" is matched with "v11->null" and abstraction is applied
+	incl_ref_blocks=0: pointsto no. 2 and 5 are not included --- abstraction fails
+*)
 
-let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases =
+type check_res =
+| CheckOK of (int * int * heap_pred) list
+| CheckFail
+
+(* this function is quite similar to the try_pointsto_to_lseg, but is is dedicated to the blocks referenced from the blocks, which should be folded *)
+let find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
+	let a1,l1,b1 = match (List.nth form.sigma i1) with
+		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
+	in
+	let a2,l2,b2 = match (List.nth form.sigma i2) with
+		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
+	in
+	(* form -> base(a1) != base(a2) /\ l1 = l2 *)
+	let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+		Boolean.mk_or ctx [
+		(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
+		(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));]
+	] in
+	(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
+	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		Boolean.mk_eq ctx 
+		(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
+		(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+	] in
+	if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then false
+	else
+	(* check all pointsto with equal bases to a1/a2 *)
+	let a1_block=get_eq_base ctx solv z3_names form a1 0 0 in
+	let a2_block=get_eq_base ctx solv z3_names form a2 0 0 in
+	match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
+		| MatchFail -> print_string "Recursion_failed"; false
+		| MatchOK matchres -> print_string "Recursion OK"; true
+
+
+
+
+
+
+let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks =
 	match pairs_of_pto with
-	| [] -> true
+	| [] -> CheckOK []
 	| (i1,i2)::rest ->
 		(* Slseg can not present here *)
 		print_string ("Matching pointsto no: "^ (string_of_int i1)^" and "^(string_of_int i2));
-		let b1 = match (List.nth form.sigma i1) with
-			| Hpointsto (_,_,b) -> b
+		let a1,s1,b1 = match (List.nth form.sigma i1) with
+			| Hpointsto (a,s,b) -> a,s,b
 		in
 		let b2 = match (List.nth form.sigma i2) with
 			| Hpointsto (_,_,b) -> b
@@ -149,23 +195,45 @@ let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases =
 		| _,_,[],[] -> 
 			(* b1 and b2 does not points to an fixed allocated block --- i.e. only integers or undef *) 
 			print_string "***V1\n";
-			if ((Solver.check solv query)=SATISFIABLE) then (check_matched_pointsto ctx solv z3_names form rest block_bases)
-			else false
+			(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks),(Solver.check solv query) with
+			| CheckFail,_ -> CheckFail
+			| CheckOK res,SATISFIABLE -> CheckOK ((i1,i2, Hpointsto (a1,s1,b1)):: res)
+			(* Here the numerical values are abstracted to "undef" ~~ any value,
+			   some abstract interpretation may be added here *)
+			| CheckOK res,_ ->  CheckOK ((i1,i2, Hpointsto (a1,s1,Undef)):: res)
+			)
 		| [x1],[x2],f1::_,f2::_ ->
 			(* b1 and b2 contaisn only a single variable pointing to an allocated block *)
 			print_string ("V2: "^(string_of_int f1)^":"^(string_of_int f2)^ "\n");
-			
-			(* check_eq_dist_from_base ctx solv z3_names form f1 f2*) (* <--- probably NOT CORRECT *)
-			check_block_bases ctx solv z3_names form x1 x2 block_bases
+			match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
+			| true, _ ->
+				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks) with
+				| CheckFail -> CheckFail
+				| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: res)
+				)
+			| false, 0 -> CheckFail
+			| false, 1 -> 
+				if (find_ref_blocks ctx solv z3_names form f1 f2 block_bases) then print_string "XXX" else print_string "YYY";
+				CheckFail (* here, we have to search the neighbouring blocks *)
+
 		| _ ->
 			(* complicated pattern -> stop abstraction *)
-			print_string "fail\n"; false
+			print_string "fail\n"; CheckFail
 			
 
 
-(* fold the pointsto on indexes i1 and i2 with its neighborhood given by the list of tuples neighbour_pairs *)
-let fold_pointsto form i1 i2 neighbour_pairs =
-	let tmp1,tmp2=List.split neighbour_pairs in
+(* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of triples of the type check_res,
+  each triple consist of two indeces and a spacial predicated, which should be placed into the lambda *)
+let fold_pointsto form i1 i2 res_triples =
+	(* first, get only the first two elements from the triples  and store it into the tmp1, and tmp2*)
+	let rec get_indeces triples =
+		match triples with
+		| [] -> [],[]
+		| (a,b,_)::rest -> 
+			match get_indeces rest with
+			| a1,a2 -> (a::a1,b::a2)
+	in
+	let tmp1,tmp2=get_indeces res_triples in
 	let neighbours= [i1;i2] @ tmp1 @ tmp2 in
 	let lambda_cont= i1 :: tmp1 in
 	let mem l x =
@@ -239,9 +307,9 @@ let try_pointsto_to_lseg ctx solv z3_names form i1 i2 =
 	match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 	| MatchFail -> AbstractionFail 
 	| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
-		if check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 
-		then fold_pointsto form i1 i2 matchres
-		else AbstractionFail
+		match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1) with
+		| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
+		| CheckFail -> AbstractionFail
 
 (***** Experiments *****)
 let form_abstr1 = {
@@ -296,6 +364,22 @@ let form_abstr5 = {
     	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 32));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
     	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 32));
+        ]
+}
+
+let form_abstr6 = {
+    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
+    	Hpointsto (Var 10,ptr_size, Var 1); 
+    	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 11);
+    	Hpointsto (Var 11,ptr_size, Var 2)
+	];
+    pi = [
+    	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
+        BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, Var 11, UnOp ( Base, Var 11));
         ]
 }
 

@@ -93,34 +93,51 @@ and t = {
     pi: pi;  (** pure part *)
 }
 
-let rec sigma_to_string s =
-  let pred_to_list a =
+let rec sigma_to_string_ll s lambda_level num=
+(* num is used to marking lambdas *)
+  let rec lambda_params_to_string params =
+  	match params with 
+	| [] -> ""
+	| first::rest -> "V"^(string_of_int first)^", "^ (lambda_params_to_string rest)
+  in
+  let pred_to_string a =
     match a with
-    | Hpointsto (a,l,b) -> Exp.to_string a ^ " -("^ (Exp.to_string l) ^ ")-> " ^ Exp.to_string b
-    | Slseg (a,b,_) -> "Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", lambdaX) "
+    | Hpointsto (a,l,b) -> (Exp.to_string a ^ " -("^ (Exp.to_string l) ^ ")-> " ^ Exp.to_string b), ""
+    | Slseg (a,b,lambda) -> 
+    	let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
+    	("Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", " ^lambda_id^") "), 
+    			"\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^ (to_string lambda.form  (lambda_level+1))
   in
   match s with
-  | [] -> ""
-  | first::rest -> pred_to_list first ^ " * " ^ sigma_to_string rest
+  | [] -> "",""
+  | first::rest -> 
+  	match (pred_to_string first),(sigma_to_string_ll rest lambda_level (num+1)) with
+	| (pred_first, lambda_first), (pred_rest, lambda_rest) -> (pred_first ^ " * " ^ pred_rest), (lambda_first ^  lambda_rest) 
 
+and sigma_to_string s lambda_level = sigma_to_string_ll s lambda_level 1
 
-
-let to_string f =
-  (*let rec evars_to_string ev =
-    match ev with
-    |[] -> ""
-    | first::rest -> "V" ^ string_of_int first ^ ", " ^ evars_to_string rest
-  in*)
+and to_string f lambda_level =
+(* call this function with:
+   lambda_level=1 -> include translation of lambdas
+   lambda_level=0 -> no translation of lambdas
+ *)
   let rec pi_to_string p =
     match p with
     | [] -> ""
     | first::rest -> Exp.to_string first ^ " & " ^  pi_to_string rest
   in
-  (*"[Ex. " ^ evars_to_string f.evars ^ "] " ^*)
-  sigma_to_string f.sigma ^ pi_to_string f.pi
+  match (sigma_to_string f.sigma lambda_level),lambda_level with
+  | (sigma, _), 0 -> sigma ^ pi_to_string f.pi
+  | (sigma, lambda_descr),_ -> sigma ^ pi_to_string f.pi ^ "\n---------------" ^ lambda_descr
 
+
+let print_formula_with_lambda f =
+  print_string (to_string f 1)
 let print_formula f =
-  print_string (to_string f)
+  print_string (to_string f 0)
+
+
+
 
 (*** FIND ALL VARIABLES IN FORMULA ***)
 (* add missing elements of list l1 to l2 *)
