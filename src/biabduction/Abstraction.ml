@@ -1,6 +1,7 @@
 open Formula
 open Z3
 open Z3wrapper
+open Abduction
 
 (* TODO: 
    (1) siplify pure part inside lambda and in the main formula after folding (i.e. get rid of useless existentials)
@@ -123,17 +124,51 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
 		else check_block_bases ctx solv z3_names form v1 v2 rest
 
-(*************************************************************************************************************)
-
-
-(* check that the pairs_of_pointsto can be folded into the list segment,
-   incl_ref_blocks - include referenced blocks --- 
-   	v1 -> v2 * v1+8 -> v10 * v10 -> null * v2 -> v3 *  v2+8->v11 * v11->null 
-	/\ base(v1)=v1, base(v2)=v2,base(v10)=v10, base(v11)=v11)
-   We call check_matched_pointsto with pairs_of_pto=[(0,3);(1,3)].
-	incl_ref_blocks=1: "v10 -> null" is matched with "v11->null" and abstraction is applied
-	incl_ref_blocks=0: pointsto no. 2 and 5 are not included --- abstraction fails
+(* use entailment form the Abduction module to check entailment between lambdas 
+  results: 0: no entailment, 1: lambda1 |= lambda2, 2: lambda2 |= lambda1 
 *)
+let check_lambda_entailment ctx solv z3_names lambda1 lambda2 =
+	if not ((List.length lambda1.param) = (List.length lambda2.param)) then 0
+	else
+	let variables= (find_vars lambda1.form) @ (find_vars lambda2.form) in
+	let rec fresh_var_id intlist id=
+		match intlist with 
+		| [] -> id
+		| first::rest -> if (first>=id) then fresh_var_id rest (first+1) else fresh_var_id rest id 
+	in
+	let rec get_unique_lambda_params params id =
+		match params with
+		| [] -> []
+		| first::rest -> id::(get_unique_lambda_params rest (id+1))
+	in
+	let new_params=get_unique_lambda_params lambda1.param (fresh_var_id variables 0) in
+	let rec rename_params form oldparams newparams =
+		match oldparams,newparams with
+		| [],[] -> form
+		| p1::rest1,p2::rest2 -> rename_params (substitutevars p2 p1 form) rest1 rest2
+		| _ -> print_string "This should not heppen"; {sigma=[];pi=[]}
+	in
+	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
+	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
+	match (entailment ctx solv z3_names lambda1_new lambda2_new variables), (entailment ctx solv z3_names lambda2_new lambda1_new variables)
+	with
+	| true,_ -> 1
+	| false,true -> 2
+	| _ -> 0
+
+
+
+(*************************************************************************************************************)
+(* Main part of the "BLOCK * BLOCK -> SLSEG" abstraction = functions:
+   * check_matched_pointsto 
+   	- get a paired number of pointsto from two blocks = these two blocks are candidates for abstraction intos Slseg
+	- the function check possibility of folding and prepare the resulting spacial part of lambda (see heap_pred in check_res)
+	- if there is a pointer reference to another blocks, the function find_ref_blocks is called (only if incl_ref_blocks=1)
+   * find_ref_blocks
+        - check that the predicates i1 and i2 are in different memory blocks
+	- call recursivelly check_matched_pointsto with incl_ref_blocks=0
+*)
+
 
 type check_res =
 | CheckOK of (int * int * heap_pred) list
@@ -141,40 +176,61 @@ type check_res =
 
 (* this function is quite similar to the try_pointsto_to_lseg, but is is dedicated to the blocks referenced from the blocks, which should be folded *)
 let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
-	let a1,l1,b1 = match (List.nth form.sigma i1) with
-		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
-	in
-	let a2,l2,b2 = match (List.nth form.sigma i2) with
-		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
-	in
-	(* form -> base(a1) != base(a2) /\ l1 = l2 *)
-	let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
-		Boolean.mk_or ctx [
-		(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
-		(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));]
-	] in
-	(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
-		Boolean.mk_eq ctx 
-		(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
-		(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
-	] in
-	if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then CheckFail
-	else
-	(* check all pointsto with equal bases to a1/a2 *)
-	let a1_block=get_eq_base ctx solv z3_names form a1 0 1 in
-	let a2_block=get_eq_base ctx solv z3_names form a2 0 1 in
-	match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
-		| MatchFail -> print_string "Recursion_failed"; CheckFail
-		| MatchOK matchres ->  
-			(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2)::block_bases) 0) with
-				| CheckOK checked_matchres -> print_string "Recursion_OK"; CheckOK  checked_matchres
-				| CheckFail -> CheckFail
-			)
+	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
+	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) ->
+		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
+		let a2,l2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb) in
+		(* form -> base(a1) != base(a2) /\ l1 = l2 *)
+		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+			Boolean.mk_or ctx [
+			(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
+			(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));]
+		] in
+		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
+		let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			Boolean.mk_eq ctx 
+			(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
+			(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+		] in
+		if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then CheckFail
+		else
+		(* check all pointsto with equal bases to a1/a2 *)
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 in
+		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 in
+		(match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
+			| MatchFail -> CheckFail
+			| MatchOK matchres ->  
+				(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2)::block_bases) 0) with
+					| CheckOK checked_matchres -> CheckOK  checked_matchres
+					| CheckFail -> CheckFail
+				)
+		)
+	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> print_string "Slseg match"; 	
+		let vars_b1 = find_vars_expr b1 in
+		let vars_b2 = find_vars_expr b2 in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 1 in
+		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
+		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
+		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
+			] in
+		let entailment_res=check_lambda_entailment ctx solv z3_names l1 l2 in
+		if entailment_res=0 then CheckFail
+		else
+		let new_lambda=if (entailment_res=1) then l2 else l1 in
+		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
+		| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
+			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
+			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda))]
+		| [x1],[x2],f1::_,f2::_ -> 
+			if (check_block_bases ctx solv z3_names form x1 x2 
+				((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases)) 
+			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
+			else CheckFail
+		
+		| _ -> CheckFail
 
-
-
-
+	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 
 
 and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks =
@@ -193,7 +249,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
 		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 1 in
-		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in (* <-- bug, eq_base miss b1->_, need a swithch *)
+		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
 				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
@@ -398,6 +454,24 @@ let form_abstr6 = {
     	BinOp ( Peq, Var 11, UnOp ( Base, Var 11));
         ]
 }
+let form_abstr7 = 
+    let lambda= {param=[1;2] ;form={
+      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[] }}
+    in
+    {
+    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
+    	 Slseg (Var 10, Const (Ptr 0), lambda);
+    	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 11);
+    	 Slseg (Var 11, Const (Ptr 0), lambda);
+	];
+    pi = [
+    	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+        BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+        ]
+}
+
 
 (*
 let x=match (try_pointsto_to_lseg ctx solv z3_names form_abstr2 0 2) with
