@@ -123,6 +123,9 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
 		else check_block_bases ctx solv z3_names form v1 v2 rest
 
+(*************************************************************************************************************)
+
+
 (* check that the pairs_of_pointsto can be folded into the list segment,
    incl_ref_blocks - include referenced blocks --- 
    	v1 -> v2 * v1+8 -> v10 * v10 -> null * v2 -> v3 *  v2+8->v11 * v11->null 
@@ -137,7 +140,7 @@ type check_res =
 | CheckFail
 
 (* this function is quite similar to the try_pointsto_to_lseg, but is is dedicated to the blocks referenced from the blocks, which should be folded *)
-let find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
+let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
 	let a1,l1,b1 = match (List.nth form.sigma i1) with
 		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
 	in
@@ -156,21 +159,25 @@ let find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
 		(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
 		(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
 	] in
-	if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then false
+	if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then CheckFail
 	else
 	(* check all pointsto with equal bases to a1/a2 *)
-	let a1_block=get_eq_base ctx solv z3_names form a1 0 0 in
-	let a2_block=get_eq_base ctx solv z3_names form a2 0 0 in
+	let a1_block=get_eq_base ctx solv z3_names form a1 0 1 in
+	let a2_block=get_eq_base ctx solv z3_names form a2 0 1 in
 	match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
-		| MatchFail -> print_string "Recursion_failed"; false
-		| MatchOK matchres -> print_string "Recursion OK"; true
+		| MatchFail -> print_string "Recursion_failed"; CheckFail
+		| MatchOK matchres ->  
+			(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2)::block_bases) 0) with
+				| CheckOK checked_matchres -> print_string "Recursion_OK"; CheckOK  checked_matchres
+				| CheckFail -> CheckFail
+			)
 
 
 
 
 
 
-let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks =
+and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks =
 	match pairs_of_pto with
 	| [] -> CheckOK []
 	| (i1,i2)::rest ->
@@ -179,8 +186,8 @@ let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases i
 		let a1,s1,b1 = match (List.nth form.sigma i1) with
 			| Hpointsto (a,s,b) -> a,s,b
 		in
-		let b2 = match (List.nth form.sigma i2) with
-			| Hpointsto (_,_,b) -> b
+		let a2,b2 = match (List.nth form.sigma i2) with
+			| Hpointsto (a,_,b) -> a,b
 		in
 		print_string (" Destinations: "^(Exp.to_string b1)^", "^(Exp.to_string b2)^"\n");
 		let vars_b1 = find_vars_expr b1 in
@@ -205,7 +212,7 @@ let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases i
 		| [x1],[x2],f1::_,f2::_ ->
 			(* b1 and b2 contaisn only a single variable pointing to an allocated block *)
 			print_string ("V2: "^(string_of_int f1)^":"^(string_of_int f2)^ "\n");
-			match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
+			(match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
 			| true, _ ->
 				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks) with
 				| CheckFail -> CheckFail
@@ -213,8 +220,17 @@ let rec check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases i
 				)
 			| false, 0 -> CheckFail
 			| false, 1 -> 
-				if (find_ref_blocks ctx solv z3_names form f1 f2 block_bases) then print_string "XXX" else print_string "YYY";
-				CheckFail (* here, we have to search the neighbouring blocks *)
+				(match (find_ref_blocks ctx solv z3_names form f1 f2 block_bases) with
+				| CheckFail -> CheckFail
+				| CheckOK res_rec ->
+					(match (check_matched_pointsto ctx solv z3_names form rest 
+						((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases) incl_ref_blocks) with
+					| CheckFail -> CheckFail
+					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: (res @ res_rec))
+					)
+				)
+			)
+
 
 		| _ ->
 			(* complicated pattern -> stop abstraction *)
