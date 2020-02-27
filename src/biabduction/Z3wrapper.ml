@@ -29,13 +29,13 @@ let get_sl_functions_z3 ctx =
 
 exception NoZ3Translation of string
 
-let const_to_solver ctx c=
+let const_to_solver ctx c =
   match c with
   | Exp.Ptr a -> Integer.mk_numeral_i ctx a
-  | Exp.Int a -> Integer.mk_numeral_i ctx a
+  | Exp.Int a -> Integer.mk_numeral_i ctx (Int64.to_int a) (* FIXME: not save *)
   | Exp.Bool a -> Boolean.mk_val ctx a
-        | Exp.String _ -> raise (NoZ3Translation "Can't translate String expression to Z3")
-        | Exp.Float _ -> raise (NoZ3Translation "Can't translate Float expression to Z3")
+  | Exp.String _ -> raise (NoZ3Translation "Can't translate String expression to Z3")
+  | Exp.Float _ -> raise (NoZ3Translation "Can't translate Float expression to Z3")
   (*| Exp.String a -> a *)
   (* | Exp.Float a -> Real.mk_numeral_i ctx a *)
 
@@ -45,26 +45,27 @@ let const_to_solver ctx c=
 
 let rec expr_to_solver ctx func expr =
   match expr with
-      | Exp.Var a -> Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (Integer.mk_sort ctx)
-      | Exp.Const a -> const_to_solver ctx a
-      | Exp.UnOp (op,a) ->
-        ( match op with
+  | Exp.Var a -> Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (Integer.mk_sort ctx)
+  | Exp.CVar _ -> raise (NoZ3Translation "Contract variable shouldn't be in Z3")
+  | Exp.Const a -> const_to_solver ctx a
+  | Exp.UnOp (op,a) ->
+    ( match op with
       | Base -> Expr.mk_app ctx func.base [(expr_to_solver ctx func a)]
       | Len ->  Expr.mk_app ctx func.len [(expr_to_solver ctx func a)]
       | Freed -> Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [(expr_to_solver ctx func a)])
     )
-      | Exp.BinOp (op,a,b) ->
-        (match op with
-    | Peq ->  Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-    | Pneq -> Boolean.mk_not ctx (Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b))
-    | Pless ->  Arithmetic.mk_lt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-    | Plesseq -> Arithmetic.mk_le ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-          | Pplus -> Arithmetic.mk_add ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
-          | Pminus -> Arithmetic.mk_sub ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
+  | Exp.BinOp (op,a,b) ->
+    ( match op with
+      | Peq ->  Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pneq -> Boolean.mk_not ctx (Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b))
+      | Pless ->  Arithmetic.mk_lt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Plesseq -> Arithmetic.mk_le ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pplus -> Arithmetic.mk_add ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
+      | Pminus -> Arithmetic.mk_sub ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
     )
-      | Exp.Void ->  Integer.mk_numeral_i ctx (-1)
-      | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (Integer.mk_sort ctx)
-      (**| Exp.Undef -> Integer.mk_numeral_i ctx (-2) !!! This may be a problem. We may create a fresh variable for this .... *)
+  | Exp.Void ->  Integer.mk_numeral_i ctx (-1)
+  | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (Integer.mk_sort ctx)
+  (**| Exp.Undef -> Integer.mk_numeral_i ctx (-2) !!! This may be a problem. We may create a fresh variable for this .... *)
 
 
 (* create conditions to guarantee SL * validity ... *)

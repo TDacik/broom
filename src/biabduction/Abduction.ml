@@ -8,9 +8,19 @@ open Formula
 open Z3
 open Z3wrapper
 
+type variable = Formula.Exp.variable
+
 exception TempExceptionBeforeApiCleanup of string
 exception ShouldBeRefactoredToMakeExhaustive of unit
 exception IllegalArgumentException of string
+
+(** result of the rule application
+    form1 * form2 * M * added_local_vars
+    or Fail
+**)
+type res =
+  | Apply of Formula.t * Formula.t * Formula.t * variable list
+  | Fail
 
 let to_slseg_unsafe hpred = match hpred with
   | Hpointsto (_, _, _) -> raise (IllegalArgumentException "Received points-to assertion instead of list")
@@ -20,13 +30,6 @@ let to_hpointsto_unsafe hpred = match hpred with
   | Slseg (_, _, _) -> raise (IllegalArgumentException "Received list instead of points-to assertion")
   | Hpointsto (a,l,b) -> (a,l,b)
 
-(** result of the rule application
-    form1 * form2 * M * added_local_vars
-    or Fail
-**)
-type res =
-| Apply of Formula.t * Formula.t * Formula.t * int list
-| Fail
 
 (**** MATCH rules ****)
 (* The level parameter gives the level of match, the only difference is in check_match function *)
@@ -168,7 +171,7 @@ let find_match ctx solv z3_names form1 form2 level =
    pred_type=3 --- Slseg x Slseg
 *)
 type apply_match_res =
-| ApplyOK of Formula.t * Formula.t * int list
+| ApplyOK of Formula.t * Formula.t * variable list
 | ApplyFail
 
 
@@ -412,7 +415,7 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
   let lhs,lhs_size,lhs_dest =
     match (List.nth form1.sigma i1) with
     | Hpointsto (a,s ,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s),b
-    | Slseg (_) -> ff,ff,Exp.Const  (Int 0)
+    | Slseg (_) -> ff,ff,Exp.Const (Int Int64.zero)
   in
   let rhs,rhs_size =
     match (List.nth form2.sigma i2) with
@@ -422,7 +425,7 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
   if ((lhs=ff)||(rhs=ff))
   then false
   else
-  let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,lhs_dest, Const (Int 0)));
+  let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq, lhs_dest, Const (Int Int64.zero)));
     (Boolean.mk_and ctx (formula_to_solver ctx form1))
     ] in
   match level with
@@ -473,13 +476,13 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
   let rhs,rhs_size,rhs_dest =
     match (List.nth form2.sigma i2) with
     | Hpointsto (a,s ,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s), b
-    | Slseg (_) -> ff,ff, Exp.Const  (Int 0)
+    | Slseg (_) -> ff,ff, Exp.Const  (Int Int64.zero)
   in
   if ((lhs=ff)||(rhs=ff))
   then false
   else
   (* we should check that the destination is NULL or UNDEF *)
-  let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,rhs_dest, Const (Int 0)));
+  let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq, rhs_dest, Const (Int Int64.zero)));
     (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
   match level with
@@ -563,43 +566,44 @@ let try_split ctx solv z3_names form1 form2 level =
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
               (expr_to_solver ctx z3_names
-                  (BinOp(Pneq,tmp_size_first,Const (Int 0))))
+                  (BinOp(Pneq, tmp_size_first, Const (Int Int64.zero))))
             ]
         in
-        if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int 0))
+        if (Solver.check solv query)=UNSATISFIABLE
+        then (Exp.Const (Int Int64.zero))
         else tmp_size_first
       in
       (* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
       let size_last=
         let tmp_size_last=
-          if size_first=(Const (Int 0))
+          if size_first=(Const (Int Int64.zero))
           then (Exp.BinOp(Pminus,s1,s2))
           else (Exp.BinOp(Pminus,s1,Exp.BinOp(Pplus,s2,size_first))) in
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
               (expr_to_solver ctx z3_names
-                  (BinOp(Pneq,tmp_size_last,Const (Int 0))))
+                  (BinOp(Pneq,tmp_size_last,Const (Int Int64.zero))))
             ]
         in
-        if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int 0))
+        if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int Int64.zero))
         else tmp_size_last
       in
       let ptr_last=(Exp.BinOp(Pplus,x2,s2)) in
       let split_dest=
-        let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y1, Const (Int 0)));
+        let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y1, Const (Int Int64.zero)));
           (Boolean.mk_and ctx (formula_to_solver ctx form1))
         ] in
-        if (Solver.check solv query_null)=UNSATISFIABLE then Exp.Const (Int 0) else Exp.Undef
+        if (Solver.check solv query_null)=UNSATISFIABLE then Exp.Const (Int Int64.zero) else Exp.Undef
       in
       let sigma1_new,pi_tmp1, pi_tmp2= (* compute the splitted part of sigma and new pi*)
-        if size_first=(Const (Int 0)) then
+        if size_first=(Const (Int Int64.zero)) then
           [ Hpointsto (x1,s2,split_dest);
             Hpointsto (ptr_last,size_last,split_dest)],
            [ Exp.BinOp(Peq,x1,x2) ;
              BinOp ( Plesseq, s1, UnOp ( Len, x1));
              BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last))],
            [ Exp.BinOp(Pless,s2,s1) ]
-        else if  size_last=(Const (Int 0)) then
+        else if  size_last=(Const (Int Int64.zero)) then
           [Hpointsto (x1,size_first,split_dest);
            Hpointsto (x2,s2,split_dest)],
            [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
@@ -630,41 +634,45 @@ let try_split ctx solv z3_names form1 form2 level =
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
               (expr_to_solver ctx z3_names
-                  (BinOp(Pneq,tmp_size_first,Const (Int 0))))
+                  (BinOp(Pneq,tmp_size_first,Const (Int Int64.zero))))
             ]
         in
-        if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int 0))
+        if (Solver.check solv query)=UNSATISFIABLE
+        then (Exp.Const (Int Int64.zero))
         else tmp_size_first
       in
       (* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
       let size_last=
         let tmp_size_last=
-          if size_first=(Const (Int 0))
+          if size_first=(Const (Int Int64.zero))
           then (Exp.BinOp(Pminus,s2,s1))
           else (Exp.BinOp(Pminus,s2,Exp.BinOp(Pplus,s1,size_first))) in
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
               (expr_to_solver ctx z3_names
-                  (BinOp(Pneq,tmp_size_last,Const (Int 0))))
+                  (BinOp(Pneq,tmp_size_last,Const (Int Int64.zero))))
             ]
         in
-        if (Solver.check solv query)=UNSATISFIABLE then (Exp.Const (Int 0))
+        if (Solver.check solv query)=UNSATISFIABLE
+        then (Exp.Const (Int Int64.zero))
         else tmp_size_last
       in
       let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
       let split_dest=
-        let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y2, Const (Int 0)));
+        let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y2, Const (Int Int64.zero)));
           (Boolean.mk_and ctx (formula_to_solver ctx form2))
         ] in
-        if (Solver.check solv query_null)=UNSATISFIABLE then Exp.Const (Int 0) else Exp.Undef
+        if (Solver.check solv query_null)=UNSATISFIABLE
+        then Exp.Const (Int Int64.zero)
+        else Exp.Undef
       in
       let sigma2_new,pi_tmp1,pi_tmp2= (* compute the splitted part of sigma *)
-        if size_first=(Const (Int 0)) then
+        if size_first=(Const (Int Int64.zero)) then
           [ Hpointsto (x1,s1,split_dest);
             Hpointsto (ptr_last,size_last,split_dest)],
            [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2)) ],
            [ Exp.BinOp(Pless,s1,s2) ]
-        else if  size_last=(Const (Int 0)) then
+        else if  size_last=(Const (Int Int64.zero)) then
           [Hpointsto (x2,size_first,split_dest);
            Hpointsto (x1,s1,split_dest)],
            [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
@@ -706,7 +714,7 @@ let test_sat ctx solv __names form1 form2 =
 (* The result is:  "missing, frame, added_lvars" *)
 
 type abduction_res =
-| Bok of Formula.t * Formula.t * int list
+| Bok of Formula.t * Formula.t * variable list
 | BFail
 
 let rec biabduction ctx solv z3_names form1 form2 =
