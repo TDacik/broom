@@ -1,8 +1,8 @@
 type variable = Formula.Exp.variable
 
 type t = { 
-    miss: Formula.t;  
-    act: Formula.t;  
+    miss: Formula.t;
+    act: Formula.t;
     lvars: variable list;
 }
 
@@ -18,7 +18,7 @@ let rec simplify_ll gvars evars state =
   let equiv=Formula.get_varmap state.act.pi in
   match evars with
   | [] -> state
-  | a :: rest ->   
+  | a :: rest ->
     let eq_vars=(Formula.get_eq_vars [a] equiv) in
     let notmem l x =
       let eq y= (x=y) in
@@ -35,7 +35,7 @@ let rec simplify_ll gvars evars state =
 (* remove redundant existential variables
    -- i.e. if V1 anv V2 are existential variables and state.act contains equality "V1=V2", then V2 is renamed to V1.
 *)
-let simplify state=
+let simplify state =
   let mem x =
     let eq y= (x=y) in
     not (List.exists eq state.lvars )
@@ -43,8 +43,8 @@ let simplify state=
   let vars = Formula.join_list_unique (Formula.find_vars state.act) (Formula.find_vars state.miss) in
   let gvars = List.filter mem vars in
   let state1 = simplify_ll gvars state.lvars state in
-  let miss_new = { Formula.sigma=state1.miss.sigma; 
+  let miss_new = { Formula.sigma=state1.miss.sigma;
     pi=Formula.remove_redundant_eq state1.miss.pi } in
-  let act_new = { Formula.sigma=state1.act.sigma;  
+  let act_new = { Formula.sigma=state1.act.sigma;
     pi=Formula.remove_redundant_eq state1.act.pi } in
   {miss=miss_new; act=act_new; lvars=state1.lvars }

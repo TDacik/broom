@@ -1,27 +1,18 @@
-(*
-#mod_use "Formula.ml";;
-#require "z3";;
-#mod_use "Z3wrapper.ml";;
-#mod_use "Abduction.ml";;
-#mod_use "State.ml";;
-*)
-
-
 open State
 open Formula
 open Z3
 open Z3wrapper
 
 type contract_app_res =
-| CAppOk of State.state
-| CAppFail
+  | CAppOk of State.t
+  | CAppFail
 
 (* apply contract,
    * we assume that contract variables are not used within the state s,
    * only the program variables may appear in both contract and state, they are used as anchors
 *)
 let apply_contract ctx solv z3_names state c =
-  match (Abduction.biabduction ctx solv z3_names state.act c.lhs) with
+  match (Abduction.biabduction ctx solv z3_names state.act c.Contract.lhs) with
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
     let missing= {pi=state.miss.pi @ miss.pi; sigma=state.miss.sigma @ miss.sigma } in
@@ -183,7 +174,7 @@ let contract_application ctx solv z3_names state c =
     CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap)
 
 (********************************************)
-(* Experiments *)
+(* Experiments
 
 let pre_move = {
     sigma = [ Hpointsto (Var 1, ptr_size, Var 3) ];
@@ -208,7 +199,7 @@ let post_change = {
 }
 
 let c_change={lhs=pre_change; rhs=post_change; cvars=[9;10;11]; pvarmap=[]}
-
+*)
 
 
 
