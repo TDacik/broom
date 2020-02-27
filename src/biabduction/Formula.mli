@@ -63,6 +63,7 @@ val to_string : t -> string
 
 val print : t -> unit
 
+
 (** {3 Find all variables in formula} *)
 
 (** [join_list_unique l1 l2] adds missing elements of list [l1] to [l2] *)
@@ -71,7 +72,18 @@ val join_list_unique : 'a list -> 'a list -> 'a list
 (** [find_vars form] provides a list of all variables used in the formula form *)
 val find_vars : t -> Exp.variable list
 
+
 (** {3 Formula simplification} *)
+
+(** [get_varmap f] simplify formula by removing equivalent existential variables
+    get a list of pair of equal variables from Pure part *)
+val get_varmap : pi -> (Exp.variable * Exp.variable) list
+
+(** [get_eq_vars varlist equalities] computes a transitive closure *)
+val get_eq_vars : 'a list -> ('a * 'a) list -> 'a list
+
+(** [substitute var eqvarlist form] *)
+val substitute : Exp.variable -> Exp.variable list -> t -> t
 
 (** [remove_redundant_eq pi] removes redundant equalities from pure part
     formula *)
@@ -87,6 +99,7 @@ val simplify_ll : Exp.variable list -> Exp.variable list -> t -> t
     q. variables, which can be renamed/removed/etc...*)
 val simplify : t -> Exp.variable list -> t
 
+
 (** {3 Rename conflicting logical variables} *)
 
 (** [rename_ex_variables form evars conflicts] creates fresh names for evars
@@ -96,7 +109,3 @@ val rename_ex_variables : t -> Exp.variable list -> Exp.variable list -> t * Exp
 (** {3 Unfold predicate} *)
 
 val unfold_predicate : t -> int -> Exp.variable list -> t * Exp.variable list
-
-
-
-
