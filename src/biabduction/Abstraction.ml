@@ -1,7 +1,6 @@
 open Formula
 open Z3
 open Z3wrapper
-open Abduction
 
 (* TODO: 
    (1) siplify pure part inside lambda and in the main formula after folding (i.e. get rid of useless existentials)
@@ -150,7 +149,8 @@ let check_lambda_entailment ctx solv z3_names lambda1 lambda2 =
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
 	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
-	match (entailment ctx solv z3_names lambda1_new lambda2_new variables), (entailment ctx solv z3_names lambda2_new lambda1_new variables)
+	match (Abduction.entailment ctx solv z3_names lambda1_new lambda2_new variables), 
+		(Abduction.entailment ctx solv z3_names lambda2_new lambda1_new variables)
 	with
 	| true,_ -> 1
 	| false,true -> 2
@@ -175,7 +175,13 @@ type check_res =
 | CheckFail
 
 (* this function is quite similar to the try_pointsto_to_lseg, but is is dedicated to the blocks referenced from the blocks, which should be folded *)
-let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
+let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
+	let global_bases base g=Boolean.mk_not ctx
+		(Boolean.mk_eq ctx
+			(Expr.mk_app ctx z3_names.base [base]) 
+			(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
+		)
+	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
 	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) ->
 		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
@@ -192,7 +198,16 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
 			(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
 			(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
 		] in
-		if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then CheckFail
+		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
+		let query3=if gvars=[] then []
+			else
+			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_and ctx (List.map (global_bases a1) gvars);
+				Boolean.mk_and ctx (List.map (global_bases a2) gvars);] 
+		in
+		if not (((Solver.check solv query1)=UNSATISFIABLE)
+			&& ((Solver.check solv query2)=SATISFIABLE)
+			&& ((Solver.check solv query3)=SATISFIABLE)) then CheckFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 in
@@ -200,12 +215,12 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
 		(match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 			| MatchFail -> CheckFail
 			| MatchOK matchres ->  
-				(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2)::block_bases) 0) with
+				(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2)::block_bases) 0 gvars) with
 					| CheckOK checked_matchres -> CheckOK  checked_matchres
 					| CheckFail -> CheckFail
 				)
 		)
-	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> print_string "Slseg match"; 	
+	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
 		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 1 in
@@ -214,26 +229,38 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases =
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
 				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
 			] in
+		(* check entailment between l1 and l2 *)
 		let entailment_res=check_lambda_entailment ctx solv z3_names l1 l2 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
+		(* check that a1 and a2 are not is equal base with a global variable *)
+		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
+		let query3=if gvars=[] then []
+			else
+			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver ctx z3_names a1)) gvars);
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver ctx z3_names a2)) gvars);] 
+		in
+		if ((Solver.check solv query3)=UNSATISFIABLE) then CheckFail
+		else
+		(* check compatibility of b1 and b2 *)
 		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
 		| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
 			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
 			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda))]
-		| [x1],[x2],f1::_,f2::_ -> 
+		| [x1],[x2],f1::_,f2::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names form x1 x2 
 				((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases)) 
 			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
 			else CheckFail
 		
 		| _ -> CheckFail
-
+		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 
 
-and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks =
+and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks gvars=
 	match pairs_of_pto with
 	| [] -> CheckOK []
 	| (i1,i2)::rest ->
@@ -258,7 +285,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		| _,_,[],[] -> 
 			(* b1 and b2 does not points to an fixed allocated block --- i.e. only integers or undef *) 
 			print_string "***V1\n";
-			(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks),(Solver.check solv query) with
+			(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars),(Solver.check solv query) with
 			| CheckFail,_ -> CheckFail
 			| CheckOK res,SATISFIABLE -> CheckOK ((i1,i2, Hpointsto (a1,s1,b1)):: res)
 			(* Here the numerical values are abstracted to "undef" ~~ any value,
@@ -270,17 +297,17 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			print_string ("V2: "^(string_of_int f1)^":"^(string_of_int f2)^ "\n");
 			(match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
 			| true, _ ->
-				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks) with
+				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 				| CheckFail -> CheckFail
 				| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: res)
 				)
 			| false, 0 -> CheckFail
-			| false, 1 -> 
-				(match (find_ref_blocks ctx solv z3_names form f1 f2 block_bases) with
+			| false, _ -> 
+				(match (find_ref_blocks ctx solv z3_names form f1 f2 block_bases gvars) with
 				| CheckFail -> CheckFail
 				| CheckOK res_rec ->
 					(match (check_matched_pointsto ctx solv z3_names form rest 
-						((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases) incl_ref_blocks) with
+						((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases) incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: (res @ res_rec))
 					)
@@ -341,47 +368,68 @@ let fold_pointsto form i1 i2 res_triples =
 
 
 
-let try_pointsto_to_lseg ctx solv z3_names form i1 i2 =
-(* try to abstract two pointsto predicates into a list segment *)
-	let ff = Boolean.mk_false ctx in
-	let a1,l1,b1 = match (List.nth form.sigma i1) with
-		| Slseg _ -> ff,ff,ff
-		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
-	in
-	let a2,l2,b2 = match (List.nth form.sigma i2) with
-		| Slseg _ -> ff,ff,ff
-		| Hpointsto (a,l,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b)
-	in
-	 (* Slseg can not match the condition *)
-	if ((a1=ff) || (a2=ff)) then AbstractionFail
-	else
-	(* First do a base check --- i.e. query1 + query2 *)
-	(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
-	let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
-		Boolean.mk_or ctx [
-			(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
-			(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
-			(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))]
-	] in
-	(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
-		Boolean.mk_eq ctx 
-			(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
-			(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
-	] in
-	if not (((Solver.check solv query1)=UNSATISFIABLE)&& ((Solver.check solv query2)=SATISFIABLE)) then AbstractionFail
-	else
-	(* check all pointsto with equal bases to a1/a2 *)
-	let a1_block=get_eq_base ctx solv z3_names form a1 0 0 in
-	let a2_block=get_eq_base ctx solv z3_names form a2 0 0 in
-	(* FIRST: try to find possible mapping between particula points-to predicates is block of a1/a2 *)
-	print_string "***";
-	match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
-	| MatchFail -> AbstractionFail 
-	| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
-		match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1) with
-		| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
-		| CheckFail -> AbstractionFail
+let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
+(* try to abstract two predicates i1 and i2 into a list segment,
+  gvars = global variables. Internal nodes of the list segment can not be pointed by global variables*)
+	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
+	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> (
+		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
+		let a2,l2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb) in
+		(* First do a base check --- i.e. query1 + query2 *)
+		(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
+		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+			Boolean.mk_or ctx [
+				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
+				(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
+				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))]
+		] in
+		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
+		let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			Boolean.mk_eq ctx 
+				(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
+				(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+		] in
+		(* SAT: forall g in gvar. base(g)!=base(a2) *)
+		let global_bases g=Boolean.mk_not ctx
+				(Boolean.mk_eq ctx
+					(Expr.mk_app ctx z3_names.base [a2]) 
+					(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
+				)
+		in
+		let query3=if gvars=[] then []
+			else
+			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_and ctx (List.map global_bases gvars) ] 
+		in
+		if not (((Solver.check solv query1)=UNSATISFIABLE)
+			&& ((Solver.check solv query2)=SATISFIABLE)
+			&& ((Solver.check solv query3)=SATISFIABLE)) then AbstractionFail
+		else
+		(* check all pointsto with equal bases to a1/a2 *)
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 in
+		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 in
+		(* FIRST: try to find possible mapping between particula points-to predicates is block of a1/a2 *)
+		print_string "***";
+		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
+		| MatchFail -> AbstractionFail 
+		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
+			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1 gvars) with
+			| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
+			| CheckFail -> AbstractionFail
+		)
+	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
+		let a1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names b) in
+		let a2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names bb) in
+		(* form -> b1 = a2 *)
+		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+				(Boolean.mk_not ctx (Boolean.mk_eq ctx b1 a2))
+		] in
+		if (Solver.check solv query1)=SATISFIABLE then AbstractionFail
+		else
+		(*print_string "SLSEG + SLSEG fail";*) 
+		AbstractionFail
+		)
+	| _ -> AbstractionFail
 
 (***** Experiments *****)
 let form_abstr1 = {
@@ -471,10 +519,28 @@ let form_abstr7 =
     	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
         ]
 }
+let form_abstr8 = 
+    {
+    sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
+    	 Hpointsto (Var 10,ptr_size, Var 1); Hpointsto(BinOp ( Pplus, Var 10, ptr_size),ptr_size, Var 10);
+    	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 11);
+    	 Hpointsto (Var 11,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 11, ptr_size),ptr_size, Var 11);
+	];
+    pi = [
+    	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
+    	BinOp ( Peq, UnOp ( Len, Var 10), Const (Int 16));
+        BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, Var 11, UnOp ( Base, Var 11));
+    	BinOp ( Peq, UnOp ( Len, Var 11), Const (Int 16));
+        ]
+}
 
 
 (*
-let x=match (try_pointsto_to_lseg ctx solv z3_names form_abstr2 0 2) with
+let x=match (try_pointsto_to_lseg ctx solv z3_names form_abstr2 0 2 []) with
 | AbstractionApply x -> x;;
 
 print_formula x;;
