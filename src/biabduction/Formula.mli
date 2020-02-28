@@ -63,13 +63,18 @@ val to_string : t -> string
 
 val print : t -> unit
 
+val print_with_lambda : t -> unit
 
 (** {3 Find all variables in formula} *)
 
 (** [join_list_unique l1 l2] adds missing elements of list [l1] to [l2] *)
 val join_list_unique : 'a list -> 'a list -> 'a list
 
-(** [find_vars form] provides a list of all variables used in the formula form *)
+(** [find_vars_expr expr] *)
+val find_vars_expr : Exp.t -> Exp.variable list
+
+(** [find_vars form] provides a list of all variables used in the formula form
+    expect contract variables *)
 val find_vars : t -> Exp.variable list
 
 
@@ -81,6 +86,9 @@ val get_varmap : pi -> (Exp.variable * Exp.variable) list
 
 (** [get_eq_vars varlist equalities] computes a transitive closure *)
 val get_eq_vars : 'a list -> ('a * 'a) list -> 'a list
+
+(** [substitute_vars var1 var2 form] *)
+val substitute_vars : Exp.variable -> Exp.variable -> t -> t
 
 (** [substitute var eqvarlist form] *)
 val substitute : Exp.variable -> Exp.variable list -> t -> t

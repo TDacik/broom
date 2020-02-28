@@ -144,7 +144,7 @@ let check_lambda_entailment ctx solv z3_names lambda1 lambda2 =
 	let rec rename_params form oldparams newparams =
 		match oldparams,newparams with
 		| [],[] -> form
-		| p1::rest1,p2::rest2 -> rename_params (substitutevars p2 p1 form) rest1 rest2
+		| p1::rest1,p2::rest2 -> rename_params (substitute_vars p2 p1 form) rest1 rest2
 		| _ -> print_string "This should not heppen"; {sigma=[];pi=[]}
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in

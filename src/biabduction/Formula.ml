@@ -101,9 +101,9 @@ let lvariables_to_string lvars =
 let rec sigma_to_string_ll s lambda_level num=
 (* num is used to marking lambdas *)
   let rec lambda_params_to_string params =
-  	match params with 
-	| [] -> ""
-	| first::rest -> "V"^(string_of_int first)^", "^ (lambda_params_to_string rest)
+    match params with 
+    | [] -> ""
+    | first::rest -> "V"^(string_of_int first)^", "^ (lambda_params_to_string rest)
   in
   let pred_to_string a =
     match a with
@@ -111,7 +111,7 @@ let rec sigma_to_string_ll s lambda_level num=
     | Slseg (a,b,lambda) -> 
     	let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
     	("Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", " ^lambda_id^") "), 
-    			"\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^ (to_string lambda.form  (lambda_level+1))
+    			"\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^ (to_string_with_lambda lambda.form  (lambda_level+1))
   in
   match s with
   | [] -> "",""
@@ -121,7 +121,7 @@ let rec sigma_to_string_ll s lambda_level num=
 
 and sigma_to_string s lambda_level = sigma_to_string_ll s lambda_level 1
 
-and to_string f lambda_level =
+and to_string_with_lambda f lambda_level =
 (* call this function with:
    lambda_level=1 -> include translation of lambdas
    lambda_level=0 -> no translation of lambdas
@@ -136,13 +136,13 @@ and to_string f lambda_level =
   | (sigma, _), 0 -> sigma ^ " & " ^ pi_to_string f.pi
   | (sigma, lambda_descr),_ -> sigma ^ " & " ^ pi_to_string f.pi ^ "\n---------------" ^ lambda_descr (* TODO: empty pi | sig *)
 
-let to_string f = to_string f 0
+let to_string f = to_string_with_lambda f 0
 
 let print_with_lambda f =
-  print_string (to_string f 1)
+  print_string (to_string_with_lambda f 1)
 
 let print f =
-  print_string (to_string f 0)
+  print_string (to_string_with_lambda f 0)
 
 
 (*** FIND ALL VARIABLES IN FORMULA ***)
@@ -159,11 +159,11 @@ let rec join_list_unique l1 l2 =
     then join_list_unique rest l2
     else join_list_unique rest (first::l2)
 
-
+(* exexcept contract variables *)
 let rec find_vars_expr expr =
   match expr with
   | Exp.Var a -> [a]
-  | CVar a -> [a] (* FIXME *)
+  | CVar _ -> []
   | Const _ -> []
   | UnOp (_,a) -> find_vars_expr a
   | BinOp (_,a,b) -> List.append (find_vars_expr a) (find_vars_expr b)
@@ -254,9 +254,9 @@ let rec substitute_pi var1 var2 pi =
   |  [] -> []
 
 
-let substitutevars var1 var2 form =
+let substitute_vars var1 var2 form =
   let sigma_out = substitute_sigma var1 var2 form.sigma in
-  let pi_out=substitute_pi var1 var2 form.pi in
+  let pi_out = substitute_pi var1 var2 form.pi in
   {sigma = sigma_out; pi = pi_out}
   (*{sigma = sigma_out; pi = pi_out; evars = form.evars} *)
 
@@ -264,7 +264,7 @@ let rec substitute var1 eqvarlist form =
   match eqvarlist with
   | [] -> form
   | first::rest ->
-    let form1=substitutevars var1 first form in
+    let form1=substitute_vars var1 first form in
       substitute var1 rest form1
 
 
@@ -351,7 +351,7 @@ let rec rename_ex_variables_ll form all_vars to_rename conflicts seed new_evars=
   | first::rest -> if (mem first conflicts)
       then
         let new_var = get_fresh_var seed (List.append all_vars conflicts) in
-        let new_form = substitutevars new_var first form in
+        let new_form = substitute_vars new_var first form in
         rename_ex_variables_ll new_form all_vars rest conflicts (new_var+1) (new_var :: new_evars)
       else rename_ex_variables_ll form all_vars rest conflicts seed (first :: new_evars)
 
