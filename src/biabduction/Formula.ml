@@ -32,6 +32,8 @@ module Exp = struct (*$< Exp *)
 
 let variable_to_string v = "V" ^ string_of_int v
 
+let cvariable_to_string v = "C" ^ string_of_int v
+
 let const_to_string c =
   match c with
   | Ptr a -> if a==0 then "NULL" else Printf.sprintf "0x%x" a
@@ -224,10 +226,13 @@ let rec get_eq_vars vlist equalities =
 let rec substitute_expr var1 var2 expr =
   match expr with
   | Exp.Var a ->
-    if (a=var2)
-    then Exp.Var var1
-    else Exp.Var a
-  | CVar _ -> assert false (* TODO *)
+    ( match var2 with
+      | Exp.Var v2 -> if (a=v2) then var1 else Exp.Var a
+      | _ -> Exp.Var a )
+  | CVar a ->
+    ( match var2 with
+      | Exp.CVar v2 -> if (a=v2) then var1 else Exp.CVar a
+      | _ -> Exp.CVar a )
   | Const a -> Const a
   | UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
   | BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
@@ -237,7 +242,7 @@ let rec substitute_expr var1 var2 expr =
 let rec substitute_sigma var1 var2 sigma =
   match sigma with
     | [] -> []
-    | Hpointsto (a,l, b) ::rest ->
+    | Hpointsto (a,l,b) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       let l_new = substitute_expr var1 var2 l in
@@ -254,11 +259,15 @@ let rec substitute_pi var1 var2 pi =
   |  [] -> []
 
 
-let substitute_vars var1 var2 form =
+let substitute_vars_cvars var1 var2 form =
   let sigma_out = substitute_sigma var1 var2 form.sigma in
   let pi_out = substitute_pi var1 var2 form.pi in
   {sigma = sigma_out; pi = pi_out}
-  (*{sigma = sigma_out; pi = pi_out; evars = form.evars} *)
+
+
+let substitute_vars var1 var2 form =
+  substitute_vars_cvars (Var var1) (Var var2) form
+
 
 let rec substitute var1 eqvarlist form =
   match eqvarlist with

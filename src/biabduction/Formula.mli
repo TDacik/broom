@@ -30,6 +30,7 @@ module Exp : sig
     and variable = int
 
   val variable_to_string : variable -> string
+  val cvariable_to_string : int -> string
   val const_to_string : const_val -> string
   val unop_to_string : unop -> string
   val binop_to_string : binop -> string
@@ -87,8 +88,11 @@ val get_varmap : pi -> (Exp.variable * Exp.variable) list
 (** [get_eq_vars varlist equalities] computes a transitive closure *)
 val get_eq_vars : 'a list -> ('a * 'a) list -> 'a list
 
-(** [substitute_vars var1 var2 form] *)
+(** [substitute_vars new_var old_var form] *)
 val substitute_vars : Exp.variable -> Exp.variable -> t -> t
+
+(** [substitute_vars_cvars new_var old_var form] same as above, but vars should be Var/CVar *)
+val substitute_vars_cvars : Exp.t -> Exp.t -> t -> t
 
 (** [substitute var eqvarlist form] *)
 val substitute : Exp.variable -> Exp.variable list -> t -> t

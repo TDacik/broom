@@ -26,7 +26,7 @@ let empty_exformula = {f = Formula.empty; cnt_cvars = 0; root = Undef}
 
 let pvarmap_to_string pvarmap =
 	CL.Util.list_to_string (fun (x,y) ->
-		(Exp.variable_to_string x) ^ "->" ^ (Exp.variable_to_string y) )
+		(Exp.variable_to_string x) ^ "->" ^ (Exp.cvariable_to_string y) )
 		pvarmap
 
 let to_string c =
@@ -95,6 +95,15 @@ let operand_to_exformula op ef =
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> assert false
 
+(* replace dst in postcondition (rhs), if it is a program variable *)
+let rewrite_dst root c =
+	match root with
+	| Exp.Var puid ->
+		let cuid = c.cvars + 1 in
+		let new_rhs = substitute_vars_cvars (CVar cuid) (Var puid) c.rhs in
+		{lhs = c.lhs; rhs = new_rhs; cvars = cuid; pvarmap = [puid, cuid] @ c.pvarmap}
+	| _ -> c
+
 (* return value in special contract variable with uid 0 *)
 let contract_for_ret ret =
 	let ef_ret = operand_to_exformula ret empty_exformula in
@@ -103,14 +112,14 @@ let contract_for_ret ret =
 	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}
 
-(* TODO: add replace for dst *)
 let contract_for_assign dst src =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_src = operand_to_exformula src {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
 	let lhs = ef_src.f in
 	let assign = Exp.BinOp ( Peq, ef_dst.root, ef_src.root) in
 	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []}
+	let c = {lhs = lhs; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []} in
+	rewrite_dst ef_dst.root c
 
 let get_contract insn =
 	match insn.code with
