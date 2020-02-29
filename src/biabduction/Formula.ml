@@ -60,7 +60,7 @@ let binop_to_string o =
 let rec to_string e =
   match e with
   | Var a -> variable_to_string a
-  | CVar a -> "C" ^ string_of_int a
+  | CVar a -> cvariable_to_string a
   | Const a -> const_to_string a
   | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string a ^ ")"
   | BinOp (op,a,b) -> "(" ^ to_string a ^ binop_to_string op ^  to_string b ^ ")"
