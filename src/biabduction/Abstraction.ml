@@ -138,7 +138,7 @@ let check_lambda_entailment ctx solv z3_names lambda1 lambda2 =
 	let rec get_unique_lambda_params params id =
 		match params with
 		| [] -> []
-		| first::rest -> id::(get_unique_lambda_params rest (id+1))
+		| _::rest -> id::(get_unique_lambda_params rest (id+1))
 	in
 	let new_params=get_unique_lambda_params lambda1.param (fresh_var_id variables 0) in
 	let rec rename_params form oldparams newparams =
@@ -183,9 +183,9 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		)
 	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
-	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) ->
-		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
-		let a2,l2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb) in
+	| Hpointsto (a,l,_), Hpointsto (aa,ll,_) ->
+		let a1,l1 = (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l) in
+		let a2,l2 = (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll) in
 		(* form -> base(a1) != base(a2) /\ l1 = l2 *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
 			Boolean.mk_or ctx [
@@ -249,7 +249,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
 			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
 			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda))]
-		| [x1],[x2],f1::_,f2::_ -> (* b1 and b2 refers to a predicate in sigma *) 
+		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names form x1 x2 
 				((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases)) 
 			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
@@ -268,9 +268,11 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		print_string ("Matching pointsto no: "^ (string_of_int i1)^" and "^(string_of_int i2));
 		let a1,s1,b1 = match (List.nth form.sigma i1) with
 			| Hpointsto (a,s,b) -> a,s,b
+			| Slseg _ -> Exp.Void,Exp.Void,Exp.Void (* this case should not happen *)
 		in
 		let a2,b2 = match (List.nth form.sigma i2) with
 			| Hpointsto (a,_,b) -> a,b
+			| Slseg _ -> Exp.Void,Exp.Void (* this case should not happen *)
 		in
 		print_string (" Destinations: "^(Exp.to_string b1)^", "^(Exp.to_string b2)^"\n");
 		let vars_b1 = find_vars_expr b1 in
@@ -353,9 +355,11 @@ let fold_pointsto form i1 i2 res_triples =
 	(* get the parameters of the list segment *)
 	let p1 = match (List.nth form.sigma i1) with
 			| Hpointsto (a,_,_) -> (find_vars_expr a)
+			| Slseg _ -> []
 	in
 	let p2,p2_lambda = match (List.nth form.sigma i2) with
 			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
+			| Slseg _ -> [],[]
 	in
 	match p1,p2,p2_lambda with (* we want only a single variable on the LHS of a pointsto *)
 	| [a],[b],[b_lambda] -> 
@@ -374,7 +378,7 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
 	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> (
 		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
-		let a2,l2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb) in
+		let a2,l2,_= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb) in
 		(* First do a base check --- i.e. query1 + query2 *)
 		(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
@@ -417,7 +421,7 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 			| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
 			| CheckFail -> AbstractionFail
 		)
-	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
+	(*| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
 		let a1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names b) in
 		let a2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names bb) in
 		(* form -> b1 = a2 *)
@@ -428,10 +432,12 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 		else
 		(*print_string "SLSEG + SLSEG fail";*) 
 		AbstractionFail
-		)
+		)*)
 	| _ -> AbstractionFail
 
 (***** Experiments *****)
+let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))
+
 let form_abstr1 = {
     sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
     	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 10)];
@@ -455,9 +461,9 @@ let form_abstr3 = {
     	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 10)];
     pi = [
     	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
-    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 16)));
         ]
 }
 
@@ -467,23 +473,23 @@ let form_abstr4 = {
     	Hpointsto (Var 3,ptr_size, Var 4); Hpointsto (BinOp ( Pplus, Var 3, ptr_size),ptr_size, Var 10)];
     pi = [
     	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
-    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 16)));
         BinOp ( Peq, Var 3, UnOp ( Base, Var 3));
-    	BinOp ( Peq, UnOp ( Len, Var 3), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 3), Const (Int (Int64.of_int 16)));
         ]
 }
 let form_abstr5 = {
     sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
-    	Hpointsto(BinOp ( Pplus, Var 1, Exp.Const (Int 16)),ptr_size, Var 1);
+    	Hpointsto(BinOp ( Pplus, Var 1, Exp.Const (Int (Int64.of_int 16))),ptr_size, Var 1);
     	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 10);
-    	Hpointsto(BinOp ( Pplus, Var 2, Exp.Const (Int 16)),ptr_size, Var 2)];
+    	Hpointsto(BinOp ( Pplus, Var 2, Exp.Const (Int (Int64.of_int 16))),ptr_size, Var 2)];
     pi = [
     	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 32));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 32)));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
-    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 32));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 32)));
         ]
 }
 
@@ -495,10 +501,10 @@ let form_abstr6 = {
 	];
     pi = [
     	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
     	BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
-    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 16)));
     	BinOp ( Peq, Var 11, UnOp ( Base, Var 11));
         ]
 }
@@ -514,9 +520,9 @@ let form_abstr7 =
 	];
     pi = [
     	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
-    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 16)));
         ]
 }
 let form_abstr8 = 
@@ -528,13 +534,13 @@ let form_abstr8 =
 	];
     pi = [
     	BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
     	BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
-    	BinOp ( Peq, UnOp ( Len, Var 10), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 16)));
         BinOp ( Peq, Var 2, UnOp ( Base, Var 2));
-    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 16)));
     	BinOp ( Peq, Var 11, UnOp ( Base, Var 11));
-    	BinOp ( Peq, UnOp ( Len, Var 11), Const (Int 16));
+    	BinOp ( Peq, UnOp ( Len, Var 11), Const (Int (Int64.of_int 16)));
         ]
 }
 

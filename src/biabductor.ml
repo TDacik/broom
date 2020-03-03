@@ -14,6 +14,7 @@ open Z3
    names with Llbiabd._, so OCaml complains that it does not know the
    modules. For now I'll keep it this way. *)
 (*open Llbiabd*)
+open Biabd
 open Z3wrapper
 open Formula
 
@@ -21,8 +22,8 @@ let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (mk_context cfg)
 let solv = (Solver.mk_solver ctx None)
 
-let () =
-  let x = Z3wrapper.formula_to_solver ctx Formula.form1 in
+let x =
+  let x = Z3wrapper.formula_to_solver ctx Abstraction.form_abstr1 in
   printf "Test 1\n";
   Z3.Solver.add solv x;
   printf "Test 2\n";
@@ -33,3 +34,7 @@ let () =
   let z3b = const_to_solver ctx b in
   let _ = Z3.Solver.check solv [z3b] in
   printf "That's it\n"
+
+
+let () =
+	print_string "Ahoj"
