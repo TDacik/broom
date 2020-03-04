@@ -375,6 +375,18 @@ let fold_pointsto form i1 i2 res_triples =
 let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 (* try to abstract two predicates i1 and i2 into a list segment,
   gvars = global variables. Internal nodes of the list segment can not be pointed by global variables*)
+  	(* SAT: forall g in gvar. base(g)!=base(middle) *)
+	let global_bases middle g=Boolean.mk_not ctx
+			(Boolean.mk_eq ctx
+				(Expr.mk_app ctx z3_names.base [middle]) 
+				(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
+			)
+	in
+	let query_gvars middle=if gvars=[] then []
+		else
+		[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			Boolean.mk_and ctx (List.map (global_bases middle) gvars) ] 
+	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
 	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> (
 		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
@@ -393,21 +405,9 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 				(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
 				(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
 		] in
-		(* SAT: forall g in gvar. base(g)!=base(a2) *)
-		let global_bases g=Boolean.mk_not ctx
-				(Boolean.mk_eq ctx
-					(Expr.mk_app ctx z3_names.base [a2]) 
-					(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
-				)
-		in
-		let query3=if gvars=[] then []
-			else
-			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
-				Boolean.mk_and ctx (List.map global_bases gvars) ] 
-		in
 		if not (((Solver.check solv query1)=UNSATISFIABLE)
 			&& ((Solver.check solv query2)=SATISFIABLE)
-			&& ((Solver.check solv query3)=SATISFIABLE)) then AbstractionFail
+			&& ((Solver.check solv (query_gvars a2))=SATISFIABLE)) then AbstractionFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 in
@@ -421,18 +421,46 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 			| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
 			| CheckFail -> AbstractionFail
 		)
-	(*| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
-		let a1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names b) in
-		let a2,b2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names bb) in
+	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
+		let b1= (expr_to_solver ctx z3_names b) in
+		let a2= (expr_to_solver ctx z3_names aa) in
 		(* form -> b1 = a2 *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx b1 a2))
 		] in
-		if (Solver.check solv query1)=SATISFIABLE then AbstractionFail
+		if (Solver.check solv query1)=SATISFIABLE 
+			|| ((Solver.check solv (query_gvars a2))=UNSATISFIABLE) then AbstractionFail
 		else
-		(*print_string "SLSEG + SLSEG fail";*) 
-		AbstractionFail
-		)*)
+		let rec remove_i1_i2 ll index=
+			if index=List.length ll then []
+			else if (index=i1) || (index=i2) then remove_i1_i2 ll (index+1)
+			else (List.nth ll index) :: remove_i1_i2 ll (index+1) 
+		in
+			
+		(match (check_lambda_entailment ctx solv z3_names l1 l2) with
+			| 1 -> print_string "**1"; AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
+			| 2 -> print_string "**2"; AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
+			| _ -> AbstractionFail
+		)
+	)
+	| Hpointsto (a,l,b), Slseg (aa,bb,lambda) -> (
+		let b1= (expr_to_solver ctx z3_names b) in
+		let a2= (expr_to_solver ctx z3_names aa) in
+		(* form -> base(b1) = base(a2) *)
+		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
+		] in		
+		if (Solver.check solv query1)=SATISFIABLE 
+			|| ((Solver.check solv (query_gvars a2))=UNSATISFIABLE) then AbstractionFail
+		else
+		(* tro process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
+			let unfolded_i2=unfold_predicate form i2 gvars in
+			let new_i1=if i1<i2 then i1 else (i1-1) in
+			let new_i2=List.length form.sigma in
+			(* check all pointsto with equal bases to a1/a2 *)
+			(print_string "xxxx"; AbstractionFail)
+
+	)
 	| _ -> AbstractionFail
 
 (***** Experiments *****)
@@ -543,6 +571,17 @@ let form_abstr8 =
     	BinOp ( Peq, UnOp ( Len, Var 11), Const (Int (Int64.of_int 16)));
         ]
 }
+
+let form_abstr9 = 
+    let lambda= {param=[1;2] ;form={
+      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[] }}
+    in
+    {
+    sigma = [  Slseg (Var 1, Var 2, lambda); Slseg (Var 2, Const (Ptr 0), lambda); Hpointsto (Var 3,ptr_size, Var 1);
+	];
+    pi = [BinOp ( Peq, Var 3, UnOp ( Base, Var 3));]
+}
+
 
 
 (*
