@@ -401,7 +401,8 @@ let diffbase form pnum =
     let sigma= remove pnum form.sigma in
     diffbase_ll sigma x
 
-
+(* The predicate pnum is removed from form.sigma, unfolded once and all the new stuff is added to the end of the list form.sigma,
+   !!! The function Abstraction.try_add_slseg_to_pointsto relies on the fact, that the unfolded stuff is added to the end *)
 let unfold_predicate form pnum conflicts =
   let confl=join_list_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in

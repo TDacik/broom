@@ -370,6 +370,72 @@ let fold_pointsto form i1 i2 res_triples =
 	| _ -> AbstractionFail
 
 
+(* check that the pointsto (and its neighbourhood) is compatible with lambda in the slseg 
+  it works as follows: 
+  1) the slseg is unfolded
+  2) the match_pointsto_from_two_blocks and check_matched_pointsto ctx solv are used to check whether the pointsto is compatible with lambda 
+  3) lambda may be updated
+*)
+let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars =
+	let unfolded_form,_=unfold_predicate form i_slseg gvars in
+	let new_i1=if i_pto<i_slseg then i_pto else (i_pto-1) in
+	(* serch for the index i2 in the unfolded_form,
+	   i2 is within the unfolded part of the formula, which 
+	   starts at index="(List.length form.sigma)-1"*)
+	let rec find_new_i2 a1 l1 b1 index =
+		if index=(List.length unfolded_form.sigma) then -1
+		else
+		match (List.nth unfolded_form.sigma index) with
+		| Hpointsto (aa,ll,_) ->
+			let a2,l2= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll) in
+			(* First do a base check --- i.e. query1 + query2 *)
+			(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
+			let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_or ctx [
+					(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
+					(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
+					(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))]
+			] in
+			(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
+			let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_eq ctx 
+					(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
+					(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+			] in
+			if not (((Solver.check solv query1)=UNSATISFIABLE)
+			&& ((Solver.check solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 index+1)
+			else (print_string ("Findex="^(string_of_int index)); index)
+
+		| _ -> find_new_i2 a1 l1 b1 (index+1)
+	in
+	Formula.print unfolded_form;
+	(* sanity check that the unfolding work ok *)
+	if not ((List.nth form.sigma i_pto)=(List.nth unfolded_form.sigma new_i1)) then (print_string "This should not happen - Problem with unfolding"; false)
+	else
+	match (List.nth unfolded_form.sigma new_i1) with
+	| Hpointsto (a,l,b) -> (
+		let a1,l1,b1= (expr_to_solver ctx z3_names a), (expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
+		let new_i2=find_new_i2 a1 l1 b1 ((List.length form.sigma)-1) in (* try to find i2 in the unfolded part of the formula *)
+		if (new_i2=(-1)) then false
+		else
+		let a2= match (List.nth unfolded_form.sigma new_i2) with
+			| Hpointsto (aa,_,_) -> (expr_to_solver ctx z3_names aa) 
+		in
+		let a1_block=get_eq_base ctx solv z3_names unfolded_form a1 0 0 in
+		let a2_block=get_eq_base ctx solv z3_names unfolded_form a2 0 0 in
+		print_string ("i1,i2 = "^string_of_int new_i1 ^","^string_of_int new_i2^"\n");
+		(* FIRST: try to find possible mapping between particular points-to predicates is block of a1/a2 *)
+		match match_pointsto_from_two_blocks ctx solv z3_names unfolded_form a1_block a2_block with
+		| MatchFail -> false 
+		| MatchOK matchres -> 
+			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1 gvars) with
+			| CheckOK checked_matchres -> true
+			| CheckFail -> false
+	)
+	| _ -> false
+	
+
+
 
 
 let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
@@ -413,7 +479,6 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 in
 		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 in
 		(* FIRST: try to find possible mapping between particula points-to predicates is block of a1/a2 *)
-		print_string "***";
 		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 		| MatchFail -> AbstractionFail 
 		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
@@ -438,8 +503,8 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 		in
 			
 		(match (check_lambda_entailment ctx solv z3_names l1 l2) with
-			| 1 -> print_string "**1"; AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
-			| 2 -> print_string "**2"; AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
+			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
+			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail
 		)
 	)
@@ -454,11 +519,10 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 			|| ((Solver.check solv (query_gvars a2))=UNSATISFIABLE) then AbstractionFail
 		else
 		(* tro process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
-			let unfolded_i2=unfold_predicate form i2 gvars in
-			let new_i1=if i1<i2 then i1 else (i1-1) in
-			let new_i2=List.length form.sigma in
 			(* check all pointsto with equal bases to a1/a2 *)
-			(print_string "xxxx"; AbstractionFail)
+			if (try_add_slseg_to_pointsto ctx solv z3_names form i1 i2 gvars)
+			then	(print_string "OK"; AbstractionFail)
+			else	(print_string "FF"; AbstractionFail)
 
 	)
 	| _ -> AbstractionFail
