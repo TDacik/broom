@@ -101,7 +101,7 @@ val substitute : Exp.variable -> Exp.variable list -> t -> t
     formula *)
 val remove_redundant_eq : pi -> pi
 
-val remove_unused_evars : t -> Exp.variable list -> Exp.variable list
+val remove_useless_conjuncts : t -> Exp.variable list -> t
 
 (** [simplify_ll gvars evars form] simplify the formula, where [gvars] are
     global variables and [evars] are existential variables *)

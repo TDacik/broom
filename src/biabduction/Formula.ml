@@ -312,20 +312,48 @@ let rec remove_redundant_eq pi =
       else Exp.BinOp (Peq,a,b) :: (remove_redundant_eq rest)
     | x -> x:: (remove_redundant_eq rest)
 
-let rec remove_unused_evars_ll evars vars =
-  let mem x =
-    let eq y= (x=y) in
-    List.exists eq vars
-  in
-  match evars with
-  | [] -> []
-  | first::rest -> if mem first
-      then first::(remove_unused_evars_ll rest vars)
-      else (remove_unused_evars_ll rest vars)
+(* remove usless conjuncts from pure part 
+   - a conjunct is useless iff
+   1) contains evars only
+   2) there is no transitive reference from spatial part or program variables *)
 
-let remove_unused_evars form evars =
-  let vars=find_vars form in
-  remove_unused_evars_ll evars vars
+let rec get_referenced_conjuncts_ll sigma ref_vars =
+	match sigma with 
+	| [] -> [],[]
+	| first::rest ->
+		let vars_in_first=find_vars_expr first in
+		let mem x =
+    			let eq y= (x=y) in
+    			List.exists eq ref_vars
+  		in
+		let nomem x = not (mem x) in
+		let referenced=List.filter mem vars_in_first in
+		let non_referenced = List.filter nomem vars_in_first in
+		match referenced,non_referenced with
+		| [],_ -> get_referenced_conjuncts_ll rest ref_vars
+		| _,nrefs -> 
+			let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
+				first::ref_conjuncts, (join_list_unique transitive_refs nrefs)
+
+let rec get_referenced_conjuncts sigma ref_vars =
+	let res,new_refs=get_referenced_conjuncts_ll sigma ref_vars in
+	match new_refs with
+	| [] -> res
+	| _ -> get_referenced_conjuncts sigma (ref_vars @ new_refs)
+
+		
+
+let remove_useless_conjuncts form evars =
+	let mem x =
+	    let eq y= (x=y) in
+	    not (List.exists eq evars )
+	in
+	let vars=find_vars form in
+	let gvars=List.filter mem vars in
+	let ref_vars=join_list_unique (find_vars_sigma form.sigma)  gvars in
+	let new_pi=get_referenced_conjuncts form.pi ref_vars in
+	{sigma=form.sigma; pi=new_pi}
+	
 
 
 (* now we have everything for global simplify function,
@@ -340,12 +368,6 @@ let simplify form evars=
   let form1 = simplify_ll gvars evars form in
   { sigma=form1.sigma;
     pi=remove_redundant_eq form1.pi }
-  (*let form2 = {
-    sigma=form1.sigma;
-    pi=remove_redundant_eq form1.pi;
-    evars = form1.evars
-  } in
-  remove_unused_evars form2*)
 
 
 (*** RENAME CONFLICTING LOGICAL VARIABLES ***)
