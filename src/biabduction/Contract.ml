@@ -121,13 +121,41 @@ let contract_for_assign dst src =
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 
+(****** CONTRACTS FOR BUILT-IN FUNCTIONS ******)
+
+(* if size==0 : dst=null - or create object of size 0?
+   else         len(dst)=size & base(dst)=dst & dst-(size)->undef *)
+let contract_for_malloc dst size =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_size = operand_to_exformula size {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let lhs = ef_size.f in
+	let len = Exp.BinOp ( Peq, (UnOp (Len, ef_dst.root)), ef_size.root) in
+	let base = Exp.BinOp ( Peq, (UnOp (Base, ef_dst.root)), ef_dst.root) in
+	let sig_add = Hpointsto (ef_dst.root, ef_size.root, Undef) in
+	let rhs = {pi = len :: base :: lhs.pi; sigma = sig_add :: lhs.sigma} in
+	let c = {lhs = lhs; rhs = rhs; cvars = ef_size.cnt_cvars; pvarmap = []} in
+	rewrite_dst ef_dst.root c
+
+let contract_for_builtin dst called args =
+	let fnc_name = CL.Printer.operand_to_string called in
+	match fnc_name with
+	| "malloc" -> ( match args with
+		| size::[] -> (contract_for_malloc dst size)::[]
+		| _ -> assert false (* invalid call of malloc *) )
+	| _ -> []
+
+
 let get_contract insn =
 	match insn.code with
 	| InsnRET ret -> (contract_for_ret ret)::[]
 	(* | InsnCLOBBER var -> []
 	| InsnABORT -> []
-	| InsnBINOP (code, dst, src1, src2) -> []
-	| InsnCALL ops -> [] *)
+	| InsnBINOP (code, dst, src1, src2) -> [] *)
+		| InsnCALL ops -> ( match ops with
+		| dst::called::args -> if (CL.Util.is_extern called)
+			then contract_for_builtin dst called args
+			else []
+		| _ -> [] )
 	| InsnUNOP (code, dst, src) -> (match code with
 		| CL_UNOP_ASSIGN -> (contract_for_assign dst src)::[]
 		| _ -> [] )
