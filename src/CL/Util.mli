@@ -29,6 +29,9 @@ val print_list: ('a -> string) -> 'a list -> unit
 (** [is_viod op] if operand is void *)
 val is_void: Operand.t -> bool
 
+(** [is_extern op] if operand is extern - valid for function *)
+val is_extern: Operand.t -> bool
+
 val is_fnc_static: Fnc.t -> bool
 
 val get_type_size : Loc.cl_uid -> int
