@@ -321,7 +321,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 
 
 (* fold the pointsto into a existing list segment using the unfolded version of the slseg *)
-let fold_pointsto_slseg form  i2_orig unfolded_form new_i1 new_i2 res_triples flag =
+let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_triples flag =
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded slseg *)
 	let rec get_indeces triples =

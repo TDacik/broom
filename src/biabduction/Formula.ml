@@ -314,26 +314,45 @@ let rec remove_redundant_eq pi =
 
 (* remove usless conjuncts from pure part 
    - a conjunct is useless iff
-   1) contains evars only
+   1a) contains evars only
+   1b) it is of the form exp1 !=exp2 and evars  are not togather with ref_vars in exp1/2 
+      --- r1 != e1 (r1 referenced, e1 existential) => this conjunct is not needed
    2) there is no transitive reference from spatial part or program variables *)
 
 let rec get_referenced_conjuncts_ll sigma ref_vars =
+	let mem x =
+    		let eq y= (x=y) in
+    		List.exists eq ref_vars
+	in
+	let nomem x = not (mem x) in
 	match sigma with 
 	| [] -> [],[]
 	| first::rest ->
-		let vars_in_first=find_vars_expr first in
-		let mem x =
-    			let eq y= (x=y) in
-    			List.exists eq ref_vars
-  		in
-		let nomem x = not (mem x) in
-		let referenced=List.filter mem vars_in_first in
-		let non_referenced = List.filter nomem vars_in_first in
-		match referenced,non_referenced with
-		| [],_ -> get_referenced_conjuncts_ll rest ref_vars
-		| _,nrefs -> 
-			let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-				first::ref_conjuncts, (join_list_unique transitive_refs nrefs)
+		match first with  
+		| Exp.BinOp ( Pneq, a, b) -> ( (* handle the case 1b *)
+			let a_vars=find_vars_expr a in
+			let b_vars=find_vars_expr b in
+			let referenced_a=List.filter mem a_vars in
+			let referenced_b=List.filter mem b_vars in
+			let non_referenced_a = List.filter nomem a_vars in
+			let non_referenced_b = List.filter nomem b_vars in
+			match referenced_a,referenced_b,non_referenced_a,non_referenced_b with
+			| [],[],_,_ -> get_referenced_conjuncts_ll rest ref_vars
+			| _,[],[],_ -> get_referenced_conjuncts_ll rest ref_vars
+			| [],_,_,[] -> get_referenced_conjuncts_ll rest ref_vars
+			| _,_,nrefs_a,nrefs_b ->
+				let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
+					first::ref_conjuncts, (join_list_unique transitive_refs (join_list_unique nrefs_a nrefs_b))
+		)
+		| _ ->
+			let vars_in_first=find_vars_expr first in
+			let referenced=List.filter mem vars_in_first in
+			let non_referenced = List.filter nomem vars_in_first in
+			match referenced,non_referenced with
+			| [],_ -> get_referenced_conjuncts_ll rest ref_vars
+			| _,nrefs -> 
+				let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
+					first::ref_conjuncts, (join_list_unique transitive_refs nrefs)
 
 let rec get_referenced_conjuncts sigma ref_vars =
 	let res,new_refs=get_referenced_conjuncts_ll sigma ref_vars in
@@ -366,8 +385,9 @@ let simplify form evars=
   let vars=find_vars form in
   let gvars=List.filter mem vars in
   let form1 = simplify_ll gvars evars form in
-  { sigma=form1.sigma;
-    pi=remove_redundant_eq form1.pi }
+  let form2 = remove_useless_conjuncts form1 evars in
+  { sigma=form2.sigma;
+    pi=remove_redundant_eq form2.pi }
 
 
 (*** RENAME CONFLICTING LOGICAL VARIABLES ***)
