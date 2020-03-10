@@ -136,13 +136,23 @@ let contract_for_malloc dst size =
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_size.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 
+(* PRE: base(src)=src & len(src)=_ & points-to for each field
+   POS: freed(src) *)
+let contract_for_free src =
+	let ef_src = operand_to_exformula src empty_exformula in
+	let lhs = ef_src.f in
+	(* let len = Exp.BinOp ( Peq, (UnOp (Len, ef_src.root)), Undef) in *)
+	let base = Exp.BinOp ( Peq, (UnOp (Base, ef_src.root)), ef_src.root) in
+	let free_pi = Exp.UnOp (Freed, ef_src.root) in
+	let rhs = {pi = free_pi :: lhs.pi; sigma = []} in
+	{lhs = {pi = base :: lhs.pi; sigma = lhs.sigma}; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []}
+
 let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
-	match fnc_name with
-	| "malloc" -> ( match args with
-		| size::[] -> (contract_for_malloc dst size)::[]
-		| _ -> assert false (* invalid call of malloc *) )
-	| _ -> []
+	match fnc_name, args with
+	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
+	| "free", src::[] -> (contract_for_free src)::[]
+	| _,_ -> [] (* TODO: unrecognized built-in/extern function *)
 
 
 let get_contract insn =
