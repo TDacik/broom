@@ -36,6 +36,8 @@ val is_fnc_static: Fnc.t -> bool
 
 val get_type_size : Loc.cl_uid -> int
 
+val get_type_ptr : Loc.cl_uid -> Loc.cl_uid
+
 (** [get_type_item items id] gets (name, offset, typ) of type item on index
 	[id] - for structured types only *)
 val get_type_item: Type.cl_type_item array -> int -> (string * int * Loc.cl_uid)

@@ -71,6 +71,9 @@ val print_with_lambda : t -> unit
 (** [join_list_unique l1 l2] adds missing elements of list [l1] to [l2] *)
 val join_list_unique : 'a list -> 'a list -> 'a list
 
+(** [find_var_pointsto obj sigma cvars] returns variable pointed to object [obj] otherwise fresh cvar *)
+val find_var_pointsto : Exp.t -> sigma -> int -> (Exp.t * int)
+
 (** [find_vars_expr expr] *)
 val find_vars_expr : Exp.t -> Exp.variable list
 

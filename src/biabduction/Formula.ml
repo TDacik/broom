@@ -168,6 +168,16 @@ let rec join_list_unique l1 l2 =
     then join_list_unique rest l2
     else join_list_unique rest (first::l2)
 
+let rec find_var_pointsto obj sigma cvars =
+  match sigma with
+  | [] -> let cvar_last = cvars + 1 in
+    (Exp.CVar cvar_last), cvar_last
+  | Hpointsto (a,_,obj)::rest ->
+    (match a with
+     | Var _ | CVar _ -> (a, cvars)
+     | _ -> find_var_pointsto obj rest cvars )
+  | _::rest -> find_var_pointsto obj rest cvars
+
 (* exexcept contract variables *)
 let rec find_vars_expr expr =
   match expr with

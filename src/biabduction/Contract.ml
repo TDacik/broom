@@ -37,44 +37,59 @@ let to_string c =
 
 let print c = print_string (to_string c)
 
-(* var is Exp.t but only Var/CVar *)
-let rec var_to_exformula var typ accs ef = (* empty_ext_formula *)
+(* var is Exp.t but only Var/CVar, last C represents root *)
+let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 	match accs with
 	| [] -> {f=ef.f; cnt_cvars=ef.cnt_cvars; root=var}
 	| ac::tl -> (match ac.acc_data with
+
+		(* C -()-> <var> *)
 		| Ref ->
 			let last_cvar = ef.cnt_cvars + 1 in
-			let ptr_size = CL.Util.get_type_size typ(* ac.acc_typ *) in
+			let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
 			let sig_add = [ Hpointsto (CVar last_cvar, exp_ptr_size, var) ] in
-			var_to_exformula (CVar last_cvar) ac.acc_typ tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=last_cvar; root=(CVar last_cvar)}
+			var_to_exformula (CVar last_cvar) tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=last_cvar; root=(CVar last_cvar)}
+
+		(* <var> -()-> C *)
 		| Deref ->
 			let last_cvar = ef.cnt_cvars + 1 in
-			let ptr_size = CL.Util.get_type_size typ(* ac.acc_typ *) in
+			let ptr_typ = CL.Util.get_type_ptr ac.acc_typ in
+			let ptr_size = CL.Util.get_type_size ptr_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
 			let sig_add = [ Hpointsto (var, exp_ptr_size, CVar last_cvar) ] in
-			var_to_exformula (CVar last_cvar) ac.acc_typ tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=last_cvar; root=(CVar last_cvar)}
+			var_to_exformula (CVar last_cvar) tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=last_cvar; root=(CVar last_cvar)}
+
 		| DerefArray _ (* idx *) -> assert false (* TODO *)
+
+		(* from: C1 -()-> <var>
+		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
 		| Item _ ->
-			let cvar_obj = ef.cnt_cvars + 1 in (* find var in sigma *)
-			let cvar_itm = cvar_obj + 1 in
+			let (obj,cvars_obj) = find_var_pointsto var ef.f.sigma ef.cnt_cvars in
+			(* let cvar_obj = ef.cnt_cvars + 1 in (* find var in sigma *) *)
+			let cvar_itm = cvars_obj + 1 in
 			let cvar_last = cvar_itm + 1 in
 			let (_,itm_off,itm_typ) = CL.Util.get_accessor_item ac in
 			let pi_add = [ Exp.BinOp ( Peq, CVar cvar_itm,
-			BinOp ( Pplus, CVar cvar_obj, Const (Int (Int64.of_int itm_off))));
-			BinOp ( Peq, (UnOp (Base, CVar cvar_itm)), (UnOp (Base, CVar cvar_obj))) ] in
-			let ptr_size_obj = CL.Util.get_type_size ac.acc_typ in
-			let exp_ptr_size_obj = Exp.Const (Int (Int64.of_int ptr_size_obj)) in
+			BinOp ( Pplus, obj, Const (Int (Int64.of_int itm_off))));
+			BinOp ( Peq, (UnOp (Base, CVar cvar_itm)), (UnOp (Base, obj))) ] in
+			let exp_obj = (match obj with (* move to LHS only? *)
+				| CVar _ ->
+					let ptr_size_obj = CL.Util.get_type_size ac.acc_typ in
+					let exp_ptr_size_obj = Exp.Const (Int (Int64.of_int ptr_size_obj)) in
+					[ Hpointsto (obj, exp_ptr_size_obj, var) ]
+				| _ -> [] ) in
 			let ptr_size_itm = CL.Util.get_type_size itm_typ in
 			let exp_ptr_size_itm = Exp.Const (Int (Int64.of_int ptr_size_itm)) in
-			let sig_add = [ Hpointsto (CVar cvar_obj, exp_ptr_size_obj, var);
-			Hpointsto (CVar cvar_itm, exp_ptr_size_itm, CVar cvar_last) ] in
-			var_to_exformula (CVar cvar_last) ac.acc_typ tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi @ pi_add}; cnt_cvars=cvar_last; root=(CVar cvar_last)}
+			let sig_add = [ Hpointsto (CVar cvar_itm, exp_ptr_size_itm, CVar cvar_last) ] in
+			var_to_exformula (CVar cvar_last) tl {f={sigma = ef.f.sigma @ exp_obj @ sig_add; pi = ef.f.pi @ pi_add}; cnt_cvars=cvar_last; root=(CVar cvar_last)}
+
+		(* C = <var> + off *)
 		| Offset off ->
 			let last_cvar = ef.cnt_cvars + 1 in
 			let pi_add = [ Exp.BinOp ( Peq, CVar last_cvar,
 			BinOp ( Pplus, var, Const (Int (Int64.of_int off)))) ] in
-			var_to_exformula (CVar last_cvar) ac.acc_typ tl {f={sigma = ef.f.sigma; pi = ef.f.pi @ pi_add};cnt_cvars=last_cvar; root=(CVar last_cvar)} )
+			var_to_exformula (CVar last_cvar) tl {f={sigma = ef.f.sigma; pi = ef.f.pi @ pi_add};cnt_cvars=last_cvar; root=(CVar last_cvar)} )
 
 let constant_to_exformula data accs ef =
 	if (accs != []) then assert false;
@@ -91,7 +106,7 @@ let constant_to_exformula data accs ef =
 
 let operand_to_exformula op ef =
 	match op.data with
-		| OpVar uid -> var_to_exformula (Var uid) op.typ op.accessor ef
+		| OpVar uid -> var_to_exformula (Var uid) op.accessor ef
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> assert false
 
@@ -165,7 +180,7 @@ let get_contract insn =
 		| dst::called::args -> if (CL.Util.is_extern called)
 			then contract_for_builtin dst called args
 			else []
-		| _ -> [] )
+		| _ -> assert false )
 	| InsnUNOP (code, dst, src) -> (match code with
 		| CL_UNOP_ASSIGN -> (contract_for_assign dst src)::[]
 		| _ -> [] )

@@ -57,6 +57,12 @@ let get_type_size uid =
 	let typ = get_type uid in
 	typ.size
 
+let get_type_ptr uid =
+	let typ = get_type uid in
+	match typ.code with
+	| TypePtr t -> t
+	| _ -> assert false
+
 let get_type_item items id =
 	let i = Array.get items id in
 	let iname = (match i.item_name with
