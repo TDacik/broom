@@ -66,6 +66,11 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
 		| Item _ ->
 			let (obj,cvars_obj) = find_var_pointsto var ef.f.sigma ef.cnt_cvars in
+			let _ = (match obj, ef.f.sigma with
+				| CVar _, [] -> true (* must be empty *)
+				| Var _, [Hpointsto (_,_,_)] -> true (* must have 1 points-to *)
+				| _,_ -> assert false
+			) in
 			(* let cvar_obj = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_obj + 1 in
 			let cvar_last = cvar_itm + 1 in
@@ -73,16 +78,16 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let pi_add = [ Exp.BinOp ( Peq, CVar cvar_itm,
 			BinOp ( Pplus, obj, Const (Int (Int64.of_int itm_off))));
 			BinOp ( Peq, (UnOp (Base, CVar cvar_itm)), (UnOp (Base, obj))) ] in
-			let exp_obj = (match obj with (* move to LHS only? *)
+			(* let exp_obj = (match obj with (* move to LHS only! *)
 				| CVar _ ->
 					let ptr_size_obj = CL.Util.get_type_size ac.acc_typ in
 					let exp_ptr_size_obj = Exp.Const (Int (Int64.of_int ptr_size_obj)) in
 					[ Hpointsto (obj, exp_ptr_size_obj, var) ]
-				| _ -> [] ) in
+				| _ -> [] ) in *)
 			let ptr_size_itm = CL.Util.get_type_size itm_typ in
 			let exp_ptr_size_itm = Exp.Const (Int (Int64.of_int ptr_size_itm)) in
 			let sig_add = [ Hpointsto (CVar cvar_itm, exp_ptr_size_itm, CVar cvar_last) ] in
-			var_to_exformula (CVar cvar_last) tl {f={sigma = ef.f.sigma @ exp_obj @ sig_add; pi = ef.f.pi @ pi_add}; cnt_cvars=cvar_last; root=(CVar cvar_last)}
+			var_to_exformula (CVar cvar_last) tl {f={sigma = (* exp_obj @ *) sig_add; pi = ef.f.pi @ pi_add}; cnt_cvars=cvar_last; root=(CVar cvar_last)}
 
 		(* C = <var> + off *)
 		| Offset off ->
