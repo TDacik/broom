@@ -136,6 +136,17 @@ let contract_for_ret ret =
 	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}
 
+(* 1st contract is for then branch, 2nd for else branch *)
+let contract_for_cond op =
+	let ef_op = operand_to_exformula op empty_exformula in
+	let assign_then = Exp.BinOp ( Peq, ef_op.root, Const (Bool true) ) in
+	let assign_else = Exp.BinOp ( Peq, ef_op.root, Const (Bool false) ) in
+	let lhs_then = {pi = assign_then :: ef_op.f.pi; sigma = ef_op.f.sigma} in
+	let lhs_else = {pi = assign_else :: ef_op.f.pi; sigma = ef_op.f.sigma} in
+	let c1 = {lhs = lhs_then; rhs = lhs_then; cvars = ef_op.cnt_cvars; pvarmap = []} in
+	let c2 = {lhs = lhs_else; rhs = lhs_else; cvars = ef_op.cnt_cvars; pvarmap = []} in
+	c1::c2::[]
+
 (****** CONTRACTS FOR BINARY OPERATION ******)
 
 let contract_for_binop code dst src1 src2 =
@@ -210,6 +221,7 @@ let contract_for_builtin dst called args =
 let get_contract insn =
 	match insn.code with
 	| InsnRET ret -> (contract_for_ret ret)::[]
+	| InsnCOND (op,_,_) -> contract_for_cond op
 	(* | InsnCLOBBER var -> []
 	| InsnABORT -> [] *)
 	| InsnBINOP (code, dst, src1, src2) -> (contract_for_binop code dst src1 src2)::[]
@@ -221,7 +233,7 @@ let get_contract insn =
 	| InsnUNOP (code, dst, src) -> (match code with
 		| CL_UNOP_ASSIGN -> (contract_for_assign dst src)::[]
 		| _ -> [] )
-	| InsnNOP | InsnJMP _ | InsnCOND _ | InsnLABEL _ -> []
+	| InsnNOP | InsnJMP _ | InsnLABEL _ -> []
 	| InsnSWITCH _ -> assert false
 	| _ -> []
 
