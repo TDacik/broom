@@ -186,8 +186,11 @@ let contract_for_assign dst src =
 
 (****** CONTRACTS FOR BUILT-IN FUNCTIONS ******)
 
-(* if size==0 : dst=null - or create object of size 0?
-   else         len(dst)=size & base(dst)=dst & dst-(size)->undef *)
+(*
+   if size==0 : dst=null - or create object of size 0?
+   else         len(dst)=size & base(dst)=dst & dst-(size)->undef
+   TODO: if dst is void, generate memory leak, or add points-to without assign
+*)
 let contract_for_malloc dst size =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_size = operand_to_exformula size {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
@@ -210,11 +213,25 @@ let contract_for_free src =
 	let rhs = {pi = free_pi :: lhs.pi; sigma = []} in
 	{lhs = {pi = base :: lhs.pi; sigma = lhs.sigma}; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []}
 
+let contract_nondet dst =
+	match dst.data with
+	| OpVoid -> []
+	| _ ->
+		let ef_dst = operand_to_exformula dst empty_exformula in
+		let lhs = ef_dst.f in
+		let assign = Exp.BinOp ( Peq, ef_dst.root, Undef) in
+		let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
+		let c = {lhs = lhs; rhs = rhs; cvars = ef_dst.cnt_cvars; pvarmap = []} in
+		(rewrite_dst ef_dst.root c)::[]
+
 let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
 	| "free", src::[] -> (contract_for_free src)::[]
+	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
+	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
+	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
 	| _,_ -> [] (* TODO: unrecognized built-in/extern function *)
 
 
