@@ -168,12 +168,18 @@ let contract_for_binop code dst src1 src2 =
 		| CL_BINOP_TRUTH_AND -> Undef (* TODO: not in Exp *)
 		| CL_BINOP_TRUTH_OR -> Undef (* TODO: not in Exp *)
 		| CL_BINOP_TRUTH_XOR -> Undef (* TODO: not in Exp *)
-		| CL_BINOP_PLUS -> BinOp ( Pplus, ef_src1.root, ef_src2.root)
+		| CL_BINOP_PLUS | CL_BINOP_POINTER_PLUS ->
+			BinOp ( Pplus, ef_src1.root, ef_src2.root)
 		| CL_BINOP_MINUS -> BinOp ( Pminus, ef_src1.root, ef_src2.root)
 		| _ -> Undef (* TODO: should be Def or Everything *)
 	) in
 	let assign = Exp.BinOp ( Peq, ef_dst.root, bin_exp ) in
-	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
+	let pi_add = ( match code with
+		| CL_BINOP_POINTER_PLUS -> [ assign; Exp.BinOp ( Pless, ef_dst.root,
+			 (UnOp (Len, ef_dst.root)) ) ]
+		| _ -> [assign]
+	) in
+	let rhs = {pi = pi_add @ lhs.pi; sigma = lhs.sigma} in
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_src2.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 
