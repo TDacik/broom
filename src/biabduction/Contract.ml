@@ -136,6 +136,10 @@ let contract_for_ret ret =
 	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}
 
+let contract_fail =
+	let rhs = {pi = (Const (Bool false))::[]; sigma = []} in
+	{lhs = Formula.empty; rhs = rhs; cvars = 0; pvarmap = []}
+
 (* 1st contract is for then branch, 2nd for else branch *)
 let contract_for_cond op =
 	let ef_op = operand_to_exformula op empty_exformula in
@@ -229,6 +233,7 @@ let contract_for_builtin dst called args =
 	match fnc_name, args with
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
 	| "free", src::[] -> (contract_for_free src)::[]
+	| " __VERIFIER_error", [] -> (contract_fail)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
 	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
@@ -239,8 +244,8 @@ let get_contract insn =
 	match insn.code with
 	| InsnRET ret -> (contract_for_ret ret)::[]
 	| InsnCOND (op,_,_) -> contract_for_cond op
-	(* | InsnCLOBBER var -> []
-	| InsnABORT -> [] *)
+	(* | InsnCLOBBER var -> [] *)
+	| InsnABORT -> (contract_fail)::[]
 	| InsnBINOP (code, dst, src1, src2) -> (contract_for_binop code dst src1 src2)::[]
 		| InsnCALL ops -> ( match ops with
 		| dst::called::args -> if (CL.Util.is_extern called)
