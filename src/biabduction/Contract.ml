@@ -110,13 +110,17 @@ let operand_to_exformula op ef =
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> assert false
 
-(* replace dst in postcondition (rhs), if it is a program variable *)
+(* replace dst in postcondition (rhs) *)
 let rewrite_dst root c =
 	match root with
 	| Exp.Var puid ->
 		let cuid = c.cvars + 1 in
 		let new_rhs = substitute_vars_cvars (CVar cuid) (Var puid) c.rhs in
 		{lhs = c.lhs; rhs = new_rhs; cvars = cuid; pvarmap = [puid, cuid] @ c.pvarmap}
+	| CVar old_cuid ->
+		let cuid = c.cvars + 1 in
+		let new_rhs = substitute_vars_cvars (CVar cuid) (CVar old_cuid) c.rhs in
+		{lhs = c.lhs; rhs = new_rhs; cvars = cuid; pvarmap = c.pvarmap}
 	| _ -> c
 
 (* return value in special contract variable with uid 0 *)
