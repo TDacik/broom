@@ -136,6 +136,34 @@ let contract_for_ret ret =
 	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}
 
+(****** CONTRACTS FOR BINARY OPERATION ******)
+
+let contract_for_binop code dst src1 src2 =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_src1 = operand_to_exformula src1 {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let ef_src2 = operand_to_exformula src2 {f=ef_src1.f; cnt_cvars=ef_src1.cnt_cvars; root=Undef} in
+	let lhs = ef_src2.f in
+	let bin_exp = ( match code with
+		| CL_BINOP_EQ -> Exp.BinOp ( Peq, ef_src1.root, ef_src2.root)
+		| CL_BINOP_NE -> BinOp ( Pneq, ef_src1.root, ef_src2.root)
+		| CL_BINOP_LT -> BinOp ( Pless, ef_src1.root, ef_src2.root)
+		| CL_BINOP_GT -> BinOp ( Pless, ef_src2.root, ef_src1.root)
+		| CL_BINOP_LE -> BinOp ( Plesseq, ef_src1.root, ef_src2.root)
+		| CL_BINOP_GE -> BinOp ( Plesseq, ef_src2.root, ef_src1.root)
+		| CL_BINOP_TRUTH_AND -> Undef (* TODO: not in Exp *)
+		| CL_BINOP_TRUTH_OR -> Undef (* TODO: not in Exp *)
+		| CL_BINOP_TRUTH_XOR -> Undef (* TODO: not in Exp *)
+		| CL_BINOP_PLUS -> BinOp ( Pplus, ef_src1.root, ef_src2.root)
+		| CL_BINOP_MINUS -> BinOp ( Pminus, ef_src1.root, ef_src2.root)
+		| _ -> Undef (* TODO: should be Def or Everything *)
+	) in
+	let assign = Exp.BinOp ( Peq, ef_dst.root, bin_exp ) in
+	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
+	let c = {lhs = lhs; rhs = rhs; cvars = ef_src2.cnt_cvars; pvarmap = []} in
+	rewrite_dst ef_dst.root c
+
+(****** CONTRACTS FOR UNARY OPERATION ******)
+
 let contract_for_assign dst src =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_src = operand_to_exformula src {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
@@ -183,8 +211,8 @@ let get_contract insn =
 	match insn.code with
 	| InsnRET ret -> (contract_for_ret ret)::[]
 	(* | InsnCLOBBER var -> []
-	| InsnABORT -> []
-	| InsnBINOP (code, dst, src1, src2) -> [] *)
+	| InsnABORT -> [] *)
+	| InsnBINOP (code, dst, src1, src2) -> (contract_for_binop code dst src1 src2)::[]
 		| InsnCALL ops -> ( match ops with
 		| dst::called::args -> if (CL.Util.is_extern called)
 			then contract_for_builtin dst called args
