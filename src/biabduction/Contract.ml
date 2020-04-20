@@ -113,7 +113,7 @@ let operand_to_exformula op ef =
 	match op.data with
 		| OpVar uid -> var_to_exformula (Var uid) op.accessor ef
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
-		| OpVoid -> assert false
+		| OpVoid -> empty_exformula
 
 (* replace dst in postcondition (rhs) *)
 let rewrite_dst root c =
@@ -131,10 +131,13 @@ let rewrite_dst root c =
 (* return value in special contract variable with uid 0 *)
 let contract_for_ret ret =
 	let ef_ret = operand_to_exformula ret empty_exformula in
-	let lhs = ef_ret.f in
-	let assign = Exp.BinOp ( Peq, CVar 0, ef_ret.root) in
-	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}
+	match ef_ret.root with
+	| Exp.Undef -> []
+	| _ -> (
+		let lhs = ef_ret.f in
+		let assign = Exp.BinOp ( Peq, CVar 0, ef_ret.root) in
+		let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
+		[{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}] )
 
 let contract_fail =
 	let rhs = {pi = (Const (Bool false))::[]; sigma = []} in
@@ -248,7 +251,7 @@ let contract_for_builtin dst called args =
 
 let get_contract insn =
 	match insn.code with
-	| InsnRET ret -> (contract_for_ret ret)::[]
+	| InsnRET ret -> contract_for_ret ret
 	| InsnCOND (op,_,_) -> contract_for_cond op
 	(* | InsnCLOBBER var -> [] *)
 	| InsnABORT -> (contract_fail)::[]
