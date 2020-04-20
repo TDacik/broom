@@ -69,6 +69,7 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let _ = (match obj, ef.f.sigma with
 				| CVar _, [] -> true (* must be empty *)
 				| Var _, [Hpointsto (_,_,_)] -> true (* must have 1 points-to *)
+				| CVar _, [Hpointsto (_,_,_)] -> true (* TODO: must be same base *)
 				| _,_ -> assert false
 			) in
 			(* let cvar_obj = ef.cnt_cvars + 1 in (* find var in sigma *) *)
