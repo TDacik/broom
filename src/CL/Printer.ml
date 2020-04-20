@@ -52,7 +52,7 @@ and item_accessors accs =
 			let (item_name, ioff, _) = Util.get_accessor_item ac in
 			let (rest, off, rest_tl) = item_accessors tl in
 			let new_off = off + ioff in
-			(item_name ^ rest, new_off, rest_tl)
+			("." ^ item_name ^ rest, new_off, rest_tl)
 		| _ -> ("", 0, accs) )
 
 (* TODO: structure acc -> *)
@@ -71,7 +71,7 @@ and back_accessors accs =
 			let (names, off, rest_tl) = item_accessors accs in
 			let rest = back_accessors rest_tl in
 			let off_str = Printf.sprintf "%i" off in
-			".[+" ^ off_str ^ "]" ^ names ^ rest
+			"[+" ^ off_str ^ "]" ^ names ^ rest
 		| Offset off -> let rest = back_accessors tl
 			and id_str = Printf.sprintf "%i" off
 			and sign = (if off >= 0 then "+" else "") in
