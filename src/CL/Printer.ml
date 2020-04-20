@@ -123,6 +123,13 @@ and constant_to_string data accs =
 
 let get_fnc_name f = operand_to_string f.Fnc.def
 
+let print_fnc_declaration f =
+	if CL.Util.is_fnc_static f then Printf.printf "static ";
+	let str = get_fnc_name f in
+		Printf.printf "%s(" str;
+		CL.Util.print_list var_to_string f.args;
+		Printf.printf ")"
+
 (* Print unary CL instruction *)
 let print_unary_insn code dst src =
 	let unop = ( match code with

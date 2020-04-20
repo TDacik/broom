@@ -21,11 +21,8 @@ let custom_fnc insn =
 let rec print_storage fncs =
 	match fncs with
 	| [] -> ()
-	| (_, f)::tl -> if CL.Util.is_fnc_static f then Printf.printf "static ";
-		let str = CL.Printer.get_fnc_name f in
-			Printf.printf "%s(" str;
-			CL.Util.print_list CL.Printer.var_to_string f.args;
-			Printf.printf "):\n";
+	| (_, f)::tl -> CL.Printer.print_fnc_declaration f;
+			Printf.printf ":\n";
 			(match f.cfg with
 				| Some bbs -> CL.Printer.print_cfg custom_fnc bbs
 				| None -> ());
@@ -37,6 +34,6 @@ let rec print_storage fncs =
 let () =
 	(* List.iter CL.Printer.print_fnc CL.Util.stor.fncs; *)
 	
-	print_storage CL.Util.stor.fncs;
-	print_newline ();
-	Printf.printf "%s\n" (to_string form1)
+	print_storage CL.Util.stor.fncs
+	(* print_newline ();
+	Printf.printf "%s\n" (to_string form1) *)
