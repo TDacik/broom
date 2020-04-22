@@ -37,8 +37,7 @@ $MAKE -C json
 
 status_update "Checking whether JSON dumper works"
 $MAKE -C json check \
-    || true
-#    || die "JSON dumper does not work"
+    || die "JSON dumper does not work"
 
 status_update "Copying ATD"
 $MAKE -C json atd
