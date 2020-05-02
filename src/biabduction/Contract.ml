@@ -241,9 +241,10 @@ let contract_nondet dst =
 let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
+	| "abort", [] -> (contract_fail)::[]
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
 	| "free", src::[] -> (contract_for_free src)::[]
-	| " __VERIFIER_error", [] -> (contract_fail)::[]
+	| "__VERIFIER_error", [] -> (contract_fail)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
 	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
