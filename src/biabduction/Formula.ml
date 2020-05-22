@@ -10,7 +10,7 @@ module Exp = struct (*$< Exp *)
       | Void
       | Undef
 
-    and unop =  Base | Len | Freed
+    and unop =  Base | Len | Freed | BVneg
 
     (* aritmetic operation *)
     and binop =
@@ -19,7 +19,9 @@ module Exp = struct (*$< Exp *)
       | Pless  (** less then *)
       | Plesseq (** less or equal then **)
       | Pplus
-      | Pminus (** in same alloc block *)
+      | Pminus (** in same alloc block **)
+      | BVand (** bitvector AND *)
+      | BVor (** bitvector OR **)
 
     and const_val =
         Ptr of int
@@ -47,6 +49,7 @@ let unop_to_string o =
   | Base -> "base"
   | Len -> "len"
   | Freed -> "freed"
+  | BVneg -> "neg"
 
 let binop_to_string o =
   match o with
@@ -56,6 +59,8 @@ let binop_to_string o =
   | Plesseq -> "<="
   | Pplus -> "+"
   | Pminus -> "-"
+  | BVand -> "&"
+  | BVor -> "|"
 
 let rec to_string e =
   match e with

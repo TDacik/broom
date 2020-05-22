@@ -17,24 +17,34 @@ open Z3
 open Biabd
 open Z3wrapper
 open Formula
+open Abstraction
 
 let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (mk_context cfg)
 let solv = (Solver.mk_solver ctx None)
+let z3_names=get_sl_functions_z3 ctx
 
-let x =
-  let x = Z3wrapper.formula_to_solver ctx Abstraction.form_abstr1 in
-  printf "Test 1\n";
-  Z3.Solver.add solv x;
-  printf "Test 2\n";
-  let res = Z3.Solver.check solv [] in
-  printf "Hello, %s!\n" (Z3.Solver.string_of_status res);
-  let b = Exp.Bool false in
-  printf "The const is %s\n" (Exp.to_string (Const b));
-  let z3b = const_to_solver ctx b in
-  let _ = Z3.Solver.check solv [z3b] in
-  printf "That's it\n"
-
+let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))
 
 let () =
-	print_string "Ahoj"
+let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
+ let form5=
+  let lambda= {param=[1;2] ;form={
+      sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (Var 2, ptr_size, Var 3) ]; pi=[] }}
+  in
+  {
+          sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (Var 6, ptr_size, Var 5); Slseg (Var 3, Var 4, lambda) ];
+      pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+            BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
+           BinOp ( Peq, Var 6, (BinOp (Pplus, Var 1, (Const (Int (Int64.of_int 7))))));
+            BinOp ( Peq, Var 1, Var 2332 );
+            BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+  }
+in 
+ print_with_lambda form5;
+let z3_form5=formula_to_solver ctx form5 in
+if (Solver.check solv z3_form5)=SATISFIABLE then print_string "OK\n" else print_string "NO\n"
+
+
+
+

@@ -5,9 +5,13 @@
 
 open Z3
 (*open Z3.Symbol*)
-open Z3.Arithmetic
-
+(* open Z3.Arithmetic *)
+open Z3.BitVector
 open Formula
+
+
+(* width of the bitvector *)
+let bw_width=64
 
 (* The functions base, len, size, etc in SL are used as uninterpreted functions in z3 *)
 type sl_function_names_z3 = {
@@ -18,9 +22,9 @@ type sl_function_names_z3 = {
 
 let get_sl_functions_z3 ctx =
   {
-    base=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "base") [(Integer.mk_sort ctx)] (Integer.mk_sort ctx);
-    len=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "len") [(Integer.mk_sort ctx)] (Integer.mk_sort ctx);
-    alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc") [(Integer.mk_sort ctx)] (Boolean.mk_sort ctx);
+    base=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "base") [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
+    len=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "len") [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
+    alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc") [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
   }
 
 
@@ -31,8 +35,8 @@ exception NoZ3Translation of string
 
 let const_to_solver ctx c =
   match c with
-  | Exp.Ptr a -> Integer.mk_numeral_i ctx a
-  | Exp.Int a -> Integer.mk_numeral_i ctx (Int64.to_int a) (* FIXME: not save *)
+  | Exp.Ptr a -> BitVector.mk_numeral ctx (string_of_int a) bw_width
+  | Exp.Int a -> BitVector.mk_numeral ctx (Int64.to_string a) bw_width
   | Exp.Bool a -> Boolean.mk_val ctx a
   | Exp.String _ -> raise (NoZ3Translation "Can't translate String expression to Z3")
   | Exp.Float _ -> raise (NoZ3Translation "Can't translate Float expression to Z3")
@@ -45,7 +49,7 @@ let const_to_solver ctx c =
 
 let rec expr_to_solver ctx func expr =
   match expr with
-  | Exp.Var a -> Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (Integer.mk_sort ctx)
+  | Exp.Var a -> Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (BitVector.mk_sort ctx bw_width)
   | Exp.CVar _ -> raise (NoZ3Translation "Contract variable shouldn't be in Z3")
   | Exp.Const a -> const_to_solver ctx a
   | Exp.UnOp (op,a) ->
@@ -53,19 +57,21 @@ let rec expr_to_solver ctx func expr =
       | Base -> Expr.mk_app ctx func.base [(expr_to_solver ctx func a)]
       | Len ->  Expr.mk_app ctx func.len [(expr_to_solver ctx func a)]
       | Freed -> Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [(expr_to_solver ctx func a)])
+      | BVneg -> BitVector.mk_neg ctx (expr_to_solver ctx func a)
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
       | Peq ->  Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Pneq -> Boolean.mk_not ctx (Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b))
-      | Pless ->  Arithmetic.mk_lt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-      | Plesseq -> Arithmetic.mk_le ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-      | Pplus -> Arithmetic.mk_add ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
-      | Pminus -> Arithmetic.mk_sub ctx [ (expr_to_solver ctx func a); (expr_to_solver ctx func b) ]
+      | Pless ->  BitVector.mk_slt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Plesseq -> BitVector.mk_sle ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pplus -> BitVector.mk_add ctx  (expr_to_solver ctx func a) (expr_to_solver ctx func b) 
+      | Pminus -> BitVector.mk_sub ctx  (expr_to_solver ctx func a) (expr_to_solver ctx func b) 
+      | BVor -> BitVector.mk_or ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVand -> BitVector.mk_and ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
     )
-  | Exp.Void ->  Integer.mk_numeral_i ctx (-1)
-  | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (Integer.mk_sort ctx)
-  (**| Exp.Undef -> Integer.mk_numeral_i ctx (-2) !!! This may be a problem. We may create a fresh variable for this .... *)
+  | Exp.Void ->  BitVector.mk_numeral ctx "-1" bw_width 
+  | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (BitVector.mk_sort ctx bw_width)
 
 
 (* create conditions to guarantee SL * validity ... *)
@@ -83,35 +89,42 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
   | Hpointsto (a, size, _) -> (
     (* Create "local" constraints for a single points-to *)
     (* local_c[123] = alloc(base a)
-        /\ base(x) = base(base(x))
-        /\ len(x) >=size*)
+        /\ base(a) = base(base(a))
+        /\ len(a) >=size 
+	/\ a>0 
+	/\ base(a)<=a 
+	/\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector*)
     let x=alloc a in
     let local_c1= Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]] in
     let local_c2= Boolean.mk_eq ctx
         (Expr.mk_app ctx func.base [x])
         (Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x])]) in
-    let local_c3 = Arithmetic.mk_ge ctx
+    let local_c3 = BitVector.mk_sge ctx
       (Expr.mk_app ctx func.len [x])
       (expr_to_solver ctx func size)
     in
+    let local_c4 = BitVector.mk_sgt ctx x (BitVector.mk_numeral ctx "0" bw_width) in
+    let local_c5 = BitVector.mk_sle ctx (Expr.mk_app ctx func.base [x]) x in
+    let local_c6 = BitVector.mk_sle ctx x (BitVector.mk_add ctx x (expr_to_solver ctx func size) ) in
+    	
     (* Create constrains for two space predicates *)
     (*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
     (* fit_len: x<=y<x+len(x) \/ y<=x<y+len(y) => base(x) = base(y) *)
     let no_overlap x size_x y size_y=
       Boolean.mk_or ctx
-      [(Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [x; (expr_to_solver ctx func size_x) ]) y);
-      (Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [y; (expr_to_solver ctx func size_y) ]) x)]
+      [(BitVector.mk_sle ctx (BitVector.mk_add ctx x (expr_to_solver ctx func size_x) ) y);
+      (BitVector.mk_sle ctx (BitVector.mk_add ctx y (expr_to_solver ctx func size_y) ) x)]
     in
     let dist_fields x size_x y size_y = Boolean.mk_implies ctx (base_eq x y) (no_overlap x size_x y size_y) in
     let fit_len x y = Boolean.mk_implies ctx 
 		(Boolean.mk_or ctx [
 			Boolean.mk_and ctx [
-				Arithmetic.mk_le ctx x y;
-				Arithmetic.mk_lt ctx y (Arithmetic.mk_add ctx [x; Expr.mk_app ctx func.len [x]])
+				BitVector.mk_sle ctx x y;
+				BitVector.mk_slt ctx y (BitVector.mk_add ctx x (Expr.mk_app ctx func.len [x]))
 			];
 			Boolean.mk_and ctx [
-				Arithmetic.mk_le ctx y x;
-				Arithmetic.mk_lt ctx x (Arithmetic.mk_add ctx [y; Expr.mk_app ctx func.len [y]])
+				BitVector.mk_sle ctx y x;
+				BitVector.mk_slt ctx x (BitVector.mk_add ctx y (Expr.mk_app ctx func.len [y]))
 			]
 		])
     		(base_eq x y) 
@@ -133,17 +146,20 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
       | first:: rest -> (two_sp_preds_c x first) :: create_noneq rest
       | [] -> []
     in
-    (Boolean.mk_and ctx [ local_c1; local_c2; local_c3]) :: create_noneq rest_preds)
+    (Boolean.mk_and ctx [ local_c1; local_c2; local_c3; local_c4; local_c5; local_c6 ]) :: create_noneq rest_preds)
   | Slseg (a,b,_) ->
     let x=alloc a in
     let y=alloc b in
-    (* alloc base(x) or x=y *)
+    (* alloc base(x) or x=y 
+       base(x)=base(base(x))
+       x>=0 --- x can be 0 in the case of x=y=null *)
     let c1 = Boolean.mk_or ctx
       [ Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]];
       Boolean.mk_eq ctx x y]  in
     let c2= Boolean.mk_eq ctx
         (Expr.mk_app ctx func.base [x])
         (Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x])]) in
+    let c3 = BitVector.mk_sge ctx x (BitVector.mk_numeral ctx "0" bw_width) in
     let two_sp_preds_c al dst sp_rule =
       match sp_rule with
       | Hpointsto (aa, _, _) -> (* base(al) != base(aa) or Slseq is empty al=dst *)
@@ -162,7 +178,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         | first:: rest -> (two_sp_preds_c x y first) :: sp_constraints rest
         | [] -> []
     in
-    [c1;c2] @ (sp_constraints rest_preds)
+    [c1;c2;c3] @ (sp_constraints rest_preds)
 
 (* Creation of the Z3 formulae for a SL formulae *)
 
@@ -180,10 +196,10 @@ let formula_to_solver ctx form =
   let names_z3=get_sl_functions_z3 ctx in
   let pi= pi_to_solver ctx names_z3 form.pi in
   let sigma= sigma_to_solver ctx names_z3 form.sigma in
-  let null_not_alloc=Boolean.mk_not ctx (Expr.mk_app ctx names_z3.alloc [Integer.mk_numeral_i ctx 0]) in
+  let null_not_alloc=Boolean.mk_not ctx (Expr.mk_app ctx names_z3.alloc [BitVector.mk_numeral ctx "0" bw_width]) in
   let base0=Boolean.mk_eq ctx
-    (Integer.mk_numeral_i ctx 0)
-    (Expr.mk_app ctx names_z3.base [Integer.mk_numeral_i ctx 0]) in
+    (BitVector.mk_numeral ctx "0" bw_width)
+    (Expr.mk_app ctx names_z3.base [BitVector.mk_numeral ctx "0" bw_width]) in
   List.append pi (List.append sigma [null_not_alloc; base0])
   (*List.append pi (List.append sigma global_constr)*)
 
