@@ -6,7 +6,7 @@
 open Z3
 (*open Z3.Symbol*)
 (* open Z3.Arithmetic *)
-open Z3.BitVector
+(* open Z3.BitVector *)
 open Formula
 
 
@@ -58,6 +58,8 @@ let rec expr_to_solver ctx func expr =
       | Len ->  Expr.mk_app ctx func.len [(expr_to_solver ctx func a)]
       | Freed -> Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [(expr_to_solver ctx func a)])
       | BVneg -> BitVector.mk_neg ctx (expr_to_solver ctx func a)
+      | Pnot -> Boolean.mk_not ctx (expr_to_solver ctx func a)
+      (* | _ -> raise (NoZ3Translation "Unsupported unary operator in Z3") *)
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
@@ -65,10 +67,22 @@ let rec expr_to_solver ctx func expr =
       | Pneq -> Boolean.mk_not ctx (Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b))
       | Pless ->  BitVector.mk_slt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Plesseq -> BitVector.mk_sle ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pand -> Boolean.mk_and ctx [(expr_to_solver ctx func a); (expr_to_solver ctx func b)]
+      | Por -> Boolean.mk_or ctx [(expr_to_solver ctx func a); (expr_to_solver ctx func b)]
+      | Pxor -> Boolean.mk_xor ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Pplus -> BitVector.mk_add ctx  (expr_to_solver ctx func a) (expr_to_solver ctx func b) 
       | Pminus -> BitVector.mk_sub ctx  (expr_to_solver ctx func a) (expr_to_solver ctx func b) 
-      | BVor -> BitVector.mk_or ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pmult -> BitVector.mk_mul ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pdiv -> BitVector.mk_sdiv ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pmod -> BitVector.mk_smod ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | BVand -> BitVector.mk_and ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVor -> BitVector.mk_or ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVxor -> BitVector.mk_xor ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVlshift -> BitVector.mk_shl ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVrshift -> BitVector.mk_ashr ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVlrotate -> BitVector.mk_ext_rotate_left ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | BVrrotate -> BitVector.mk_ext_rotate_right ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      (* | _ -> raise (NoZ3Translation "Unsupported binary operator in Z3") *)
     )
   | Exp.Void ->  BitVector.mk_numeral ctx "-1" bw_width 
   | Exp.Undef -> Expr.mk_fresh_const ctx "UNDEF" (BitVector.mk_sort ctx bw_width)

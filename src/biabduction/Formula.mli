@@ -1,6 +1,6 @@
 module Exp : sig
   type t =
-      | Var of variable
+        Var of variable
       | CVar of int
       | Const of const_val
       (* todo | Interval... *)
@@ -9,19 +9,34 @@ module Exp : sig
       | Void
       | Undef
 
-    and unop =  Base | Len | Freed | BVneg
+    and unop =
+        Base
+      | Len
+      | Freed
+      | BVneg    (** bitwise, in C: ~ *)
+      | Pnot     (** logical, in C: ! *)
 
-    (** aritmetic operation *)
+    (* aritmetic operation *)
     and binop =
-      | Peq    (** equality *)
-      | Pneq   (** nonequality *)
-      | Pless  (** less then *)
-      | Plesseq (** less or equal then **)
+        Peq      (** equality *)
+      | Pneq     (** nonequality *)
+      | Pless    (** less then *)
+      | Plesseq  (** less or equal then *)
+      | Pand     (** logical AND *)
+      | Por      (** logical OR *)
+      | Pxor     (** logical XOR *)
       | Pplus
-      | Pminus (** in same alloc block *)
-      | BVand (** bitvector AND *)
-      | BVor (** bitvector OR **)
-
+      | Pminus   (** for pointers - in same alloc block *)
+      | Pmult
+      | Pdiv     (** CL_BINOP_EXACT_DIV: for pointers - div without rounding *)
+      | Pmod
+      | BVand    (** bitwise AND *)
+      | BVor     (** bitwise OR *)
+      | BVxor    (** bitwise XOR *)
+      | BVlshift
+      | BVrshift (** logical on unsigned, arithmetic on signed *)
+      | BVlrotate
+      | BVrrotate
 
 
     and const_val =

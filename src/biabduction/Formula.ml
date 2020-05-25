@@ -1,7 +1,7 @@
 (* NOTE: original name Expr was renamed to Exp due to name collision with Z3.Expr *)
 module Exp = struct (*$< Exp *)
     type t =
-      | Var of variable
+        Var of variable
       | CVar of int
       | Const of const_val
       (* todo | Interval... *)
@@ -10,18 +10,34 @@ module Exp = struct (*$< Exp *)
       | Void
       | Undef
 
-    and unop =  Base | Len | Freed | BVneg
+    and unop =
+        Base
+      | Len
+      | Freed
+      | BVneg    (** bitwise, in C: ~ *)
+      | Pnot     (** logical, in C: ! *)
 
     (* aritmetic operation *)
     and binop =
-      | Peq    (** equality *)
-      | Pneq   (** nonequality *)
-      | Pless  (** less then *)
-      | Plesseq (** less or equal then **)
+        Peq      (** equality *)
+      | Pneq     (** nonequality *)
+      | Pless    (** less then *)
+      | Plesseq  (** less or equal then *)
+      | Pand     (** logical AND *)
+      | Por      (** logical OR *)
+      | Pxor     (** logical XOR *)
       | Pplus
-      | Pminus (** in same alloc block **)
-      | BVand (** bitvector AND *)
-      | BVor (** bitvector OR **)
+      | Pminus   (** for pointers - in same alloc block *)
+      | Pmult
+      | Pdiv     (** CL_BINOP_EXACT_DIV: for pointers - div without rounding *)
+      | Pmod
+      | BVand    (** bitwise AND *)
+      | BVor     (** bitwise OR *)
+      | BVxor    (** bitwise XOR *)
+      | BVlshift
+      | BVrshift (** logical on unsigned, arithmetic on signed *)
+      | BVlrotate
+      | BVrrotate
 
     and const_val =
         Ptr of int
@@ -49,7 +65,8 @@ let unop_to_string o =
   | Base -> "base"
   | Len -> "len"
   | Freed -> "freed"
-  | BVneg -> "neg"
+  | BVneg -> "~"
+  | Pnot -> "!"
 
 let binop_to_string o =
   match o with
@@ -57,10 +74,21 @@ let binop_to_string o =
   | Pneq -> "!="
   | Pless -> "<"
   | Plesseq -> "<="
+  | Pand -> "&&"
+  | Por -> "||"
+  | Pxor -> "xor"
   | Pplus -> "+"
   | Pminus -> "-"
+  | Pmult -> "*"
+  | Pdiv -> "/"
+  | Pmod -> "%"
   | BVand -> "&"
   | BVor -> "|"
+  | BVxor -> "^"
+  | BVlshift -> "<<"
+  | BVrshift -> ">>"
+  | BVlrotate -> "lrotate"
+  | BVrrotate -> "rrotate"
 
 let rec to_string e =
   match e with
