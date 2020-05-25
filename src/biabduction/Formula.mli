@@ -13,8 +13,9 @@ module Exp : sig
         Base
       | Len
       | Freed
-      | BVneg    (** bitwise, in C: ~ *)
+      | BVnot    (** bitwise, in C: ~ *)
       | Pnot     (** logical, in C: ! *)
+      | Puminus  (** in C: - *)
 
     (* aritmetic operation *)
     and binop =

@@ -57,8 +57,9 @@ let rec expr_to_solver ctx func expr =
       | Base -> Expr.mk_app ctx func.base [(expr_to_solver ctx func a)]
       | Len ->  Expr.mk_app ctx func.len [(expr_to_solver ctx func a)]
       | Freed -> Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [(expr_to_solver ctx func a)])
-      | BVneg -> BitVector.mk_neg ctx (expr_to_solver ctx func a)
+      | BVnot -> BitVector.mk_not ctx (expr_to_solver ctx func a)
       | Pnot -> Boolean.mk_not ctx (expr_to_solver ctx func a)
+      | Puminus -> BitVector.mk_neg ctx (expr_to_solver ctx func a)
       (* | _ -> raise (NoZ3Translation "Unsupported unary operator in Z3") *)
     )
   | Exp.BinOp (op,a,b) ->

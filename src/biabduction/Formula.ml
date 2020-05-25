@@ -14,8 +14,9 @@ module Exp = struct (*$< Exp *)
         Base
       | Len
       | Freed
-      | BVneg    (** bitwise, in C: ~ *)
+      | BVnot    (** bitwise, in C: ~ *)
       | Pnot     (** logical, in C: ! *)
+      | Puminus  (** in C: - *)
 
     (* aritmetic operation *)
     and binop =
@@ -65,8 +66,9 @@ let unop_to_string o =
   | Base -> "base"
   | Len -> "len"
   | Freed -> "freed"
-  | BVneg -> "~"
+  | BVnot -> "~"
   | Pnot -> "!"
+  | Puminus -> "-"
 
 let binop_to_string o =
   match o with

@@ -201,8 +201,9 @@ let contract_for_unop code dst src =
 	let lhs = ef_src.f in
 	let un_exp = ( match code with
 		| CL_UNOP_ASSIGN -> ef_src.root
-		| CL_UNOP_BIT_NOT -> Exp.UnOp ( BVneg, ef_src.root)
+		| CL_UNOP_BIT_NOT -> Exp.UnOp ( BVnot, ef_src.root)
 		| CL_UNOP_TRUTH_NOT -> Exp.UnOp ( Pnot, ef_src.root)
+		| CL_UNOP_MINUS -> Exp.UnOp ( Puminus, ef_src.root)
 		| _ -> Undef (* TODO: should be Def or Everything *)
 	) in
 	let assign = Exp.BinOp ( Peq, ef_dst.root, un_exp ) in
