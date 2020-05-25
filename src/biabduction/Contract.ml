@@ -44,7 +44,7 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 	| ac::tl -> (match ac.acc_data with
 
 		(* C -()-> <var> *)
-		| Ref ->
+		| Ref -> (*TODO find var pointso*)
 			let last_cvar = ef.cnt_cvars + 1 in
 			let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
@@ -178,12 +178,7 @@ let contract_for_binop code dst src1 src2 =
 		| _ -> Undef (* TODO: should be Def or Everything *)
 	) in
 	let assign = Exp.BinOp ( Peq, ef_dst.root, bin_exp ) in
-	let pi_add = ( match code with
-		| CL_BINOP_POINTER_PLUS -> [ assign; Exp.BinOp ( Pless, ef_dst.root,
-			 (UnOp (Len, ef_dst.root)) ) ]
-		| _ -> [assign]
-	) in
-	let rhs = {pi = pi_add @ lhs.pi; sigma = lhs.sigma} in
+	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_src2.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 
