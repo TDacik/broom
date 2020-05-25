@@ -169,12 +169,23 @@ let contract_for_binop code dst src1 src2 =
 		| CL_BINOP_GT -> BinOp ( Pless, ef_src2.root, ef_src1.root)
 		| CL_BINOP_LE -> BinOp ( Plesseq, ef_src1.root, ef_src2.root)
 		| CL_BINOP_GE -> BinOp ( Plesseq, ef_src2.root, ef_src1.root)
-		| CL_BINOP_TRUTH_AND -> Undef (* TODO: not in Exp *)
-		| CL_BINOP_TRUTH_OR -> Undef (* TODO: not in Exp *)
-		| CL_BINOP_TRUTH_XOR -> Undef (* TODO: not in Exp *)
+		| CL_BINOP_TRUTH_AND -> BinOp ( Pand, ef_src1.root, ef_src2.root)
+		| CL_BINOP_TRUTH_OR -> BinOp ( Por, ef_src1.root, ef_src2.root)
+		| CL_BINOP_TRUTH_XOR -> BinOp ( Pxor, ef_src1.root, ef_src2.root)
 		| CL_BINOP_PLUS | CL_BINOP_POINTER_PLUS ->
 			BinOp ( Pplus, ef_src1.root, ef_src2.root)
 		| CL_BINOP_MINUS -> BinOp ( Pminus, ef_src1.root, ef_src2.root)
+		| CL_BINOP_MULT -> BinOp ( Pmult, ef_src1.root, ef_src2.root)
+		| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV ->
+			BinOp ( Pdiv, ef_src1.root, ef_src2.root)
+		| CL_BINOP_TRUNC_MOD -> BinOp ( Pmod, ef_src1.root, ef_src2.root)
+		| CL_BINOP_BIT_AND -> BinOp ( BVand, ef_src1.root, ef_src2.root)
+		| CL_BINOP_BIT_IOR -> BinOp ( BVor, ef_src1.root, ef_src2.root)
+		| CL_BINOP_BIT_XOR -> BinOp ( BVxor, ef_src1.root, ef_src2.root)
+		| CL_BINOP_LSHIFT -> BinOp ( BVlshift, ef_src1.root, ef_src2.root)
+		| CL_BINOP_RSHIFT -> BinOp ( BVrshift, ef_src1.root, ef_src2.root)
+		| CL_BINOP_LROTATE -> BinOp ( BVlrotate, ef_src1.root, ef_src2.root)
+		| CL_BINOP_RROTATE -> BinOp ( BVrrotate, ef_src1.root, ef_src2.root)
 		| _ -> Undef (* TODO: should be Def or Everything *)
 	) in
 	let assign = Exp.BinOp ( Peq, ef_dst.root, bin_exp ) in
@@ -184,11 +195,17 @@ let contract_for_binop code dst src1 src2 =
 
 (****** CONTRACTS FOR UNARY OPERATION ******)
 
-let contract_for_assign dst src =
+let contract_for_unop code dst src =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_src = operand_to_exformula src {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
 	let lhs = ef_src.f in
-	let assign = Exp.BinOp ( Peq, ef_dst.root, ef_src.root) in
+	let un_exp = ( match code with
+		| CL_UNOP_ASSIGN -> ef_src.root
+		| CL_UNOP_BIT_NOT -> Exp.UnOp ( BVneg, ef_src.root)
+		| CL_UNOP_TRUTH_NOT -> Exp.UnOp ( Pnot, ef_src.root)
+		| _ -> Undef (* TODO: should be Def or Everything *)
+	) in
+	let assign = Exp.BinOp ( Peq, ef_dst.root, un_exp ) in
 	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
@@ -258,9 +275,7 @@ let get_contract insn =
 			then contract_for_builtin dst called args
 			else []
 		| _ -> assert false )
-	| InsnUNOP (code, dst, src) -> (match code with
-		| CL_UNOP_ASSIGN -> (contract_for_assign dst src)::[]
-		| _ -> [] )
+	| InsnUNOP (code, dst, src) -> (contract_for_unop code dst src)::[]
 	| InsnNOP | InsnJMP _ | InsnLABEL _ -> []
 	| InsnSWITCH _ -> assert false
 	| _ -> []
