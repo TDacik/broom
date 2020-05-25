@@ -43,11 +43,6 @@ dune runtest
 ```
 Scripts `generator` and `biabductor` expect input due to the CL library. **[Need to be fixed!]**
 
-## Attention
-Need to be fixed!
- * the module AGU must be set correctly  in the files `code-listener/json/Check.ml`, `src/CL/Util.ml`
- * scripts expect input due to the CL library
-
 ## See also
    * [atd's documentation](http://atd.readthedocs.io/en/latest/)
    * [yojson's documentation](https://docs.mirage.io/yojson/Yojson/index.html)
