@@ -41,9 +41,16 @@ let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
             BinOp ( Peq, Var 2, Const (Ptr 0)) ]
   }
 in 
- print_with_lambda form5;
+
+(*print_with_lambda form5;
 let z3_form5=formula_to_solver ctx form5 in
-if (Solver.check solv z3_form5)=SATISFIABLE then print_string "OK\n" else print_string "NO\n"
+if (Solver.check solv z3_form5)=SATISFIABLE then print_string "OK\n" else print_string "NO\n";*)
+print_with_lambda form_abstr12;
+let aa=try_abstraction_to_lseg ctx solv z3_names form_abstr12 0 1 [1]
+in match aa with
+| AbstractionFail -> print_string "FF\n"
+| AbstractionApply x -> print_string "AA";print_with_lambda x
+
 
 
 

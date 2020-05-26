@@ -55,8 +55,8 @@ let check_eq_dist_from_base ctx solv z3_names form i1 i2 =
 	(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
 	let query1 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
 		Boolean.mk_eq ctx 
-			(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
-			(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
+			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 	] in
 	(* SAT l1=l2 *)
 	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
@@ -117,8 +117,8 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		(* SAT: form /\ v1-base(v1) = v2 - base(v2) *)
 		let query_dist = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
 				Boolean.mk_eq ctx 
-				(Arithmetic.mk_sub ctx [ var1; (Expr.mk_app ctx z3_names.base [var1]) ])
-				(Arithmetic.mk_sub ctx [ var2; (Expr.mk_app ctx z3_names.base [var2]) ])
+				(BitVector.mk_sub ctx  var1 (Expr.mk_app ctx z3_names.base [var1]) )
+				(BitVector.mk_sub ctx  var2 (Expr.mk_app ctx z3_names.base [var2]) )
 		] in
 
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
@@ -196,8 +196,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
 			Boolean.mk_eq ctx 
-			(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
-			(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
+			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 		] in
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
 		let query3=if gvars=[] then []
@@ -438,8 +438,8 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 			(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
 			let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx unfolded_form));
 				Boolean.mk_eq ctx 
-					(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
-					(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+					(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
+					(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 			] in
 			if not (((Solver.check solv query1)=UNSATISFIABLE)
 			&& ((Solver.check solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
@@ -557,8 +557,8 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
 			Boolean.mk_eq ctx 
-				(Arithmetic.mk_sub ctx [ a1; (Expr.mk_app ctx z3_names.base [a1]) ])
-				(Arithmetic.mk_sub ctx [ a2; (Expr.mk_app ctx z3_names.base [a2]) ])
+				(BitVector.mk_sub ctx a1 (Expr.mk_app ctx z3_names.base [a1]) )
+				(BitVector.mk_sub ctx a2 (Expr.mk_app ctx z3_names.base [a2]) )
 		] in
 		if not (((Solver.check solv query1)=UNSATISFIABLE)
 			&& ((Solver.check solv query2)=SATISFIABLE)

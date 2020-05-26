@@ -1,7 +1,8 @@
 (* Useful functions for Code Listener Storage *)
 
 (* newer lib: Atdgen_runtime.Util *)
-module AGU = Ag_util
+(*module AGU = Ag_util*)
+module AGU = Atdgen_runtime.Util
 
 open Type
 open Operand
