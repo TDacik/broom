@@ -199,8 +199,7 @@ and exec_insn state insn =
     let res = contract_application ctx solv z3_names state (List.hd c) in (* FIXME allow contracts *)
     match res with
     | CAppFail -> assert false
-    | CAppOk s -> State.print_state s; State.simplify s (* in
-      Abduction.biabduction ctx solv z3_names s.act  *)
+    | CAppOk s -> State.print_state s; State.simplify s
 
 and exec_insns state insns =
   match insns with
