@@ -10,7 +10,7 @@ fancy introduction...
      - dune
      - ppx_compare, ppx_deriving
      - qtest
-     - z3 <= 3.4.8.1
+     - z3                = 4.8.1
 
 For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 
