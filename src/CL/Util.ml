@@ -1,8 +1,7 @@
 (* Useful functions for Code Listener Storage *)
 
 (* newer lib: Atdgen_runtime.Util *)
-(*module AGU = Ag_util*)
-module AGU = Atdgen_runtime.Util
+module AGU = Ag_util
 
 open Type
 open Operand
@@ -53,6 +52,20 @@ let is_extern op =
 let is_fnc_static f =
 	let scope = f.Fnc.def.scope in
 		scope == CL_SCOPE_STATIC
+
+let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
+
+let rec check_fncs uid fncs =
+	match fncs with
+	| [] -> assert false
+	| (_,f)::tl -> let bb = find_block uid f in (match bb with
+		| None -> check_fncs uid tl
+		| Some bb -> bb
+	)
+
+let get_insns_from_block uid = let bb = check_fncs uid stor.Storage.fncs in bb.insns
+
+let get_block uid = (uid, (check_fncs uid stor.Storage.fncs))
 
 let get_type_size uid =
 	let typ = get_type uid in

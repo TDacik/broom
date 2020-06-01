@@ -213,8 +213,8 @@ let print_insn insn =
 	| InsnSWITCH _ -> Util.error ILOC "unsupported switch instruction"
 	| InsnLABEL _ -> empty_output (* unused *)
 
-let print_block apply_on bb =
-	Printf.printf "\tL%i:\n" bb.uid;
+let print_block apply_on (uid, bb) =
+	Printf.printf "\tL%i:\n" uid;
 	List.iter apply_on bb.insns
 
 let rec print_cfg apply_on_insn cfg =
@@ -229,6 +229,4 @@ let print_fnc ?apply_on_insn:(apply = print_insn) (_, f) =
 		Printf.printf "%s(" str;
 		Util.print_list var_to_string f.args;
 		Printf.printf "):\n";
-	match f.cfg with
-		| Some bbs -> print_cfg apply bbs
-		| None -> ()
+	print_cfg apply f.cfg

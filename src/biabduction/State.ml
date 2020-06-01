@@ -6,6 +6,8 @@ type t = {
     lvars: variable list;
 }
 
+let empty = {miss = Formula.empty; act = Formula.empty; lvars = []}
+
 let to_string state =
   "EXISTS: " ^ CL.Util.list_to_string string_of_int state.lvars 
   ^ "\nMISS: " ^ Formula.to_string state.miss 

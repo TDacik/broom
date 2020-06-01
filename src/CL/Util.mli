@@ -34,6 +34,11 @@ val is_extern: Operand.t -> bool
 
 val is_fnc_static: Fnc.t -> bool
 
+(** [get_insns_from_block uid] *)
+val get_insns_from_block: Loc.cl_uid -> Fnc.insn list
+
+val get_block: Loc.cl_uid -> (Loc.cl_uid * Fnc.block)
+
 val get_type_size : Loc.cl_uid -> int
 
 val get_type_ptr : Loc.cl_uid -> Loc.cl_uid

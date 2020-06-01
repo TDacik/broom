@@ -17,13 +17,13 @@ val print_insn: Fnc.insn -> unit
 
 (** [print_block apply_on_insn bb] prints basic block of function and applies
 	'apply_on_insn' on each instruction *)
-val print_block: (Fnc.insn -> unit) -> Fnc.block -> unit
+val print_block: (Fnc.insn -> unit) -> Loc.cl_uid * Fnc.block -> unit
 
 val get_fnc_name: Fnc.t -> string
 
 val print_fnc_declaration : Fnc.t -> unit
 
-val print_cfg : (Fnc.insn -> unit) -> Fnc.block list -> unit
+val print_cfg : (Fnc.insn -> unit) -> (Loc.cl_uid * Fnc.block) list -> unit
 
 (** [print_fnc ?apply_on_insn (uid,f)] prints function and applies
 	'apply_on_insn' on each instruction *)

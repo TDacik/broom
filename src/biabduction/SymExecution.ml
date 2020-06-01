@@ -3,6 +3,8 @@ open Formula
 open Z3
 open Z3wrapper
 
+(*** APPLAYING CONTRACTS ***)
+
 type contract_app_res =
   | CAppOk of State.t
   | CAppFail
@@ -53,8 +55,8 @@ let rec rename_contract_vars_ll state c seed =
   match c.cvars with
   | 0 -> c
   | n -> let new_var = get_fresh_var seed (svars @ cvars) in
-         let new_c={ Contract.lhs=substitute_vars new_var n c.lhs;
-           rhs=substitute_vars new_var n c.rhs;
+         let new_c={ Contract.lhs=substitute_vars_cvars (Var new_var) (CVar n) c.lhs;
+           rhs=substitute_vars_cvars (Var new_var) (CVar n) c.rhs;
            cvars=(n-1);
            pvarmap=substitute_varmap new_var n c.pvarmap;
          } in
@@ -171,6 +173,48 @@ let contract_application ctx solv z3_names state c =
   | CAppFail -> CAppFail
   | CAppOk s_applied ->
     CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap)
+
+
+(*** EXECUTION ***)
+(* TODO: ctx solv z3_names -> merge into one parameter *)
+
+let cfg = [("model", "true"); ("proof", "false")]
+let ctx = (Z3.mk_context cfg)
+let solv = (Z3.Solver.mk_solver ctx None)
+let z3_names=get_sl_functions_z3 ctx
+
+let rec exec_block state (uid, bb) =
+  Printf.printf ">>> executing block L%i:\n" uid;
+  exec_insns state bb.CL.Fnc.insns
+
+and exec_insn state insn =
+  match insn.CL.Fnc.code with
+  | InsnJMP uid -> let bb = CL.Util.get_block uid in exec_block state bb
+  (* | InsnCOND (op,uid_then,uid_else) -> contract_for_cond op *)
+  | InsnSWITCH _ -> assert false
+  | InsnNOP | InsnLABEL _ -> state
+  | _ -> let c = Contract.get_contract insn in
+    CL.Printer.print_insn insn;
+    CL.Util.print_list Contract.to_string c;
+    let res = contract_application ctx solv z3_names state (List.hd c) in (* FIXME allow contracts *)
+    match res with
+    | CAppFail -> assert false
+    | CAppOk s -> State.print_state s; State.simplify s (* in
+      Abduction.biabduction ctx solv z3_names s.act  *)
+
+and exec_insns state insns =
+  match insns with
+  | [] -> state
+  | insn::tl -> let s = exec_insn state insn in exec_insns s tl
+
+(* TODO: state not empty for functions with parameters? *)
+let exec_fnc f =
+  if (CL.Util.is_extern f.CL.Fnc.def) then () else (
+    Printf.printf ">>> executing function ";
+    CL.Printer.print_fnc_declaration f;
+    Printf.printf ":\n";
+    let s = exec_block State.empty (List.hd f.cfg) in State.print_state s
+  )
 
 (********************************************)
 (* Experiments

@@ -23,17 +23,15 @@ let rec print_storage fncs =
 	| [] -> ()
 	| (_, f)::tl -> CL.Printer.print_fnc_declaration f;
 			Printf.printf ":\n";
-			(match f.cfg with
-				| Some bbs -> CL.Printer.print_cfg custom_fnc bbs
-				| None -> ());
+			CL.Printer.print_cfg custom_fnc f.cfg;
 			print_storage tl
-
-
 
 (* * * * * * * * * * * * * * * main * * * * * * * * * * * * * * *)
 let () =
 	(* List.iter CL.Printer.print_fnc CL.Util.stor.fncs; *)
 	
-	print_storage CL.Util.stor.fncs
+	(* print_storage CL.Util.stor.fncs *)
+	let (_, fnc) = List.hd CL.Util.stor.fncs in
+	Biabd.SymExecution.exec_fnc fnc
 	(* print_newline ();
 	Printf.printf "%s\n" (to_string form1) *)
