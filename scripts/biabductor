@@ -1,1 +1,15 @@
-../_build/default/src/biabductor.exe
+#!/bin/sh
+
+LIBZ3=`opam config var z3:lib`
+
+if [ `uname` = Darwin ]; then
+    ABSPATH='realpath'
+    export DYLD_LIBRARY_PATH=$LIBZ3${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}
+else
+    ABSPATH='readlink -f'
+    export LD_LIBRARY_PATH=$LIBZ3${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+fi
+
+self="`${ABSPATH} "$0"`"
+self_dir="`dirname "$self"`"
+$self_dir/json_dumper $@ | $self_dir/../_build/default/src/biabductor.exe

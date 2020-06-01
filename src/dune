@@ -9,3 +9,9 @@
   (public_name bi)
   (libraries core z3 biabd)
   (modules biabductor))
+
+(executable
+  (name test)
+  (public_name bi)
+  (libraries core CL z3 biabd)
+  (modules test))
