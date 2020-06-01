@@ -433,9 +433,9 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
     let query=[
       Boolean.mk_not ctx (
         Boolean.mk_and ctx [
-        (Arithmetic.mk_le ctx lhs rhs);
-        (Arithmetic.mk_ge ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
-        (Arithmetic.mk_gt ctx lhs_size rhs_size)
+        (BitVector.mk_sle ctx lhs rhs);
+        (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+        (BitVector.mk_sgt ctx lhs_size rhs_size)
         ] );
       (Boolean.mk_and ctx (formula_to_solver ctx form1))
     ] in
@@ -445,9 +445,9 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
     let query=[
       Boolean.mk_not ctx (
         Boolean.mk_and ctx [
-        (Arithmetic.mk_le ctx lhs rhs);
-        (Arithmetic.mk_ge ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
-        (Arithmetic.mk_gt ctx lhs_size rhs_size)
+        (BitVector.mk_sle ctx lhs rhs);
+        (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+        (BitVector.mk_sgt ctx lhs_size rhs_size)
         ] );
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
@@ -456,9 +456,9 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
     ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
-      (Arithmetic.mk_le ctx lhs rhs);
-      (Arithmetic.mk_ge ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
-      (Arithmetic.mk_gt ctx lhs_size rhs_size);
+      (BitVector.mk_sle ctx lhs rhs);
+      (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+      (BitVector.mk_sgt ctx lhs_size rhs_size);
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
@@ -490,9 +490,9 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
     let query=[
       Boolean.mk_not ctx (
         Boolean.mk_and ctx [
-        (Arithmetic.mk_ge ctx lhs rhs);
-        (Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
-        (Arithmetic.mk_lt ctx lhs_size rhs_size)
+        (BitVector.mk_sge ctx lhs rhs);
+        (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+        (BitVector.mk_slt ctx lhs_size rhs_size)
         ] );
       (Boolean.mk_and ctx (formula_to_solver ctx form1))
     ] in
@@ -502,9 +502,9 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
     let query=[
       Boolean.mk_not ctx (
         Boolean.mk_and ctx [
-        (Arithmetic.mk_ge ctx lhs rhs);
-        (Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
-        (Arithmetic.mk_lt ctx lhs_size rhs_size)
+        (BitVector.mk_sge ctx lhs rhs);
+        (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+        (BitVector.mk_slt ctx lhs_size rhs_size)
         ] );
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
@@ -513,9 +513,9 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
     ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
-      (Arithmetic.mk_ge ctx lhs rhs);
-      (Arithmetic.mk_le ctx (Arithmetic.mk_add ctx [lhs; lhs_size]) (Arithmetic.mk_add ctx [rhs; rhs_size]) );
-      (Arithmetic.mk_lt ctx lhs_size rhs_size);
+      (BitVector.mk_sge ctx lhs rhs);
+      (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+      (BitVector.mk_slt ctx lhs_size rhs_size);
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
@@ -792,7 +792,7 @@ let (*rec*) check_entailment_finish ctx solv __names form1 form2 evars=
       In the implementation, we are checking UNSAT of [ form1 /\ not (\ex. evars form2) ]
     *)
 
-    let get_z3_cons a=Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (Arithmetic.Integer.mk_sort ctx) in
+    let get_z3_cons a=Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (BitVector.mk_sort ctx bw_width) in
     let evars_z3=List.map get_z3_cons evars in
     let f2=Boolean.mk_and ctx (formula_to_solver ctx {pi=x; sigma=[]}) in
     let f2_q=match evars_z3 with
