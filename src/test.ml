@@ -31,7 +31,7 @@ let form1 = {
     pi = [ BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
           BinOp ( Peq, UnOp ( Len, Var 1), Const (Int 8L));
           BinOp ( Peq, Var 1, Var 2332 );
-          BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+          BinOp ( Peq, Var 2, Exp.null) ]
     (*evars = [ 2 ]*)
 }
 
@@ -47,7 +47,7 @@ let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
             BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
            BinOp ( Peq, Var 6, (BinOp (Pplus, Var 1, (Const (Int (Int64.of_int 7))))));
             BinOp ( Peq, Var 1, Var 2332 );
-            BinOp ( Peq, Var 2, Const (Ptr 0)) ]
+            BinOp ( Peq, Var 2, Exp.null) ]
   }
 in 
 

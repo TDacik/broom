@@ -189,7 +189,12 @@ let contract_for_binop code dst src1 src2 =
 		| _ -> Undef (* TODO: should be Def or Everything *)
 	) in
 	let assign = Exp.BinOp ( Peq, ef_dst.root, bin_exp ) in
-	let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
+	let pi_add = ( match code with
+		| CL_BINOP_POINTER_PLUS -> [ assign; Exp.BinOp ( Plesseq, ef_dst.root,
+			 BinOp ( Pplus, UnOp (Base, ef_dst.root), UnOp (Len, ef_dst.root)) ) ]
+		| _ -> [assign]
+	) in
+	let rhs = {pi = pi_add @ lhs.pi; sigma = lhs.sigma} in
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_src2.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 
@@ -214,9 +219,11 @@ let contract_for_unop code dst src =
 (****** CONTRACTS FOR BUILT-IN FUNCTIONS ******)
 
 (*
-   if size==0 : dst=null - or create object of size 0?
+   if size<0 or unsuccesful alloc : dst=null
    else         len(dst)=size & base(dst)=dst & dst-(size)->undef
+   allowd create object of size 0
    TODO: if dst is void, generate memory leak, or add points-to without assign
+   TODO: if size is constant, don't generate 0<=size
 *)
 let contract_for_malloc dst size =
 	let ef_dst = operand_to_exformula dst empty_exformula in
@@ -224,8 +231,9 @@ let contract_for_malloc dst size =
 	let lhs = ef_size.f in
 	let len = Exp.BinOp ( Peq, (UnOp (Len, ef_dst.root)), ef_size.root) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, ef_dst.root)), ef_dst.root) in
+	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
 	let sig_add = Hpointsto (ef_dst.root, ef_size.root, Undef) in
-	let rhs = {pi = len :: base :: lhs.pi; sigma = sig_add :: lhs.sigma} in
+	let rhs = {pi = len :: base :: size :: lhs.pi; sigma = sig_add :: lhs.sigma} in
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_size.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 

@@ -49,6 +49,8 @@ module Exp : sig
 
     and variable = int
 
+  val zero : t
+  val null : t
   val variable_to_string : variable -> string
   val cvariable_to_string : int -> string
   val const_to_string : const_val -> string

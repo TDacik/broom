@@ -49,6 +49,9 @@ module Exp = struct (*$< Exp *)
 
     and variable = int
 
+let zero = Const (Int 0L)
+let null = Const (Ptr 0) (* TODO: need Ptr ? *)
+
 let variable_to_string v =
 	let var = CL.Util.get_var_opt v in
 	match var with
