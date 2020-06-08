@@ -18,6 +18,8 @@ val get_type: Loc.cl_uid -> Type.t
 (** [get_var uid] gets variable from association list in storage *)
 val get_var: Loc.cl_uid -> Var.t
 
+val get_var_opt: Loc.cl_uid -> Var.t option
+
 (** [list_to_string to_string args] gets string of elms separated by ',' calling
 	[to_string] on each elm *)
 val list_to_string: ('a -> string) -> 'a list -> string
@@ -33,6 +35,8 @@ val is_void: Operand.t -> bool
 val is_extern: Operand.t -> bool
 
 val is_fnc_static: Fnc.t -> bool
+
+val get_fnc_uid: Fnc.t -> Loc.cl_uid
 
 (** [get_insns_from_block uid] *)
 val get_insns_from_block: Loc.cl_uid -> Fnc.insn list

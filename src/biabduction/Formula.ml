@@ -49,9 +49,13 @@ module Exp = struct (*$< Exp *)
 
     and variable = int
 
-let variable_to_string v = "V" ^ string_of_int v
+let variable_to_string v =
+	let var = CL.Util.get_var_opt v in
+	match var with
+	| None -> "%l" ^ string_of_int v
+	| Some _ -> CL.Printer.var_to_string v
 
-let cvariable_to_string v = "C" ^ string_of_int v
+let cvariable_to_string v = "%c" ^ string_of_int v
 
 let const_to_string c =
   match c with

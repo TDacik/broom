@@ -21,6 +21,8 @@ let get_type uid = List.assoc uid stor.Storage.types
 
 let get_var uid = List.assoc uid stor.Storage.vars
 
+let get_var_opt uid = List.assoc_opt uid stor.Storage.vars
+
 let rec list_to_string to_string args =
 	match args with
 	| [] -> ""
@@ -52,6 +54,13 @@ let is_extern op =
 let is_fnc_static f =
 	let scope = f.Fnc.def.scope in
 		scope == CL_SCOPE_STATIC
+
+let get_fnc_uid f =
+	match f.Fnc.def.Operand.data with
+	| OpCst { cst_data } -> ( match cst_data with
+		| CstFnc fnc -> fnc.uid
+		| _ -> assert false )
+	| _ -> assert false
 
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 
