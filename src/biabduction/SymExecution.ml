@@ -193,6 +193,7 @@ and exec_insn state insn =
   (* | InsnCOND (op,uid_then,uid_else) -> contract_for_cond op *)
   | InsnSWITCH _ -> assert false
   | InsnNOP | InsnLABEL _ -> state
+  | InsnCLOBBER _ -> state (* TODO: stack allocation *)
   | _ -> let c = Contract.get_contract insn in
     CL.Printer.print_insn insn;
     CL.Util.print_list Contract.to_string c;
