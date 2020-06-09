@@ -3,8 +3,9 @@ fancy introduction...
 ## Building from sources
 
 
-### Ocaml dependences
-     - atd
+### List of dependencies
+     - opam             >= 2.0.0
+     - atdgen
      - core
      - cppo
      - dune
@@ -14,19 +15,32 @@ fancy introduction...
 
 For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 
+### Install dependencies
 ```
-opam install atd core cppo z3 dune qtest
-eval `opam config env`
+bew install opam                                         # for MacOS
+```
+```
+$COMPILER="ocaml-variants.4.09.1+flambda"
+$SWITCH=$COMPILER
 
+opam init
+opam switch create $SWITCH $COMPILER
+eval `opam config env`
+opam update
+opam install --deps-only bi .
+```
+
+### Build
+```
 ./build.sh           # for custom installation of gcc, set $GCC_HOST
 dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
 ```
 
 ### Troubleshooting
 
-* For `atd 2.0+`: the module AGU must be set correctly in these files:
+* Empty the `code-listener` directory:
   ```
-  gsed -i 's/Ag_util/Atdgen_runtime.Util/' code-listener/json/Check.ml src/CL/Util.ml
+  git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
   ```
 
 * Z3 Installation failed on MacOS with `clang: error: unsupported option '-fopenmp'`:
@@ -35,7 +49,7 @@ dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
 * If scripts doesn't work due to Z3, set the search path for shared libraries
   ```
   export LD_LIBRARY_PATH=`opam config var z3:lib`
-  export DYLD_LIBRARY_PATH=`opam config var z3:lib` # for OSX
+  export DYLD_LIBRARY_PATH=`opam config var z3:lib`      # for MacOS
   ```
 
 To run the tests:

@@ -1,11 +1,10 @@
-opam-version: "1.2.2"
+opam-version: "2.0"
 
 name: "bi"
 
-synopsis: ""
-description: ""
+synopsis: "A static analyzer for C"
 
-maintainer: ""
+maintainer: "Bi team"
 authors: [
   ""
   ""
@@ -15,11 +14,12 @@ homepage: "https://pajda.fit.vutbr.cz/rogalew/bi-work"
 bug-reports: "https://pajda.fit.vutbr.cz/rogalew/bi-work/issues"
 
 depends: [
-  "atd"
+  "atdgen" {>="2.0.0"}
   "core"
   "cppo"
   "dune"
   "ocaml"
   "qtest"
-  "z3"
+  "z3" {= "4.8.1"}
+  "utop" {with-test}
 ]
