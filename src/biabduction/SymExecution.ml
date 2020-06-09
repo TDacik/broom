@@ -25,7 +25,13 @@ let apply_contract ctx solv z3_names state c =
 (* to avoid conflicts, we rename the contract variables, which appear in state *)
 let rec rename_contract_vars_ll state c seed =
   let svars=join_list_unique (find_vars state.act) (find_vars state.miss) in
-  let cvars=join_list_unique (find_vars c.Contract.lhs) (find_vars c.rhs) in
+  let rec cvars_pvarmap pvarmap =
+  	match pvarmap with
+	| [] -> []
+	| (a,_)::rest -> join_list_unique [a] (cvars_pvarmap rest)
+  in
+  let cvars=join_list_unique (join_list_unique (find_vars c.Contract.lhs) (find_vars c.rhs)) 
+  	(cvars_pvarmap c.pvarmap) in
   let mem x l =
     let eq y= (x=y) in
     List.exists eq l
