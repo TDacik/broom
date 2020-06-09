@@ -61,6 +61,10 @@ let get_fnc_uid f =
 		| _ -> assert false )
 	| _ -> assert false
 
+let get_fnc_vars uid =
+	let f = get_fnc uid in
+	f.vars
+
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 
 let rec check_fncs uid fncs =

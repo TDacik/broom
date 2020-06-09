@@ -189,13 +189,13 @@ let ctx = (Z3.mk_context cfg)
 let solv = (Z3.Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
 
-let rec exec_block state (uid, bb) =
+let rec exec_block state (uid, bb) fuid =
   Printf.printf ">>> executing block L%i:\n" uid;
-  exec_insns state bb.CL.Fnc.insns
+  exec_insns state bb.CL.Fnc.insns fuid
 
-and exec_insn state insn =
+and exec_insn state insn fuid =
   match insn.CL.Fnc.code with
-  | InsnJMP uid -> let bb = CL.Util.get_block uid in exec_block state bb
+  | InsnJMP uid -> let bb = CL.Util.get_block uid in exec_block state bb fuid
   (* | InsnCOND (op,uid_then,uid_else) -> contract_for_cond op *)
   | InsnSWITCH _ -> assert false
   | InsnNOP | InsnLABEL _ -> state
@@ -208,10 +208,10 @@ and exec_insn state insn =
     | CAppFail -> assert false
     | CAppOk s -> State.print_state s; State.simplify s
 
-and exec_insns state insns =
+and exec_insns state insns fuid =
   match insns with
   | [] -> state
-  | insn::tl -> let s = exec_insn state insn in exec_insns s tl
+  | insn::tl -> let s = exec_insn state insn fuid in exec_insns s tl fuid
 
 (* TODO: state not empty for functions with parameters? *)
 let exec_fnc f =
@@ -219,7 +219,7 @@ let exec_fnc f =
     Printf.printf ">>> executing function ";
     CL.Printer.print_fnc_declaration f;
     Printf.printf ":\n";
-    let s = exec_block State.empty (List.hd f.cfg) in State.print_state s
+    let s = exec_block State.empty (List.hd f.cfg) (CL.Util.get_fnc_uid f) in State.print_state s
   )
 
 (********************************************)
