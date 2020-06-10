@@ -22,16 +22,17 @@ let apply_contract ctx solv z3_names state c =
 
     CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
 
-(* to avoid conflicts, we rename the contract variables, which appear in state *)
-let rec rename_contract_vars_ll state c seed =
-  let svars=join_list_unique (find_vars state.act) (find_vars state.miss) in
+(* to avoid conflicts, we rename the contract variables, which appear in state 
+   gvars - a list of global variables + variables used in function *)
+let rec rename_contract_vars_ll state c seed gvars =
+  let svars= (find_vars state.act) @ (find_vars state.miss) in
   let rec cvars_pvarmap pvarmap =
   	match pvarmap with
 	| [] -> []
 	| (a,_)::rest -> join_list_unique [a] (cvars_pvarmap rest)
   in
-  let cvars=join_list_unique (join_list_unique (find_vars c.Contract.lhs) (find_vars c.rhs)) 
-  	(cvars_pvarmap c.pvarmap) in
+  let cvars= (find_vars c.Contract.lhs) @ (find_vars c.rhs) @ (cvars_pvarmap c.pvarmap) in
+  let conflicts = svars @ cvars @ gvars in
   let mem x l =
     let eq y= (x=y) in
     List.exists eq l
@@ -60,13 +61,13 @@ let rec rename_contract_vars_ll state c seed =
   in
   match c.cvars with
   | 0 -> c
-  | n -> let new_var = get_fresh_var seed (svars @ cvars) in
+  | n -> let new_var = get_fresh_var seed conflicts in
          let new_c={ Contract.lhs=substitute_vars_cvars (Var new_var) (CVar n) c.lhs;
            rhs=substitute_vars_cvars (Var new_var) (CVar n) c.rhs;
            cvars=(n-1);
            pvarmap=substitute_varmap new_var n c.pvarmap;
          } in
-         (rename_contract_vars_ll state new_c (new_var+1) )
+         (rename_contract_vars_ll state new_c (new_var+1) gvars)
 
 
 exception State_lhs_contains_forbidden_vars
@@ -76,7 +77,8 @@ exception State_lhs_contains_forbidden_vars
   * rename all occurences of a by a fresh lvar
   * rename all occurences of b by a
 *)
-let rec post_contract_application_vars state pvarmap seed=
+let rec post_contract_application_vars state pvarmap seed gvars=
+ let conflicts = gvars @ (find_vars state.miss) @ (find_vars state.act) in
   let mem l x =
     let eq y= (x=y) in
     List.exists eq l
@@ -92,7 +94,7 @@ let rec post_contract_application_vars state pvarmap seed=
     if mem (find_vars state.miss) b
     then raise State_lhs_contains_forbidden_vars
     else
-      let new_var=get_fresh_var seed ((find_vars state.miss)@(find_vars state.act)) in
+      let new_var=get_fresh_var seed conflicts in
       let tmp_act=substitute_vars new_var a state.act in
       let new_act=substitute_vars a b tmp_act in
       let new_lvars=
@@ -103,7 +105,7 @@ let rec post_contract_application_vars state pvarmap seed=
           miss= state.miss;
           lvars=new_lvars @ [new_var];
         } in
-      (post_contract_application_vars new_state rest (new_var+1))
+      (post_contract_application_vars new_state rest (new_var+1) gvars)
 
 (* REMOVE THE FREED PARTS *)
 
@@ -164,21 +166,30 @@ let remove_freed_parts ctx solv z3_names form =
   2: for each freed(x) predicate in pure part remove the spatial predicates
      with the equal base
 *)
-let post_contract_application state ctx solv z3_names pvarmap =
-  let step1=post_contract_application_vars state pvarmap 1 in
+let post_contract_application state ctx solv z3_names pvarmap gvars =
+  let step1=post_contract_application_vars state pvarmap 1 gvars in
   {miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=step1.lvars}
 
 (* Do
    1) rename conflicting contract variables
    2) apply the contract using biabduction
    3) apply post contract renaming
+   gvars - a list of global variables + local program variables (avoid name conflicts)
+     --- the variables used in state/contract are captured automatically, but thery may be some 
+         global/local variables, which are not used within state and contract
 *)
-let contract_application ctx solv z3_names state c =
-  let c_rename = rename_contract_vars_ll state c 1 in
+let contract_application ctx solv z3_names state c gvars =
+  let rec print_list l =
+  match l with 
+  | [] -> print_string "\n"
+  | first::rest -> print_string ((string_of_int first)^", "); print_list rest
+  in
+  print_string "GVARS (to avoid conflicts): "; print_list gvars;
+  let c_rename = rename_contract_vars_ll state c 1 gvars in
   match (apply_contract ctx solv z3_names state c_rename) with
   | CAppFail -> CAppFail
   | CAppOk s_applied ->
-    CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap)
+    CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap gvars)
 
 
 (*** EXECUTION ***)
@@ -203,7 +214,8 @@ and exec_insn state insn fuid =
   | _ -> let c = Contract.get_contract insn in
     CL.Printer.print_insn insn;
     CL.Util.print_list Contract.to_string c;
-    let res = contract_application ctx solv z3_names state (List.hd c) in (* FIXME allow contracts *)
+    (* FIXME: Add global variables --- (global_variables @ (CL.Util.get_fnc_vars fuid)) *)
+    let res = contract_application ctx solv z3_names state (List.hd c) (CL.Util.get_fnc_vars fuid) in (* FIXME allow contracts *)
     match res with
     | CAppFail -> assert false
     | CAppOk s -> State.print_state s; State.simplify s
