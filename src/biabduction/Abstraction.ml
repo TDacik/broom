@@ -537,7 +537,8 @@ let fold_pointsto form i1 i2 res_triples =
 
 let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 (* try to abstract two predicates i1 and i2 into a list segment,
-  gvars = global variables. Internal nodes of the list segment can not be pointed by global variables*)
+  gvars = global variables/variables of function. 
+      Internal nodes of the list segment can not be pointed by global variables*)
   	(* SAT: forall g in gvar. base(g)!=base(middle) *)
 	let global_bases middle g=Boolean.mk_not ctx
 			(Boolean.mk_eq ctx

@@ -175,8 +175,7 @@ type apply_match_res =
 | ApplyFail
 
 
-(* !!! Need to be tested, case 4 not finished ***)
-let apply_match i pred_type form1 form2 =
+let apply_match i pred_type form1 form2 gvars =
   let nequiv a b = not (a=b) in
   let remove k form =
     { pi=form.pi;
@@ -186,14 +185,14 @@ let apply_match i pred_type form1 form2 =
   | (i1,i2) ->
     match pred_type with
     | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
-    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 (find_vars form1) in
+    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@gvars) in
       ApplyOK (form1, new_form2, new_lvars)
-    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 (find_vars form2) in
+    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@gvars) in
       ApplyOK (new_form1, form2, new_lvars)
     | 3 ->
       let _,y1,ls1 = to_slseg_unsafe  (List.nth form1.sigma i1) in
       let _,y2,ls2 = to_slseg_unsafe (List.nth form2.sigma i2) in
-      if (ls1=ls2) then (* This is ugly hack. Should be replaced by entailment check ls1 |-ls2 *)
+      if (ls1=ls2) then (* FIXME: This is ugly hack. Should be replaced by entailment check ls1 |-ls2 *)
         let lhs=(remove i1 form1) in
         let rhs_tmp=(remove i2 form2) in
         let rhs={sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
@@ -209,7 +208,7 @@ let apply_match i pred_type form1 form2 =
   M - the learned part
 2:  unfolded Slseg in form1/form2 and added equality x=y
 *)
-let try_match ctx solv z3_names form1 form2 level =
+let try_match ctx solv z3_names form1 form2 level gvars =
   let m=find_match ctx solv z3_names form1 form2 level in
   match m with
   | (-1,-1) -> Fail
@@ -220,7 +219,7 @@ let try_match ctx solv z3_names form1 form2 level =
     let x2,y2,type2,size2=match (List.nth form2.sigma i2) with
       | Hpointsto (a,size,b) -> (a,b,0,size)
       | Slseg (a,b,_) -> (a,b,1,Exp.Void) in
-    match apply_match (i1,i2) (type1+type2) form1 form2 with
+    match apply_match (i1,i2) (type1+type2) form1 form2 gvars with
     | ApplyFail -> Fail
     | ApplyOK (f1,f2,added_lvars) ->
       (* x1 = x2 if equal predicate types match. Othervice base(x1) = base(x2) is added. *)
@@ -308,7 +307,7 @@ let check_learn_pointsto ctx solv z3_names form1 form2 i2 level =
 
 
 (* try to apply learn1 rule for pointsto *)
-let try_learn_pointsto ctx solv z3_names form1 form2 level=
+let try_learn_pointsto ctx solv z3_names form1 form2 level _ =
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
@@ -385,7 +384,7 @@ let check_learn_slseg ctx solv z3_names form1 form2 i2 level =
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 (* try to apply learn rule for slseg *)
-let try_learn_slseg ctx solv z3_names form1 form2 level=
+let try_learn_slseg ctx solv z3_names form1 form2 level _=
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
@@ -545,7 +544,7 @@ let find_split ctx solv z3_names form1 form2 level =
   find_split_ll ctx solv z3_names form1 0 form2 level
 
 
-let try_split ctx solv z3_names form1 form2 level =
+let try_split ctx solv z3_names form1 form2 level _ =
   let m=find_split ctx solv z3_names form1 form2 level in
   let nequiv a b = not (a=b) in
   let remove k form =
@@ -717,7 +716,7 @@ type abduction_res =
 | Bok of Formula.t * Formula.t * variable list
 | BFail
 
-let rec biabduction ctx solv z3_names form1 form2 =
+let rec biabduction ctx solv z3_names form1 form2 gvars =
   (* First test SAT of form1 and form2.
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
      The conflicts may be removed by application of a match rule.
@@ -745,7 +744,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
   let rec try_rules todo=
     match todo with
     | (func_name,rule_arg,rule_name) :: rest ->
-      (match (func_name ctx solv z3_names form1 form2 rule_arg) with
+      (match (func_name ctx solv z3_names form1 form2 rule_arg gvars) with
       | Apply (f1,f2,missing,n_lvars) ->
         print_string (rule_name ^", ");
         Apply (f1,f2,missing,n_lvars)
@@ -756,7 +755,7 @@ let rec biabduction ctx solv z3_names form1 form2 =
   in
   match try_rules rules with
   | Apply (f1,f2,missing,n_lvars) ->
-    (match biabduction ctx solv z3_names f1 f2 with
+    (match biabduction ctx solv z3_names f1 f2 gvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
@@ -810,7 +809,7 @@ let rec entailment_ll ctx solv z3_names form1 form2 evars=
   | 0 -> false
   | 1 -> true
   | -1 ->
-     (match (try_match ctx solv z3_names form1 form2 1) with
+     (match (try_match ctx solv z3_names form1 form2 1 []) with
      | Apply (f1,f2,_,_) ->
   print_string "Match, ";
   (entailment_ll ctx solv z3_names f1 f2 evars)

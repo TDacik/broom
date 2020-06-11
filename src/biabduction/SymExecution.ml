@@ -13,8 +13,8 @@ type contract_app_res =
    * we assume that contract variables are not used within the state s,
    * only the program variables may appear in both contract and state, they are used as anchors
 *)
-let apply_contract ctx solv z3_names state c =
-  match (Abduction.biabduction ctx solv z3_names state.act c.Contract.lhs) with
+let apply_contract ctx solv z3_names state c gvars =
+  match (Abduction.biabduction ctx solv z3_names state.act c.Contract.lhs gvars) with
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
     let missing= {pi=state.miss.pi @ miss.pi; sigma=state.miss.sigma @ miss.sigma } in
@@ -186,7 +186,7 @@ let contract_application ctx solv z3_names state c gvars =
   in
   print_string "GVARS (to avoid conflicts): "; print_list gvars;
   let c_rename = rename_contract_vars_ll state c 1 gvars in
-  match (apply_contract ctx solv z3_names state c_rename) with
+  match (apply_contract ctx solv z3_names state c_rename gvars) with
   | CAppFail -> CAppFail
   | CAppOk s_applied ->
     CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap gvars)

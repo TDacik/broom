@@ -31,7 +31,7 @@ exception IllegalArgumentException of string
     going to be applied. Trying the rules till an applicable if founded
 *)
 val biabduction : Z3.context -> Z3.Solver.solver ->
-    Z3wrapper.sl_function_names_z3 -> Formula.t -> Formula.t
+    Z3wrapper.sl_function_names_z3 -> Formula.t -> Formula.t -> variable list
     -> abduction_res
 
 
