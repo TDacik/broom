@@ -53,15 +53,15 @@ let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
 
 let variable_to_string v =
-	let var = CL.Util.get_var_opt v in
-	match var with
-	| None -> "%l" ^ string_of_int v
-	| Some _ -> CL.Printer.var_to_string v
+  let var = CL.Util.get_var_opt v in
+  match var with
+  | None -> "%l" ^ string_of_int v
+  | Some _ -> CL.Printer.var_to_string v
 
 let cvariable_to_string v =
-	match v with
-	| 0 -> "%ret" (* special variable *)
-	| _ -> "%c" ^ string_of_int v
+  match v with
+  | 0 -> "%ret" (* special variable *)
+  | _ -> "%c" ^ string_of_int v
 
 let const_to_string c =
   match c with
@@ -156,22 +156,22 @@ let rec pi_to_string p =
 let rec sigma_to_string_ll s lambda_level num=
 (* num is used to marking lambdas *)
   let rec lambda_params_to_string params =
-    match params with 
+    match params with
     | [] -> ""
     | first::rest -> "V"^(string_of_int first)^", "^ (lambda_params_to_string rest)
   in
   let pred_to_string a =
     match a with
     | Hpointsto (a,l,b) -> (Exp.to_string a ^ " -("^ (Exp.to_string l) ^ ")-> " ^ Exp.to_string b), ""
-    | Slseg (a,b,lambda) -> 
-    	let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
-    	("Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", " ^lambda_id^") "), 
-    			"\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^ (to_string_with_lambda lambda.form  (lambda_level+1))
+    | Slseg (a,b,lambda) ->
+      let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
+      ("Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", " ^lambda_id^") "),
+      "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^ (to_string_with_lambda lambda.form  (lambda_level+1))
   in
   match s with
   | [] -> "",""
-  | first::rest -> 
-  	match (pred_to_string first),(sigma_to_string_ll rest lambda_level (num+1)) with
+  | first::rest ->
+    match (pred_to_string first),(sigma_to_string_ll rest lambda_level (num+1)) with
     | (pred_first, lambda_first), ("", lambda_rest) -> pred_first, (lambda_first ^ lambda_rest)
     | (pred_first, lambda_first), (pred_rest, lambda_rest) -> (pred_first ^ " * " ^ pred_rest), (lambda_first ^ lambda_rest)
 
@@ -367,67 +367,65 @@ let rec remove_redundant_eq pi =
       else Exp.BinOp (Peq,a,b) :: (remove_redundant_eq rest)
     | x -> x:: (remove_redundant_eq rest)
 
-(* remove usless conjuncts from pure part 
+(* remove usless conjuncts from pure part
    - a conjunct is useless iff
    1a) contains evars only
-   1b) it is of the form exp1 !=exp2 and evars  are not togather with ref_vars in exp1/2 
+   1b) it is of the form exp1 !=exp2 and evars  are not togather with ref_vars in exp1/2
       --- r1 != e1 (r1 referenced, e1 existential) => this conjunct is not needed
    2) there is no transitive reference from spatial part or program variables *)
 
 let rec get_referenced_conjuncts_ll sigma ref_vars =
-	let mem x =
-    		let eq y= (x=y) in
-    		List.exists eq ref_vars
-	in
-	let nomem x = not (mem x) in
-	match sigma with 
-	| [] -> [],[]
-	| first::rest ->
-		match first with  
-		| Exp.BinOp ( Pneq, a, b) -> ( (* handle the case 1b *)
-			let a_vars=find_vars_expr a in
-			let b_vars=find_vars_expr b in
-			let referenced_a=List.filter mem a_vars in
-			let referenced_b=List.filter mem b_vars in
-			let non_referenced_a = List.filter nomem a_vars in
-			let non_referenced_b = List.filter nomem b_vars in
-			match referenced_a,referenced_b,non_referenced_a,non_referenced_b with
-			| [],[],_,_ -> get_referenced_conjuncts_ll rest ref_vars
-			| _,[],[],_ -> get_referenced_conjuncts_ll rest ref_vars
-			| [],_,_,[] -> get_referenced_conjuncts_ll rest ref_vars
-			| _,_,nrefs_a,nrefs_b ->
-				let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-					first::ref_conjuncts, (join_list_unique transitive_refs (join_list_unique nrefs_a nrefs_b))
-		)
-		| _ ->
-			let vars_in_first=find_vars_expr first in
-			let referenced=List.filter mem vars_in_first in
-			let non_referenced = List.filter nomem vars_in_first in
-			match referenced,non_referenced with
-			| [],_ -> get_referenced_conjuncts_ll rest ref_vars
-			| _,nrefs -> 
-				let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-					first::ref_conjuncts, (join_list_unique transitive_refs nrefs)
+  let mem x =
+    let eq y= (x=y) in
+    List.exists eq ref_vars
+  in
+  let nomem x = not (mem x) in
+  match sigma with
+  | [] -> [],[]
+  | first::rest ->
+    match first with
+    | Exp.BinOp ( Pneq, a, b) -> ( (* handle the case 1b *)
+      let a_vars=find_vars_expr a in
+      let b_vars=find_vars_expr b in
+      let referenced_a=List.filter mem a_vars in
+      let referenced_b=List.filter mem b_vars in
+      let non_referenced_a = List.filter nomem a_vars in
+      let non_referenced_b = List.filter nomem b_vars in
+      match referenced_a,referenced_b,non_referenced_a,non_referenced_b with
+      | [],[],_,_ -> get_referenced_conjuncts_ll rest ref_vars
+      | _,[],[],_ -> get_referenced_conjuncts_ll rest ref_vars
+      | [],_,_,[] -> get_referenced_conjuncts_ll rest ref_vars
+      | _,_,nrefs_a,nrefs_b ->
+        let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
+          first::ref_conjuncts, (join_list_unique transitive_refs (join_list_unique nrefs_a nrefs_b))
+    )
+    | _ ->
+      let vars_in_first=find_vars_expr first in
+      let referenced=List.filter mem vars_in_first in
+      let non_referenced = List.filter nomem vars_in_first in
+      match referenced,non_referenced with
+      | [],_ -> get_referenced_conjuncts_ll rest ref_vars
+      | _,nrefs ->
+        let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
+          first::ref_conjuncts, (join_list_unique transitive_refs nrefs)
 
 let rec get_referenced_conjuncts sigma ref_vars =
-	let res,new_refs=get_referenced_conjuncts_ll sigma ref_vars in
-	match new_refs with
-	| [] -> res
-	| _ -> get_referenced_conjuncts sigma (ref_vars @ new_refs)
+  let res,new_refs=get_referenced_conjuncts_ll sigma ref_vars in
+  match new_refs with
+  | [] -> res
+  | _ -> get_referenced_conjuncts sigma (ref_vars @ new_refs)
 
-		
 
 let remove_useless_conjuncts form evars =
-	let mem x =
-	    let eq y= (x=y) in
-	    not (List.exists eq evars )
-	in
-	let vars=find_vars form in
-	let gvars=List.filter mem vars in
-	let ref_vars=join_list_unique (find_vars_sigma form.sigma)  gvars in
-	let new_pi=get_referenced_conjuncts form.pi ref_vars in
-	{sigma=form.sigma; pi=new_pi}
-	
+  let mem x =
+      let eq y= (x=y) in
+      not (List.exists eq evars )
+  in
+  let vars=find_vars form in
+  let gvars=List.filter mem vars in
+  let ref_vars=join_list_unique (find_vars_sigma form.sigma)  gvars in
+  let new_pi=get_referenced_conjuncts form.pi ref_vars in
+  {sigma=form.sigma; pi=new_pi}
 
 
 (* now we have everything for global simplify function,
