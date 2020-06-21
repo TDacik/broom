@@ -535,9 +535,9 @@ let fold_pointsto form i1 i2 res_triples =
 
 
 
-let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
+let try_abstraction_to_lseg ctx solv z3_names form i1 i2 pvars =
 (* try to abstract two predicates i1 and i2 into a list segment,
-  gvars = global variables/variables of function. 
+  pvars = program variables (global vars + vars of function).
       Internal nodes of the list segment can not be pointed by global variables*)
   	(* SAT: forall g in gvar. base(g)!=base(middle) *)
 	let global_bases middle g=Boolean.mk_not ctx
@@ -546,10 +546,10 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 				(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
 			)
 	in
-	let query_gvars middle=if gvars=[] then []
+	let query_pvars middle=if pvars=[] then []
 		else
 		[ (Boolean.mk_and ctx (formula_to_solver ctx form));
-			Boolean.mk_and ctx (List.map (global_bases middle) gvars) ] 
+			Boolean.mk_and ctx (List.map (global_bases middle) pvars) ] 
 	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
 	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> (
@@ -571,7 +571,7 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 		] in
 		if not (((Solver.check solv query1)=UNSATISFIABLE)
 			&& ((Solver.check solv query2)=SATISFIABLE)
-			&& ((Solver.check solv (query_gvars a2))=SATISFIABLE)) then AbstractionFail
+			&& ((Solver.check solv (query_pvars a2))=SATISFIABLE)) then AbstractionFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 [i1;i2] in
@@ -580,7 +580,7 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 		| MatchFail -> AbstractionFail 
 		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
-			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1 gvars) with
+			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1 pvars) with
 			| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
 			| CheckFail -> AbstractionFail
 		)
@@ -592,7 +592,7 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx b1 a2))
 		] in
 		if (Solver.check solv query1)=SATISFIABLE 
-			|| ((Solver.check solv (query_gvars a2))=UNSATISFIABLE) then AbstractionFail
+			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then AbstractionFail
 		else
 		let rec remove_i1_i2 ll index=
 			if index=List.length ll then []
@@ -614,10 +614,10 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
 		] in		
 		if (Solver.check solv query1)=SATISFIABLE 
-			|| ((Solver.check solv (query_gvars a2))=UNSATISFIABLE) then AbstractionFail
+			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then AbstractionFail
 		else
 		(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
-		try_add_slseg_to_pointsto ctx solv z3_names form i1 i2 gvars 0
+		try_add_slseg_to_pointsto ctx solv z3_names form i1 i2 pvars 0
 
 	)
 	|  Slseg (_,b,_),Hpointsto (aa,_,_) -> (
@@ -628,10 +628,10 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 gvars =
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
 		] in		
 		if (Solver.check solv query1)=SATISFIABLE 
-			|| ((Solver.check solv (query_gvars a2))=UNSATISFIABLE) then AbstractionFail
+			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then AbstractionFail
 		else
 		(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
-		try_add_slseg_to_pointsto ctx solv z3_names form i2 i1 gvars 1
+		try_add_slseg_to_pointsto ctx solv z3_names form i2 i1 pvars 1
 
 	)
 	(*| _ -> AbstractionFail*)

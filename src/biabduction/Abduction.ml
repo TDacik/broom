@@ -175,7 +175,7 @@ type apply_match_res =
 | ApplyFail
 
 
-let apply_match i pred_type form1 form2 gvars =
+let apply_match i pred_type form1 form2 pvars =
   let nequiv a b = not (a=b) in
   let remove k form =
     { pi=form.pi;
@@ -185,9 +185,9 @@ let apply_match i pred_type form1 form2 gvars =
   | (i1,i2) ->
     match pred_type with
     | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
-    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@gvars) in
+    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) in
       ApplyOK (form1, new_form2, new_lvars)
-    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@gvars) in
+    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) in
       ApplyOK (new_form1, form2, new_lvars)
     | 3 ->
       let _,y1,ls1 = to_slseg_unsafe  (List.nth form1.sigma i1) in
@@ -208,7 +208,7 @@ let apply_match i pred_type form1 form2 gvars =
   M - the learned part
 2:  unfolded Slseg in form1/form2 and added equality x=y
 *)
-let try_match ctx solv z3_names form1 form2 level gvars =
+let try_match ctx solv z3_names form1 form2 level pvars =
   let m=find_match ctx solv z3_names form1 form2 level in
   match m with
   | (-1,-1) -> Fail
@@ -219,7 +219,7 @@ let try_match ctx solv z3_names form1 form2 level gvars =
     let x2,y2,type2,size2=match (List.nth form2.sigma i2) with
       | Hpointsto (a,size,b) -> (a,b,0,size)
       | Slseg (a,b,_) -> (a,b,1,Exp.Void) in
-    match apply_match (i1,i2) (type1+type2) form1 form2 gvars with
+    match apply_match (i1,i2) (type1+type2) form1 form2 pvars with
     | ApplyFail -> Fail
     | ApplyOK (f1,f2,added_lvars) ->
       (* x1 = x2 if equal predicate types match. Othervice base(x1) = base(x2) is added. *)
@@ -716,7 +716,7 @@ type abduction_res =
 | Bok of Formula.t * Formula.t * variable list
 | BFail
 
-let rec biabduction ctx solv z3_names form1 form2 gvars =
+let rec biabduction ctx solv z3_names form1 form2 pvars =
   (* First test SAT of form1 and form2.
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
      The conflicts may be removed by application of a match rule.
@@ -744,7 +744,7 @@ let rec biabduction ctx solv z3_names form1 form2 gvars =
   let rec try_rules todo=
     match todo with
     | (func_name,rule_arg,rule_name) :: rest ->
-      (match (func_name ctx solv z3_names form1 form2 rule_arg gvars) with
+      (match (func_name ctx solv z3_names form1 form2 rule_arg pvars) with
       | Apply (f1,f2,missing,n_lvars) ->
         print_string (rule_name ^", ");
         Apply (f1,f2,missing,n_lvars)
@@ -755,7 +755,7 @@ let rec biabduction ctx solv z3_names form1 form2 gvars =
   in
   match try_rules rules with
   | Apply (f1,f2,missing,n_lvars) ->
-    (match biabduction ctx solv z3_names f1 f2 gvars with
+    (match biabduction ctx solv z3_names f1 f2 pvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
