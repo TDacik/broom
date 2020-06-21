@@ -44,12 +44,16 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 	| ac::tl -> (match ac.acc_data with
 
 		(* C -()-> <var> *)
-		| Ref -> (*TODO find var pointso*)
-			let last_cvar = ef.cnt_cvars + 1 in
+		| Ref ->
+			let (obj,cvars_obj) = find_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-			let sig_add = [ Hpointsto (CVar last_cvar, exp_ptr_size, var) ] in
-			var_to_exformula (CVar last_cvar) tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=last_cvar; root=(CVar last_cvar)}
+			let sig_add =
+				if ef.cnt_cvars = cvars_obj then (* points-to exists *)
+					[]
+				else
+					[ Hpointsto (obj, exp_ptr_size, var) ] in
+			var_to_exformula obj tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=cvars_obj; root=obj}
 
 		(* <var> -()-> C *)
 		| Deref ->
@@ -66,12 +70,8 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
 		| Item _ ->
 			let (obj,cvars_obj) = find_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			let _ = (match obj, ef.f.sigma with
-				| CVar _, [] -> true (* must be empty *)
-				| Var _, [Hpointsto (_,_,_)] -> true (* must have 1 points-to *)
-				| CVar _, [Hpointsto (_,_,_)] -> true (* TODO: must be same base *)
-				| _,_ -> assert false
-			) in
+			assert (ef.cnt_cvars = cvars_obj); (* TODO object on stack unsupported *)
+
 			(* let cvar_obj = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_obj + 1 in
 			let cvar_last = cvar_itm + 1 in

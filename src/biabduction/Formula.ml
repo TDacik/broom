@@ -58,7 +58,10 @@ let variable_to_string v =
 	| None -> "%l" ^ string_of_int v
 	| Some _ -> CL.Printer.var_to_string v
 
-let cvariable_to_string v = "%c" ^ string_of_int v
+let cvariable_to_string v =
+	match v with
+	| 0 -> "%ret" (* special variable *)
+	| _ -> "%c" ^ string_of_int v
 
 let const_to_string c =
   match c with
