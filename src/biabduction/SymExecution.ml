@@ -252,20 +252,14 @@ let rec exec_block states (uid, bb) fuid =
 and exec_insn states insn fuid =
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in exec_block states bb fuid
-  (* | InsnCOND (_,uid_then,_) ->
+  | InsnCOND (_,uid_then,uid_else) ->
+    CL.Printer.print_insn insn;
     let c = Contract.get_contract insn in
-    let pvars = CL.Util.get_fnc_vars fuid in
-    let res_then = contract_application ctx solv z3_names state (List.hd c) pvars in
-    (* let res_else = contract_application ctx solv z3_names state (List.nth c 1) pvars in *)
+    let s_then = apply_on_state ctx solv z3_names fuid states [(List.hd c)] in
+    let s_else = apply_on_state ctx solv z3_names fuid states [(List.nth c 1)] in
     let bb_then = CL.Util.get_block uid_then in
-    (* let bb_else = CL.Util.get_block uid_else in *)
-    (* assert (res_then <> CAppFail && res_else <> CAppFail); (* FIXME error handling *) *)
-    (match res_then with
-    | CAppFail -> assert false (* FIXME exeption *)
-    | CAppOk s -> State.print s; exec_block (State.simplify s) bb_then fuid) *)
-  (* match res_else with
-  | CAppFail -> assert false (* FIXME exeption *)
-  | CAppOk s -> State.print s; exec_block (State.simplify s) bb_else fuid *)
+    let bb_else = CL.Util.get_block uid_else in
+    (exec_block s_then bb_then fuid) @ (exec_block s_else bb_else fuid)
   | InsnSWITCH _ -> assert false
   | InsnNOP | InsnLABEL _ -> states
   | InsnCLOBBER _ -> states (* TODO: stack allocation *)
