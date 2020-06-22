@@ -65,6 +65,10 @@ let get_fnc_vars uid =
 	let f = get_fnc uid in
 	f.vars
 
+let get_fnc_args uid =
+	let f = get_fnc uid in
+	f.args
+
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 
 let rec check_fncs uid fncs =

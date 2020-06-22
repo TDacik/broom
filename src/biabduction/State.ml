@@ -13,7 +13,7 @@ let to_string state =
   ^ "\nMISS: " ^ Formula.to_string state.miss 
   ^ "\nACTUAL: " ^ Formula.to_string state.act ^ "\n"
   
-let print_state state =
+let print state =
   print_string (to_string state)
 
 let rec simplify_ll gvars evars state = 

@@ -38,8 +38,11 @@ val is_fnc_static: Fnc.t -> bool
 
 val get_fnc_uid: Fnc.t -> Loc.cl_uid
 
-(** [get_fnc_vars uid] gets uids of varables for function given by uid *)
+(** [get_fnc_vars uid] gets uids of varables used in function given by uid *)
 val get_fnc_vars: Loc.cl_uid -> Loc.cl_uid list
+
+(** [get_fnc_vars uid] gets uids of arguments used in function given by uid *)
+val get_fnc_args: Loc.cl_uid -> Loc.cl_uid list
 
 (** [get_insns_from_block uid] *)
 val get_insns_from_block: Loc.cl_uid -> Fnc.insn list

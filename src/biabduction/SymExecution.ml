@@ -193,39 +193,90 @@ let contract_application ctx solv z3_names state c pvars =
   | CAppOk s_applied ->
     CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap pvars)
 
+(* PREPARE STATE FOR CONTRACT
+  rename all variables expect parameters and global (fixed_vars) -
+  set existential connected with them as fresh contract variables
+*)
+
+(* TODO move to CL.Util *)
+let diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
+
+let rec state2contract s vars cvar =
+  match vars with
+  | [] -> {Contract.lhs = s.miss; rhs = s.act; cvars = cvar; pvarmap = []}
+  | var::tl -> let new_cvar = cvar + 1 in
+      let new_s = {
+        miss = substitute_vars_cvars (CVar new_cvar) (Var var) s.miss;
+        act = substitute_vars_cvars (CVar new_cvar) (Var var) s.act;
+        lvars = []} in
+      state2contract new_s tl new_cvar
+
+	(* prog[1,2,3,4,5]-param+glob[1,2,3]
+	+exist[6,7,8] *)
+
+let rec get_fnc_contract fixed_vars states =
+  match states with
+  | [] -> []
+  | s::tl -> State.print s; (state2contract s (fixed_vars @ s.lvars) 0) :: (get_fnc_contract fixed_vars tl)
 
 (*** EXECUTION ***)
+
 (* TODO: ctx solv z3_names -> merge into one parameter *)
+(* Applay each contract on each state *)
 
 let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (Z3.mk_context cfg)
 let solv = (Z3.Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
 
-let rec exec_block state (uid, bb) fuid =
-  Printf.printf ">>> executing block L%i:\n" uid;
-  exec_insns state bb.CL.Fnc.insns fuid
+let rec solve_contract ctx solv z3_names fuid state contracts =
+  match contracts with
+  | [] -> []
+  | c::tl -> Contract.print c;
+      (* FIXME: Add global variables --- (global_variables @ (CL.Util.get_fnc_vars fuid)) *)
+      let res = contract_application ctx solv z3_names state c (CL.Util.get_fnc_vars fuid) in (* FIXME allow contracts *)
+      match res with
+      | CAppFail -> [] (* FIXME error handling *)
+      | CAppOk s -> State.print s;
+        (State.simplify s)::(solve_contract ctx solv z3_names fuid state tl)
 
-and exec_insn state insn fuid =
+let rec apply_on_state ctx solv z3_names fuid states contracts =
+  match states with
+  | [] -> []
+  | s::tl -> (solve_contract ctx solv z3_names fuid s contracts) @ (apply_on_state ctx solv z3_names fuid tl contracts)
+
+let rec exec_block states (uid, bb) fuid =
+  Printf.printf ">>> executing block L%i:\n" uid;
+  exec_insns states bb.CL.Fnc.insns fuid
+
+and exec_insn states insn fuid =
   match insn.CL.Fnc.code with
-  | InsnJMP uid -> let bb = CL.Util.get_block uid in exec_block state bb fuid
-  (* | InsnCOND (op,uid_then,uid_else) -> contract_for_cond op *)
+  | InsnJMP uid -> let bb = CL.Util.get_block uid in exec_block states bb fuid
+  (* | InsnCOND (_,uid_then,_) ->
+    let c = Contract.get_contract insn in
+    let pvars = CL.Util.get_fnc_vars fuid in
+    let res_then = contract_application ctx solv z3_names state (List.hd c) pvars in
+    (* let res_else = contract_application ctx solv z3_names state (List.nth c 1) pvars in *)
+    let bb_then = CL.Util.get_block uid_then in
+    (* let bb_else = CL.Util.get_block uid_else in *)
+    (* assert (res_then <> CAppFail && res_else <> CAppFail); (* FIXME error handling *) *)
+    (match res_then with
+    | CAppFail -> assert false (* FIXME exeption *)
+    | CAppOk s -> State.print s; exec_block (State.simplify s) bb_then fuid) *)
+  (* match res_else with
+  | CAppFail -> assert false (* FIXME exeption *)
+  | CAppOk s -> State.print s; exec_block (State.simplify s) bb_else fuid *)
   | InsnSWITCH _ -> assert false
-  | InsnNOP | InsnLABEL _ -> state
-  | InsnCLOBBER _ -> state (* TODO: stack allocation *)
+  | InsnNOP | InsnLABEL _ -> states
+  | InsnCLOBBER _ -> states (* TODO: stack allocation *)
   | _ -> let c = Contract.get_contract insn in
     CL.Printer.print_insn insn;
-    CL.Util.print_list Contract.to_string c;
-    (* FIXME: Add global variables --- (global_variables @ (CL.Util.get_fnc_vars fuid)) *)
-    let res = contract_application ctx solv z3_names state (List.hd c) (CL.Util.get_fnc_vars fuid) in (* FIXME allow contracts *)
-    match res with
-    | CAppFail -> assert false
-    | CAppOk s -> State.print_state s; State.simplify s
+    apply_on_state ctx solv z3_names fuid states c
 
-and exec_insns state insns fuid =
+and exec_insns states insns fuid =
   match insns with
-  | [] -> state
-  | insn::tl -> let s = exec_insn state insn fuid in exec_insns s tl fuid
+  | [] -> states
+  | insn::tl -> let s = exec_insn states insn fuid in exec_insns s tl fuid
 
 (* TODO: state not empty for functions with parameters? *)
 let exec_fnc f =
@@ -233,7 +284,16 @@ let exec_fnc f =
     Printf.printf ">>> executing function ";
     CL.Printer.print_fnc_declaration f;
     Printf.printf ":\n";
-    let s = exec_block State.empty (List.hd f.cfg) (CL.Util.get_fnc_uid f) in State.print_state s
+    let s = exec_block (State.empty::[]) (List.hd f.cfg) (CL.Util.get_fnc_uid f) in
+    Printf.printf ">>> final contract\n";
+    print_string "PVARS:";
+    CL.Util.print_list Exp.variable_to_string f.vars; print_string "\n";
+    print_string "ARGS:";
+    CL.Util.print_list Exp.variable_to_string f.args; print_string "\n";
+    (* FIXME: f.args @ global variables *)
+    let fixed_vars = diff f.vars f.args in
+    let fnc_c = get_fnc_contract fixed_vars s in
+    CL.Util.print_list Contract.to_string fnc_c;
   )
 
 (********************************************)
