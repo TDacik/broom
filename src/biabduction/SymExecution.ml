@@ -168,7 +168,13 @@ let remove_freed_parts ctx solv z3_names form =
 *)
 let post_contract_application state ctx solv z3_names pvarmap pvars =
   let step1=post_contract_application_vars state pvarmap 1 pvars in
-  {miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=step1.lvars}
+  let vars= Formula.join_list_unique (find_vars step1.act) (find_vars step1.miss) in
+  let notmem l x =
+      let eq y= (x=y) in
+      not (List.exists eq l)
+  in
+  let new_lvars=List.filter (notmem pvars) vars in
+  {miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=new_lvars}
 
 (* Do
    1) rename conflicting contract variables
@@ -181,12 +187,6 @@ let post_contract_application state ctx solv z3_names pvarmap pvars =
    and contract
 *)
 let contract_application ctx solv z3_names state c pvars =
-  let rec print_list l =
-  match l with 
-  | [] -> print_string "\n"
-  | first::rest -> print_string ((string_of_int first)^", "); print_list rest
-  in
-  print_string "PVARS (to avoid conflicts): "; print_list pvars;
   let c_rename = rename_contract_vars_ll state c 1 pvars in
   match (apply_contract ctx solv z3_names state c_rename pvars) with
   | CAppFail -> CAppFail

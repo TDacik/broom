@@ -38,13 +38,16 @@ let rec simplify_ll gvars evars state =
    -- i.e. if V1 anv V2 are existential variables and state.act contains equality "V1=V2", then V2 is renamed to V1.
 *)
 let simplify state =
-  let mem x =
+  let mem lst x =
     let eq y= (x=y) in
-    not (List.exists eq state.lvars )
+    (List.exists eq lst )
   in
+  let nomem lst x = not (mem lst x) in
   let vars = Formula.join_list_unique (Formula.find_vars state.act) (Formula.find_vars state.miss) in
-  let gvars = List.filter mem vars in
-  let state1 = simplify_ll gvars state.lvars state in
+  let used_lvars = List.filter (mem vars) state.lvars in
+  let gvars = List.filter (nomem state.lvars) vars in
+  let state0 = {miss=state.miss; act=state.act; lvars=used_lvars} in
+  let state1 = simplify_ll gvars used_lvars state0 in
   let miss_new = { Formula.sigma=state1.miss.sigma;
     pi=Formula.remove_redundant_eq state1.miss.pi } in
   let act_new = { Formula.sigma=state1.act.sigma;
