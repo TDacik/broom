@@ -22,6 +22,8 @@ let get_var uid = List.assoc uid stor.Storage.vars
 
 let get_var_opt uid = List.assoc_opt uid stor.Storage.vars
 
+let list_diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
+
 let rec list_to_string to_string args =
 	match args with
 	| [] -> ""
@@ -79,7 +81,8 @@ let rec check_fncs uid fncs =
 		| Some bb -> bb
 	)
 
-let get_insns_from_block uid = let bb = check_fncs uid stor.Storage.fncs in bb.insns
+let get_insns_from_block uid =
+	let bb = check_fncs uid stor.Storage.fncs in bb.insns
 
 let get_block uid = (uid, (check_fncs uid stor.Storage.fncs))
 

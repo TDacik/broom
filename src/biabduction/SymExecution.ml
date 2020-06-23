@@ -198,9 +198,6 @@ let contract_application ctx solv z3_names state c pvars =
   set existential connected with them as fresh contract variables
 *)
 
-(* TODO move to CL.Util *)
-let diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
-
 let rec state2contract s vars cvar =
   match vars with
   | [] -> {Contract.lhs = s.miss; rhs = s.act; cvars = cvar; pvarmap = []}
@@ -233,8 +230,8 @@ let rec solve_contract ctx solv z3_names fuid state contracts =
   match contracts with
   | [] -> []
   | c::tl -> Contract.print c;
-      (* FIXME: Add global variables --- (global_variables @ (CL.Util.get_fnc_vars fuid)) *)
-      let res = contract_application ctx solv z3_names state c (CL.Util.get_fnc_vars fuid) in (* FIXME allow contracts *)
+      let res = contract_application ctx solv z3_names state c
+        ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
       match res with
       | CAppFail -> [] (* FIXME error handling *)
       | CAppOk s -> State.print s;
@@ -284,8 +281,10 @@ let exec_fnc f =
     CL.Util.print_list Exp.variable_to_string f.vars; print_string "\n";
     print_string "ARGS:";
     CL.Util.print_list Exp.variable_to_string f.args; print_string "\n";
-    (* FIXME: f.args @ global variables *)
-    let fixed_vars = diff f.vars f.args in
+    print_string "GVARS:";
+    CL.Util.print_list Exp.variable_to_string CL.Util.stor.global_vars; print_string "\n";
+    let fixed_vars =
+      CL.Util.list_diff f.vars (f.args @ CL.Util.stor.global_vars) in
     let fnc_c = get_fnc_contract fixed_vars s in
     CL.Util.print_list Contract.to_string fnc_c;
   )

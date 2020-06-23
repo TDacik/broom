@@ -2,7 +2,7 @@ void g0_rec() {
 	g0_rec();
 }
 
-int* h0() {}
+void h0() {}
 
 void e1() {
 	g0_rec();

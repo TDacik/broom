@@ -20,6 +20,10 @@ val get_var: Loc.cl_uid -> Var.t
 
 val get_var_opt: Loc.cl_uid -> Var.t option
 
+(** [list_diff list1 list2] gets difference between two lists;
+    list as a homogeneous set *)
+val list_diff: 'a list -> 'a list -> 'a list
+
 (** [list_to_string to_string args] gets string of elms separated by ',' calling
 	[to_string] on each elm *)
 val list_to_string: ('a -> string) -> 'a list -> string
