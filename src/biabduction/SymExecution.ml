@@ -208,9 +208,6 @@ let rec state2contract s vars cvar =
         lvars = []} in
       state2contract new_s tl new_cvar
 
-	(* prog[1,2,3,4,5]-param+glob[1,2,3]
-	+exist[6,7,8] *)
-
 let rec get_fnc_contract fixed_vars states =
   match states with
   | [] -> []
@@ -219,14 +216,19 @@ let rec get_fnc_contract fixed_vars states =
 (*** EXECUTION ***)
 
 (* TODO: ctx solv z3_names -> merge into one parameter *)
-(* Applay each contract on each state *)
 
 let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (Z3.mk_context cfg)
 let solv = (Z3.Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
 
-let rec solve_contract ctx solv z3_names fuid state contracts =
+(* Applay each contract on each state *)
+let rec apply_on_state ctx solv z3_names fuid states contracts =
+  match states with
+  | [] -> []
+  | s::tl -> (solve_contract ctx solv z3_names fuid s contracts) @ (apply_on_state ctx solv z3_names fuid tl contracts)
+
+and solve_contract ctx solv z3_names fuid state contracts =
   match contracts with
   | [] -> []
   | c::tl -> Contract.print c;
@@ -237,10 +239,6 @@ let rec solve_contract ctx solv z3_names fuid state contracts =
       | CAppOk s -> State.print s;
         (State.simplify s)::(solve_contract ctx solv z3_names fuid state tl)
 
-let rec apply_on_state ctx solv z3_names fuid states contracts =
-  match states with
-  | [] -> []
-  | s::tl -> (solve_contract ctx solv z3_names fuid s contracts) @ (apply_on_state ctx solv z3_names fuid tl contracts)
 
 let rec exec_block states (uid, bb) fuid =
   Printf.printf ">>> executing block L%i:\n" uid;
@@ -269,13 +267,33 @@ and exec_insns states insns fuid =
   | [] -> states
   | insn::tl -> let s = exec_insn states insn fuid in exec_insns s tl fuid
 
+
+(* execute initials of all global variables, if they are initialized
+   fuid belons to function 'main' *)
+let rec init_global_var states vars fuid =
+  match vars with
+  | [] -> states
+  | uid::tl -> let gv = CL.Util.get_var uid in
+    init_global_var (exec_insns states gv.initials fuid) tl fuid
+
+let exec_init_global_vars fuid =
+  Printf.printf ">>> initializing global variables\n";
+  init_global_var (State.empty::[]) CL.Util.stor.global_vars fuid
+
+
 (* TODO: state not empty for functions with parameters? *)
 let exec_fnc f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
     Printf.printf ">>> executing function ";
     CL.Printer.print_fnc_declaration f;
     Printf.printf ":\n";
-    let s = exec_block (State.empty::[]) (List.hd f.cfg) (CL.Util.get_fnc_uid f) in
+    let fuid = CL.Util.get_fnc_uid f in
+    let fname = CL.Printer.get_fnc_name f in
+    let init_states = (
+      if fname = "main"
+      then exec_init_global_vars fuid
+      else State.empty::[]) in
+    let states = exec_block init_states (List.hd f.cfg) fuid in
     Printf.printf ">>> final contract\n";
     print_string "PVARS:";
     CL.Util.print_list Exp.variable_to_string f.vars; print_string "\n";
@@ -285,7 +303,7 @@ let exec_fnc f =
     CL.Util.print_list Exp.variable_to_string CL.Util.stor.global_vars; print_string "\n";
     let fixed_vars =
       CL.Util.list_diff f.vars (f.args @ CL.Util.stor.global_vars) in
-    let fnc_c = get_fnc_contract fixed_vars s in
+    let fnc_c = get_fnc_contract fixed_vars states in
     CL.Util.print_list Contract.to_string fnc_c;
   )
 

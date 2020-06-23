@@ -16,6 +16,8 @@ let stor = AGU.Json.from_channel Storage.read_t stdin
 
 let get_fnc uid = List.assoc uid stor.Storage.fncs
 
+let get_fnc_opt uid = List.assoc_opt uid stor.Storage.fncs
+
 let get_type uid = List.assoc uid stor.Storage.types
 
 let get_var uid = List.assoc uid stor.Storage.vars
@@ -64,8 +66,9 @@ let get_fnc_uid f =
 	| _ -> assert false
 
 let get_fnc_vars uid =
-	let f = get_fnc uid in
-	f.vars
+	match (get_fnc_opt uid) with
+	| None -> []
+	| Some f -> f.vars
 
 let get_fnc_args uid =
 	let f = get_fnc uid in
