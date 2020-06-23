@@ -58,6 +58,7 @@ dune runtest
 ```
 ## Usage
 ```
+./scripts/call_graph file.c            # create DOTs (call graph, CFGs) from C
 ./scripts/json_dumper [-m32] file.c > file.json           # create JSON from C
 ./scripts/generator < file.json                           # print contracts
 ./scripts/json_dumper file.c | ./scripts/generator
