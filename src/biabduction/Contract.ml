@@ -114,7 +114,7 @@ let operand_to_exformula op ef =
 	match op.data with
 		| OpVar uid -> var_to_exformula (Var uid) op.accessor ef
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
-		| OpVoid -> empty_exformula
+		| OpVoid -> ef
 
 (* return tuple (args,ef) where args is list of arguments and ef is formula
    describing all arguments *)
