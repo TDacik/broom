@@ -20,4 +20,9 @@ val to_string : t -> string
 
 val print : t -> unit
 
+(** [contract_for_called_fnc dst args vars c] renames dst and args in given
+    contract c; renaming from RET(c0) and vars *)
+val contract_for_called_fnc : CL.Operand.t -> CL.Operand.t list ->
+                              CL.Loc.cl_uid list -> t -> t
+
 val get_contract : CL.Fnc.insn -> t list

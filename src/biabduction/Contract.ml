@@ -116,6 +116,15 @@ let operand_to_exformula op ef =
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> empty_exformula
 
+(* return tuple (args,ef) where args is list of arguments and ef is formula
+   describing all arguments *)
+let rec agrs_to_exformula args ef =
+  match args with
+  | [] -> ([], ef)
+  | arg::tl -> let ef_arg = operand_to_exformula arg ef in
+    let (roots,all_ef) = agrs_to_exformula tl ef_arg in
+    ((ef_arg.root)::roots, all_ef)
+
 (* replace dst in postcondition (rhs) *)
 let rewrite_dst root c =
 	match root with
@@ -271,6 +280,33 @@ let contract_for_builtin dst called args =
 	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
 	| _,_ -> [] (* TODO: unrecognized built-in/extern function *)
 
+(****** CONTRACTS CALLED FUNCTIONS ******)
+
+let rec substitute_arguments roots vars f =
+	match roots,vars with
+	| [],_ -> f
+	| root::rtl,var::vtl ->
+		let subf = substitute_vars_cvars root (Var var) f in
+		substitute_arguments rtl vtl subf
+	| _,_ -> assert false (* should be less or eq operands then args *)
+
+
+(* rename dst and args in given contract c *)
+(* TODO: first 3 lines should be as argumets and called from outside *)
+let contract_for_called_fnc dst args vars c =
+	let init_ef = {f = Formula.empty; cnt_cvars = c.cvars; root = Undef} in
+	let dst_ef = operand_to_exformula dst init_ef in
+	let (roots,args_ef) = agrs_to_exformula args dst_ef in
+	let dst_lhs = substitute_vars_cvars dst_ef.root (CVar 0) c.lhs in
+	let dst_rhs = substitute_vars_cvars dst_ef.root (CVar 0) c.rhs in
+	let new_lhs = substitute_arguments roots vars dst_lhs in
+	let new_rhs = substitute_arguments roots vars dst_rhs in
+	let new_c = {lhs = {sigma = new_lhs.sigma @ args_ef.f.sigma;
+						pi = new_lhs.pi @ args_ef.f.pi};
+				rhs = new_rhs;
+				cvars = args_ef.cnt_cvars; pvarmap = []} in
+	rewrite_dst dst_ef.root new_c
+
 
 let get_contract insn =
 	match insn.code with
@@ -279,7 +315,7 @@ let get_contract insn =
 	(* | InsnCLOBBER var -> [] *)
 	| InsnABORT -> (contract_fail)::[]
 	| InsnBINOP (code, dst, src1, src2) -> (contract_for_binop code dst src1 src2)::[]
-		| InsnCALL ops -> ( match ops with
+	| InsnCALL ops -> ( match ops with
 		| dst::called::args -> if (CL.Util.is_extern called)
 			then contract_for_builtin dst called args
 			else []
@@ -288,4 +324,3 @@ let get_contract insn =
 	| InsnNOP | InsnJMP _ | InsnLABEL _ -> []
 	| InsnSWITCH _ -> assert false
 	| _ -> []
-

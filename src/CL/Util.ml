@@ -58,12 +58,14 @@ let is_fnc_static f =
 	let scope = f.Fnc.def.scope in
 		scope == CL_SCOPE_STATIC
 
-let get_fnc_uid f =
-	match f.Fnc.def.Operand.data with
+let get_fnc_uid_from_op op =
+	match op.Operand.data with
 	| OpCst { cst_data } -> ( match cst_data with
 		| CstFnc fnc -> fnc.uid
 		| _ -> assert false )
 	| _ -> assert false
+
+let get_fnc_uid f = get_fnc_uid_from_op f.Fnc.def
 
 let get_fnc_vars uid =
 	match (get_fnc_opt uid) with
