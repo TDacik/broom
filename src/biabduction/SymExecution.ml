@@ -240,36 +240,44 @@ let solv = (Z3.Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
 
 (* Applay each contract on each state *)
-let rec apply_on_state ctx solv z3_names fuid states contracts =
+let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
   match states with
   | [] -> []
-  | s::tl -> (solve_contract ctx solv z3_names fuid s contracts) @ (apply_on_state ctx solv z3_names fuid tl contracts)
-
-and solve_contract ctx solv z3_names fuid state contracts =
-  match contracts with
-  | [] -> []
-  | c::tl -> Contract.print c;
-      let res = contract_application ctx solv z3_names state c
-        ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
-      match res with
-      | CAppFail -> [] (* FIXME error handling *)
-      | CAppOk s -> State.print s;
-        (State.simplify s)::(solve_contract ctx solv z3_names fuid state tl)
-
+  | s::tl ->
+    let rec solve_contract contracts =
+      match contracts with
+      | [] -> []
+      | c::tl -> Contract.print c;
+          let res = contract_application ctx solv z3_names s c
+            ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
+          match res with
+          | CAppFail -> [] (* FIXME error handling *)
+          | CAppOk s -> State.print s;
+            (State.simplify s)::(solve_contract tl)
+    in
+    (solve_contract contracts) @ (apply_contracts_on_states ctx solv z3_names fuid tl contracts)
 
 let rec exec_block tbl states (uid, bb) fuid =
   Printf.printf ">>> executing block L%i:\n" uid;
   exec_insns tbl states bb.CL.Fnc.insns fuid
 
 and exec_insn tbl states insn fuid =
+  let new_states_for_insn c =
+    CL.Printer.print_insn insn;
+    if (c = [])
+      then states (* no need applaying empty contracts *)
+      else apply_contracts_on_states ctx solv z3_names fuid states c
+  in
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
     exec_block tbl states bb fuid
   | InsnCOND (_,uid_then,uid_else) ->
     CL.Printer.print_insn insn;
     let c = Contract.get_contract insn in
-    let s_then = apply_on_state ctx solv z3_names fuid states [(List.hd c)] in
-    let s_else = apply_on_state ctx solv z3_names fuid states [(List.nth c 1)] in
+    let s_then = apply_contracts_on_states ctx solv z3_names fuid states
+                 [(List.hd c)] in
+    let s_else = apply_contracts_on_states ctx solv z3_names fuid states
+                 [(List.nth c 1)] in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
     (exec_block tbl s_then bb_then fuid) @ (exec_block tbl s_else bb_else fuid)
@@ -280,18 +288,11 @@ and exec_insn tbl states insn fuid =
       let c = ( if (CL.Util.is_extern called)
         then Contract.get_contract insn
         else find_fnc_contract tbl dst args
-		                       (CL.Util.get_fnc_uid_from_op called) ) in
-      CL.Printer.print_insn insn;
-      if (c = [])
-        then states (* no need applaying empty contracts *)
-        else apply_on_state ctx solv z3_names fuid states c
+                               (CL.Util.get_fnc_uid_from_op called) ) in
+      new_states_for_insn c
     | _ -> assert false )
   | InsnCLOBBER _ -> states (* TODO: stack allocation *)
-  | _ -> let c = Contract.get_contract insn in
-    CL.Printer.print_insn insn;
-    if (c = [])
-      then states (* no need applaying empty contracts *)
-      else apply_on_state ctx solv z3_names fuid states c
+  | _ -> let c = Contract.get_contract insn in new_states_for_insn c
 
 and exec_insns tbl states insns fuid =
   match insns with
@@ -314,7 +315,6 @@ let exec_init_global_vars tbl fuid =
   init_global_var (State.empty::[]) CL.Util.stor.global_vars
 
 
-(* TODO: state not empty for functions with parameters? *)
 let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
     Printf.printf ">>> executing function ";
