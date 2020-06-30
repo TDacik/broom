@@ -1,7 +1,10 @@
 (* NOTE: original name Expr was renamed to Exp due to name collision with Z3.Expr *)
 module Exp = struct (*$< Exp *)
     type t =
-        Var of variable
+        Var of variable (** lvars - existential local variables in the scope of
+                                    a function
+                            pvars - program variables, unique in the scope of
+                                    a file *)
       | CVar of int
       | Const of const_val
       (* todo | Interval... *)
@@ -52,11 +55,13 @@ module Exp = struct (*$< Exp *)
 let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
 
-let variable_to_string v =
-  let var = CL.Util.get_var_opt v in
-  match var with
-  | None -> "%l" ^ string_of_int v
-  | Some _ -> CL.Printer.var_to_string v
+let variable_to_string ?lvars:(lvars=[]) v=
+  if (lvars <> [] && List.mem v lvars)
+    then "%l" ^ string_of_int v
+    else let var = CL.Util.get_var_opt v in
+      match var with
+      | None -> "%l" ^ string_of_int v
+      | Some _ -> CL.Printer.var_to_string v
 
 let cvariable_to_string v =
   match v with
@@ -102,13 +107,14 @@ let binop_to_string o =
   | BVlrotate -> "lrotate"
   | BVrrotate -> "rrotate"
 
-let rec to_string e =
+let rec to_string ?lvars:(lvars=[]) e =
   match e with
-  | Var a -> variable_to_string a
+  | Var a -> variable_to_string ~lvars:lvars a
   | CVar a -> cvariable_to_string a
   | Const a -> const_to_string a
-  | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string a ^ ")"
-  | BinOp (op,a,b) -> "(" ^ to_string a ^ binop_to_string op ^  to_string b ^ ")"
+  | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string ~lvars:lvars a ^ ")"
+  | BinOp (op,a,b) -> "(" ^ to_string ~lvars:lvars a ^ binop_to_string op ^
+    to_string ~lvars:lvars b ^ ")"
   | Void -> "Void"
   | Undef -> "Undef"
 
@@ -145,15 +151,16 @@ let empty = {sigma = []; pi = []}
 (* PRINTING *)
 
 let lvariables_to_string lvars =
-  CL.Util.list_to_string Exp.variable_to_string lvars
+  CL.Util.list_to_string (Exp.variable_to_string ~lvars:lvars) lvars
 
-let rec pi_to_string p =
+let rec pi_to_string ?lvars:(lvars=[]) p =
   match p with
   | [] -> ""
-  | first::[] -> Exp.to_string first
-  | first::rest -> Exp.to_string first ^ " & " ^  pi_to_string rest
+  | first::[] -> Exp.to_string ~lvars:lvars first
+  | first::rest -> Exp.to_string ~lvars:lvars first ^ " & " ^
+    pi_to_string ~lvars:lvars rest
 
-let rec sigma_to_string_ll s lambda_level num=
+let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
 (* num is used to marking lambdas *)
   let rec lambda_params_to_string params =
     match params with
@@ -162,27 +169,39 @@ let rec sigma_to_string_ll s lambda_level num=
   in
   let pred_to_string a =
     match a with
-    | Hpointsto (a,l,b) -> (Exp.to_string a ^ " -("^ (Exp.to_string l) ^ ")-> " ^ Exp.to_string b), ""
+    | Hpointsto (a,l,b) -> (
+      Exp.to_string ~lvars:lvars a ^" -("^
+      (Exp.to_string ~lvars:lvars l) ^")->"^
+      Exp.to_string ~lvars:lvars b), ""
     | Slseg (a,b,lambda) ->
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
-      ("Slseg(" ^ Exp.to_string a ^ ", " ^ Exp.to_string b ^", " ^lambda_id^") "),
-      "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^ (to_string_with_lambda lambda.form  (lambda_level+1))
+      ("Slseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
+        Exp.to_string ~lvars:lvars b ^", "^
+        lambda_id^") "),
+      "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
+        (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
   in
   match s with
   | [] -> "",""
   | first::rest ->
-    match (pred_to_string first),(sigma_to_string_ll rest lambda_level (num+1)) with
-    | (pred_first, lambda_first), ("", lambda_rest) -> pred_first, (lambda_first ^ lambda_rest)
-    | (pred_first, lambda_first), (pred_rest, lambda_rest) -> (pred_first ^ " * " ^ pred_rest), (lambda_first ^ lambda_rest)
+    match (pred_to_string first),
+           (sigma_to_string_ll ~lvars:lvars rest lambda_level (num+1)) with
+    | (pred_first, lambda_first), ("", lambda_rest) ->
+      pred_first, (lambda_first ^ lambda_rest)
+    | (pred_first, lambda_first), (pred_rest, lambda_rest) ->
+      (pred_first ^ " * " ^ pred_rest), (lambda_first ^ lambda_rest)
 
-and sigma_to_string s lambda_level = sigma_to_string_ll s lambda_level 1
+and sigma_to_string ?lvars:(lvars=[]) s lambda_level =
+  sigma_to_string_ll ~lvars:lvars s lambda_level 1
 
 (* call this function with:
    lambda_level=1 -> include translation of lambdas
    lambda_level=0 -> no translation of lambdas
 *)
-and to_string_with_lambda f lambda_level =
-  match (sigma_to_string f.sigma lambda_level), lambda_level, (pi_to_string f.pi) with
+and to_string_with_lambda ?lvars:(lvars=[]) f lambda_level =
+  match (sigma_to_string ~lvars:lvars f.sigma lambda_level),
+         lambda_level,
+         (pi_to_string ~lvars:lvars f.pi) with
   | ("",""), _, "" -> ""
   | ("",""), _, pi -> pi
   | (sigma, _), 0, "" -> sigma
@@ -190,13 +209,13 @@ and to_string_with_lambda f lambda_level =
   | (sigma, _), 0, pi -> sigma ^ " & " ^ pi
   | (sigma, lambda_descr), _, pi -> sigma ^ " & " ^ pi ^ "\n---------------" ^ lambda_descr
 
-let to_string f = to_string_with_lambda f 0
+let to_string ?lvars:(lvars=[]) f = to_string_with_lambda ~lvars:lvars f 0
 
-let print_with_lambda f =
-  print_string (to_string_with_lambda f 1)
+let print_with_lambda ?lvars:(lvars=[]) f =
+  print_string (to_string_with_lambda ~lvars:lvars f 1)
 
-let print f =
-  print_string (to_string_with_lambda f 0)
+let print ?lvars:(lvars=[]) f =
+  print_string (to_string_with_lambda ~lvars:lvars f 0)
 
 
 (*** FIND ALL VARIABLES IN FORMULA ***)

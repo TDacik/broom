@@ -1,6 +1,9 @@
 module Exp : sig
   type t =
-        Var of variable
+        Var of variable (** lvars - existential local variables in the scope of
+                                    a function
+                            pvars - program variables, unique in the scope of
+                                    a file *)
       | CVar of int
       | Const of const_val
       (* todo | Interval... *)
@@ -51,12 +54,12 @@ module Exp : sig
 
   val zero : t
   val null : t
-  val variable_to_string : variable -> string
+  val variable_to_string : ?lvars:variable list -> variable -> string
   val cvariable_to_string : int -> string
   val const_to_string : const_val -> string
   val unop_to_string : unop -> string
   val binop_to_string : binop -> string
-  val to_string : t -> string
+  val to_string : ?lvars:variable list -> t -> string
 end
 
 
@@ -82,11 +85,11 @@ val empty : t
 
 val lvariables_to_string : Exp.variable list -> string
 
-val to_string : t -> string
+val to_string : ?lvars:Exp.variable list -> t -> string
 
-val print : t -> unit
+val print : ?lvars:Exp.variable list -> t -> unit
 
-val print_with_lambda : t -> unit
+val print_with_lambda : ?lvars:Exp.variable list -> t -> unit
 
 (** {3 Find all variables in formula} *)
 

@@ -9,9 +9,9 @@ type t = {
 let empty = {miss = Formula.empty; act = Formula.empty; lvars = []}
 
 let to_string state =
-  "EXISTS: " ^ CL.Util.list_to_string string_of_int state.lvars 
-  ^ "\nMISS: " ^ Formula.to_string state.miss 
-  ^ "\nACTUAL: " ^ Formula.to_string state.act ^ "\n"
+  "EXISTS: " ^ Formula.lvariables_to_string state.lvars
+  ^ "\nMISS: " ^ Formula.to_string ~lvars:state.lvars state.miss
+  ^ "\nACTUAL: " ^ Formula.to_string ~lvars:state.lvars state.act ^ "\n"
   
 let print state =
   print_string (to_string state)
