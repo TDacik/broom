@@ -37,10 +37,12 @@ let to_string c =
 
 let print c = print_string (to_string c)
 
-(* var is Exp.t but only Var/CVar, last C represents root *)
+(* var is Exp.t but only Var/CVar, last C represents root
+   returns tuple (debub_string, ef) where debug_string contains the order of
+   applying accessors rules *)
 let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 	match accs with
-	| [] -> {f=ef.f; cnt_cvars=ef.cnt_cvars; root=var}
+	| [] -> ("", {f=ef.f; cnt_cvars=ef.cnt_cvars; root=var})
 	| ac::tl -> (match ac.acc_data with
 
 		(* C -()-> <var> *)
@@ -48,12 +50,16 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let (obj,cvars_obj) = find_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-			let sig_add =
+			let (sig_add, dbg_add) =
 				if ef.cnt_cvars = cvars_obj then (* points-to exists *)
-					[]
+					([], "Ref2, ")
 				else
-					[ Hpointsto (obj, exp_ptr_size, var) ] in
-			var_to_exformula obj tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=cvars_obj; root=obj}
+					([ Hpointsto (obj, exp_ptr_size, var) ],"Ref1, ") in
+			let (dbg, ef_new) = var_to_exformula obj tl
+				{f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi};
+				cnt_cvars=cvars_obj;
+				root=obj} in
+			(dbg_add ^ dbg, ef_new)
 
 		(* <var> -()-> C *)
 		| Deref ->
@@ -62,7 +68,11 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let ptr_size = CL.Util.get_type_size ptr_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
 			let sig_add = [ Hpointsto (var, exp_ptr_size, CVar last_cvar) ] in
-			var_to_exformula (CVar last_cvar) tl {f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi}; cnt_cvars=last_cvar; root=(CVar last_cvar)}
+			let (dbg, ef_new) = var_to_exformula (CVar last_cvar) tl
+				{f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi};
+				cnt_cvars=last_cvar;
+				root=(CVar last_cvar)} in
+			("Deref, " ^ dbg, ef_new)
 
 		| DerefArray _ (* idx *) -> assert false (* TODO *)
 
@@ -88,14 +98,23 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let ptr_size_itm = CL.Util.get_type_size itm_typ in
 			let exp_ptr_size_itm = Exp.Const (Int (Int64.of_int ptr_size_itm)) in
 			let sig_add = [ Hpointsto (CVar cvar_itm, exp_ptr_size_itm, CVar cvar_last) ] in
-			var_to_exformula (CVar cvar_last) tl {f={sigma = (* exp_obj @ *) sig_add; pi = ef.f.pi @ pi_add}; cnt_cvars=cvar_last; root=(CVar cvar_last)}
+			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
+				{f={sigma = (* exp_obj @ *) sig_add; pi = ef.f.pi @ pi_add};
+				cnt_cvars=cvar_last;
+				root=(CVar cvar_last)} in
+			("Record acc, " ^ dbg, ef_new)
 
 		(* C = <var> + off *)
 		| Offset off ->
 			let last_cvar = ef.cnt_cvars + 1 in
 			let pi_add = [ Exp.BinOp ( Peq, CVar last_cvar,
 			BinOp ( Pplus, var, Const (Int (Int64.of_int off)))) ] in
-			var_to_exformula (CVar last_cvar) tl {f={sigma = ef.f.sigma; pi = ef.f.pi @ pi_add};cnt_cvars=last_cvar; root=(CVar last_cvar)} )
+			let (dbg, ef_new) = var_to_exformula (CVar last_cvar) tl
+				{f={sigma = ef.f.sigma; pi = ef.f.pi @ pi_add};
+				cnt_cvars=last_cvar;
+				root=(CVar last_cvar)} in
+			("Offset, " ^ dbg, ef_new)
+		)
 
 let constant_to_exformula data accs ef =
 	if (accs != []) then assert false;
@@ -112,7 +131,11 @@ let constant_to_exformula data accs ef =
 
 let operand_to_exformula op ef =
 	match op.data with
-		| OpVar uid -> var_to_exformula (Var uid) op.accessor ef
+		| OpVar uid ->
+			let (dbg, ef_new) = var_to_exformula (Var uid) op.accessor ef in
+			(if (dbg <> "")
+			then print_string ("OP \""^(CL.Printer.operand_to_string op)^"\": "^dbg));
+			ef_new
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> ef
 

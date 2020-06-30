@@ -263,16 +263,15 @@ let rec exec_block tbl states (uid, bb) fuid =
 
 and exec_insn tbl states insn fuid =
   let new_states_for_insn c =
-    CL.Printer.print_insn insn;
     if (c = [])
       then states (* no need applaying empty contracts *)
       else apply_contracts_on_states ctx solv z3_names fuid states c
   in
+  CL.Printer.print_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
     exec_block tbl states bb fuid
   | InsnCOND (_,uid_then,uid_else) ->
-    CL.Printer.print_insn insn;
     let c = Contract.get_contract insn in
     let s_then = apply_contracts_on_states ctx solv z3_names fuid states
                  [(List.hd c)] in
