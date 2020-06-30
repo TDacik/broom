@@ -33,10 +33,6 @@ let rec simplify_ll gvars evars state =
     let lvars1 = List.filter (notmem eq_vars_ex) state.lvars in
       simplify_ll gvars todo_evars {miss=miss1; act=act1; lvars=lvars1}
 
-(* NOT FINISHED *)
-(* remove redundant existential variables
-   -- i.e. if V1 anv V2 are existential variables and state.act contains equality "V1=V2", then V2 is renamed to V1.
-*)
 let simplify state =
   let mem lst x =
     let eq y= (x=y) in
@@ -48,8 +44,12 @@ let simplify state =
   let gvars = List.filter (nomem state.lvars) vars in
   let state0 = {miss=state.miss; act=state.act; lvars=used_lvars} in
   let state1 = simplify_ll gvars used_lvars state0 in
-  let miss_new = { Formula.sigma=state1.miss.sigma;
-    pi=Formula.remove_redundant_eq state1.miss.pi } in
-  let act_new = { Formula.sigma=state1.act.sigma;
-    pi=Formula.remove_redundant_eq state1.act.pi } in
+  let miss_new0 = Formula.remove_useless_conjuncts state1.miss state1.lvars in
+  let miss_new = { Formula.sigma=miss_new0.sigma; pi=Formula.remove_redundant_eq miss_new0.pi } in
+  (* logical variables used in miss_new can not be removed from act_new by means of remove_useless_conjuncts in order to preserve anchors 
+     --- if miss_new contains l1 -- (8)-- >_ and act_new freed(l1) then freed(l1) can not be removed *)
+  let lvars_unused_in_miss = List.filter (nomem (Formula.find_vars state.miss)) state1.lvars in
+  let act_new0= Formula.remove_useless_conjuncts state1.act lvars_unused_in_miss in
+  let act_new = { Formula.sigma=act_new0.sigma;
+    pi=Formula.remove_redundant_eq act_new0.pi } in
   {miss=miss_new; act=act_new; lvars=state1.lvars }
