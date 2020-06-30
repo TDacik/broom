@@ -55,13 +55,15 @@ module Exp = struct (*$< Exp *)
 let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
 
-let variable_to_string ?lvars:(lvars=[]) v=
-  if (lvars <> [] && List.mem v lvars)
-    then "%l" ^ string_of_int v
-    else let var = CL.Util.get_var_opt v in
-      match var with
-      | None -> "%l" ^ string_of_int v
-      | Some _ -> CL.Printer.var_to_string v
+let variable_to_string ?lvars:(lvars=[]) v =
+  let var = if (lvars <> [] && List.mem v lvars)
+    then None
+    else CL.Util.get_var_opt v in
+  match var with
+  | None -> "%l" ^ string_of_int v
+  | Some _ -> CL.Printer.var_to_string v
+
+let lvariable_to_string v = variable_to_string ~lvars:[v] v
 
 let cvariable_to_string v =
   match v with
@@ -165,7 +167,8 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
   let rec lambda_params_to_string params =
     match params with
     | [] -> ""
-    | first::rest -> "V"^(string_of_int first)^", "^ (lambda_params_to_string rest)
+    | first::rest -> (Exp.lvariable_to_string first)^", "^
+      (lambda_params_to_string rest)
   in
   let pred_to_string a =
     match a with
