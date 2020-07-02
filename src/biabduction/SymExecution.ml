@@ -29,7 +29,7 @@ let rec rename_contract_vars_ll state c seed pvars =
   let rec cvars_pvarmap pvarmap =
   	match pvarmap with
 	| [] -> []
-	| (a,_)::rest -> join_list_unique [a] (cvars_pvarmap rest)
+	| (a,_)::rest -> CL.Util.list_join_unique [a] (cvars_pvarmap rest)
   in
   let cvars= (find_vars c.Contract.lhs) @ (find_vars c.rhs) @ (cvars_pvarmap c.pvarmap) in
   let conflicts = svars @ cvars @ pvars in
@@ -168,7 +168,7 @@ let remove_freed_parts ctx solv z3_names form =
 *)
 let post_contract_application state ctx solv z3_names pvarmap pvars =
   let step1=post_contract_application_vars state pvarmap 1 pvars in
-  let vars= Formula.join_list_unique (find_vars step1.act) (find_vars step1.miss) in
+  let vars= CL.Util.list_join_unique (find_vars step1.act) (find_vars step1.miss) in
   let notmem l x =
       let eq y= (x=y) in
       not (List.exists eq l)
@@ -225,10 +225,19 @@ let rec state2contract s vars cvar =
         lvars = []} in
       state2contract new_s tl new_cvar
 
-let rec get_fnc_contract fixed_vars states =
-  match states with
-  | [] -> []
-  | s::tl -> State.print s; (state2contract s (fixed_vars @ s.lvars) 0) :: (get_fnc_contract fixed_vars tl)
+let get_fnc_contract fixed_vars tmp_vars states =
+  let constr v =
+    Exp.Var v
+  in
+  let fixed = (Exp.CVar 0)::(List.map constr fixed_vars) in
+  let rec fnc_contract ss =
+    match ss with
+    | [] -> []
+    | s::tl -> State.print s;
+      let c = (state2contract s (tmp_vars @ s.lvars) 0) in
+      (Contract.subcontract fixed c) :: (fnc_contract tl)
+  in
+  fnc_contract states
 
 (*** EXECUTION ***)
 
@@ -333,9 +342,9 @@ let exec_fnc fnc_tbl f =
     CL.Util.print_list Exp.variable_to_string f.args; print_string "\n";
     print_string "GVARS:";
     CL.Util.print_list Exp.variable_to_string CL.Util.stor.global_vars; print_string "\n";
-    let fixed_vars =
-      CL.Util.list_diff f.vars (f.args @ CL.Util.stor.global_vars) in
-    let fnc_c = get_fnc_contract fixed_vars states in
+    let fixed_vars = f.args @ CL.Util.stor.global_vars in
+    let temporary_vars = CL.Util.list_diff f.vars fixed_vars in
+    let fnc_c = get_fnc_contract fixed_vars temporary_vars states in
     SpecTable.add fnc_tbl fuid fnc_c;
     CL.Util.print_list Contract.to_string fnc_c
   )

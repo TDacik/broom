@@ -220,20 +220,15 @@ let print_with_lambda ?lvars:(lvars=[]) f =
 let print ?lvars:(lvars=[]) f =
   print_string (to_string_with_lambda ~lvars:lvars f 0)
 
+let diff {pi = pi1; sigma = sigma1} {pi = pi2; sigma = sigma2} =
+  {pi = CL.Util.list_diff pi1 pi2;
+  sigma = CL.Util.list_diff sigma1 sigma2}
+
+let disjoint_union {pi = pi1; sigma = sigma1} {pi = pi2; sigma = sigma2} =
+  {pi = pi1 @ pi2;
+  sigma = sigma1 @ sigma2}
 
 (*** FIND ALL VARIABLES IN FORMULA ***)
-(* add missing elements of list l1 to l2 *)
-let rec join_list_unique l1 l2 =
-  let mem x =
-    let eq y= (x=y) in
-    List.exists eq l2
-  in
-  match l1 with
-  | [] -> l2
-  | first::rest ->
-    if mem first
-    then join_list_unique rest l2
-    else join_list_unique rest (first::l2)
 
 let rec find_var_pointsto obj sigma cvars =
   match sigma with
@@ -249,35 +244,95 @@ let rec find_var_pointsto obj sigma cvars =
 let rec find_vars_expr expr =
   match expr with
   | Exp.Var a -> [a]
-  | CVar _ -> []
-  | Const _ -> []
   | UnOp (_,a) -> find_vars_expr a
   | BinOp (_,a,b) -> List.append (find_vars_expr a) (find_vars_expr b)
-  | Void -> []
-  | Undef -> []
+  | CVar _ | Const _ | Void | Undef -> []
 
 let rec find_vars_pi pi =
   match pi with
   | [] -> []
-  |first::rest ->
-    join_list_unique (find_vars_expr first) ( find_vars_pi rest)
+  | first::rest ->
+    CL.Util.list_join_unique (find_vars_expr first) ( find_vars_pi rest)
 
 let rec find_vars_sigma sigma =
   match sigma with
   | [] -> []
   | Hpointsto (a,_, b)::rest ->
-    join_list_unique (find_vars_expr a)
-    (join_list_unique (find_vars_expr b) (find_vars_sigma rest))
+    CL.Util.list_join_unique (find_vars_expr a)
+    (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
   | Slseg (a,b,_)::rest ->
-    join_list_unique (find_vars_expr a)
-    (join_list_unique (find_vars_expr b) (find_vars_sigma rest))
+    CL.Util.list_join_unique (find_vars_expr a)
+    (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
 
 (* This function provides a list of all variables used in the formula form *)
 let find_vars form =
-  join_list_unique (find_vars_sigma form.sigma) (find_vars_pi form.pi)
+  CL.Util.list_join_unique (find_vars_sigma form.sigma) (find_vars_pi form.pi)
+
+(*** FIND SUBFORMULA ***)
+(* returns (all_vars,true) if expr contains at least one variable from vars,
+   all_vars are all variables in expr *)
+let rec find_expr_contains_vars vars expr =
+  match expr with
+  | Exp.Var _ -> ([expr], List.mem expr vars)
+  | CVar _ -> ([expr], List.mem expr vars)
+  | UnOp (_,a) -> find_expr_contains_vars vars a
+  | BinOp (_,a,b) ->
+    let (a_vars,a_found) = find_expr_contains_vars vars a in
+    let (b_vars,b_found) = find_expr_contains_vars vars b in
+    if (a_found || b_found) then
+      (List.append a_vars b_vars, true)
+    else
+      ([],false)
+    | Const _ | Void | Undef -> ([],false)
+
+let rec subpi vars pi =
+  match pi with
+  | [] -> ([],[])
+  | expr::tl -> let (all_vars,found) = find_expr_contains_vars vars expr in
+    let (tl_vars, subtl) = subpi vars tl in
+    if (found) then
+      let new_vars = CL.Util.list_diff all_vars vars in
+      (CL.Util.list_join_unique new_vars tl_vars, expr::subtl)
+    else
+      (tl_vars, subtl)
+
+let rec subsigma vars sigma =
+  match sigma with
+  | [] -> ([],[])
+  | Hpointsto (a,size,b)::tl ->
+    let (a_vars,a_found) = find_expr_contains_vars vars a in
+    let (size_vars,size_found) = find_expr_contains_vars vars size in
+    let (b_vars,b_found) = find_expr_contains_vars vars b in
+    let (tl_vars,subtl) = subsigma vars tl in
+    if (a_found || size_found || b_found)
+    then
+      let new_vars = CL.Util.list_diff (a_vars @ size_vars @ b_vars) vars in
+      (CL.Util.list_join_unique new_vars tl_vars, Hpointsto (a,size,b)::subtl)
+    else
+      (tl_vars,subtl)
+  | Slseg (a,b,l)::tl ->
+    let (a_vars,a_found) = find_expr_contains_vars vars a in
+    let (b_vars,b_found) = find_expr_contains_vars vars b in
+    let (tl_vars,subtl) = subsigma vars tl in
+    if (a_found || b_found)
+    then
+      let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
+      (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l)::subtl)
+    else
+      (tl_vars,subtl)
+
+(* returns a subformula that contains clauses with
+   variables from vars and related variables to them and list of all variables
+   in subformula expect vars
+   vars - list of Exp, but expect CVar and Var only *)
+let subformula vars f =
+  let (pi_vars,pi_f) = subpi vars f.pi in
+  let (sigma_vars,sigma_f) = subsigma vars f.sigma in
+  ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
 
 (**** FORMULA SIMPLIFICATION ****)
 (* Function to simplify formula by removing equivalent existential variables *)
+
 (* get a list of pair of equal variables from Pure part *)
 let rec get_varmap f =
   match f with
@@ -304,7 +359,7 @@ let rec get_eq_vars vlist equalities =
   let eq = get_eq_vars_ll vlist equalities in
   match eq with
   | [] -> []
-  | _ -> join_list_unique eq (get_eq_vars (join_list_unique eq vlist) equalities)
+  | _ -> CL.Util.list_join_unique eq (get_eq_vars (CL.Util.list_join_unique eq vlist) equalities)
 
 
 let rec substitute_expr var1 var2 expr =
@@ -419,7 +474,7 @@ let rec get_referenced_conjuncts_ll sigma ref_vars =
       | [],_,_,[] -> get_referenced_conjuncts_ll rest ref_vars
       | _,_,nrefs_a,nrefs_b ->
         let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-          first::ref_conjuncts, (join_list_unique transitive_refs (join_list_unique nrefs_a nrefs_b))
+          first::ref_conjuncts, (CL.Util.list_join_unique transitive_refs (CL.Util.list_join_unique nrefs_a nrefs_b))
     )
     | _ ->
       let vars_in_first=find_vars_expr first in
@@ -429,7 +484,7 @@ let rec get_referenced_conjuncts_ll sigma ref_vars =
       | [],_ -> get_referenced_conjuncts_ll rest ref_vars
       | _,nrefs ->
         let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-          first::ref_conjuncts, (join_list_unique transitive_refs nrefs)
+          first::ref_conjuncts, (CL.Util.list_join_unique transitive_refs nrefs)
 
 let rec get_referenced_conjuncts sigma ref_vars =
   let res,new_refs=get_referenced_conjuncts_ll sigma ref_vars in
@@ -445,7 +500,7 @@ let remove_useless_conjuncts form evars =
   in
   let vars=find_vars form in
   let gvars=List.filter mem vars in
-  let ref_vars=join_list_unique (find_vars_sigma form.sigma)  gvars in
+  let ref_vars=CL.Util.list_join_unique (find_vars_sigma form.sigma)  gvars in
   let new_pi=get_referenced_conjuncts form.pi ref_vars in
   {sigma=form.sigma; pi=new_pi}
 
@@ -521,7 +576,7 @@ let diffbase form pnum =
 (* The predicate pnum is removed from form.sigma, unfolded once and all the new stuff is added to the end of the list form.sigma,
    !!! The function Abstraction.try_add_slseg_to_pointsto relies on the fact, that the unfolded stuff is added to the end *)
 let unfold_predicate form pnum conflicts =
-  let confl=join_list_unique conflicts (find_vars form) in
+  let confl=CL.Util.list_join_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in
   let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
   let mem lst x =

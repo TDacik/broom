@@ -16,9 +16,18 @@ type t = {
         the new positions; (old,new) *)
 }
 
+val empty : t
+
 val to_string : t -> string
 
 val print : t -> unit
+
+(* [subcontract vars c] contains in lhs and rhs only clauses with variables
+   from vars and related variables
+   if removes cvars, doesn't reduce count of contract variables
+   vars - list of Exp, but expect CVar and Var only *)
+(* FIXME vars should contain Xs from moves (_->X) *)
+val subcontract : Exp.t list -> t -> t
 
 (** [contract_for_called_fnc dst args vars c] renames dst and args in given
     contract c; renaming from RET(c0) and vars *)

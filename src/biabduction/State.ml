@@ -39,7 +39,7 @@ let simplify state =
     (List.exists eq lst )
   in
   let nomem lst x = not (mem lst x) in
-  let vars = Formula.join_list_unique (Formula.find_vars state.act) (Formula.find_vars state.miss) in
+  let vars = CL.Util.list_join_unique (Formula.find_vars state.act) (Formula.find_vars state.miss) in
   let used_lvars = List.filter (mem vars) state.lvars in
   let gvars = List.filter (nomem state.lvars) vars in
   let state0 = {miss=state.miss; act=state.act; lvars=used_lvars} in

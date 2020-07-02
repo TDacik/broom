@@ -91,10 +91,14 @@ val print : ?lvars:Exp.variable list -> t -> unit
 
 val print_with_lambda : ?lvars:Exp.variable list -> t -> unit
 
-(** {3 Find all variables in formula} *)
+(** [diff f1 f2] *)
+val diff : t -> t -> t
 
-(** [join_list_unique l1 l2] adds missing elements of list [l1] to [l2] *)
-val join_list_unique : 'a list -> 'a list -> 'a list
+(** [disjoint_union f1 f2] *)
+val disjoint_union : t -> t -> t
+
+
+(** {3 Find all variables in formula} *)
 
 (** [find_var_pointsto obj sigma cvars] returns variable pointed to object [obj] otherwise fresh cvar *)
 val find_var_pointsto : Exp.t -> sigma -> int -> (Exp.t * int)
@@ -108,6 +112,12 @@ val find_vars : t -> Exp.variable list
 
 
 (** {3 Formula simplification} *)
+
+(** [subformula vars form] returns a subformula that contains clauses with
+    variables from [vars] and related variables to them and list of all
+    variables in subformula expect [vars]
+    vars - list of Exp, but expect CVar and Var only *)
+val subformula : Exp.t list -> t -> Exp.t list * t
 
 (** [get_varmap f] simplify formula by removing equivalent existential variables
     get a list of pair of equal variables from Pure part *)
@@ -145,6 +155,7 @@ val simplify : t -> Exp.variable list -> t
 (** [rename_ex_variables form evars conflicts] creates fresh names for evars
     with conflicts *)
 val rename_ex_variables : t -> Exp.variable list -> Exp.variable list -> t * Exp.variable list
+
 
 (** {3 Unfold predicate} *)
 

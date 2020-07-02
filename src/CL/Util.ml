@@ -26,6 +26,19 @@ let get_var_opt uid = List.assoc_opt uid stor.Storage.vars
 
 let list_diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
 
+(* add missing elements of list l1 to l2 *)
+let rec list_join_unique l1 l2 =
+	let mem x =
+		let eq y= (x=y) in
+		List.exists eq l2
+	in
+	match l1 with
+	| [] -> l2
+	| first::rest ->
+		if mem first
+		then list_join_unique rest l2
+		else list_join_unique rest (first::l2)
+
 let rec list_to_string to_string args =
 	match args with
 	| [] -> ""

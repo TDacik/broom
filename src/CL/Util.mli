@@ -24,6 +24,9 @@ val get_var_opt: Loc.cl_uid -> Var.t option
     list as a homogeneous set *)
 val list_diff: 'a list -> 'a list -> 'a list
 
+(** [list_join_unique l1 l2] adds missing elements of list [l1] to [l2] *)
+val list_join_unique : 'a list -> 'a list -> 'a list
+
 (** [list_to_string to_string args] gets string of elms separated by ',' calling
 	[to_string] on each elm *)
 val list_to_string: ('a -> string) -> 'a list -> string

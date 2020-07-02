@@ -20,9 +20,9 @@ type t = {
     pvarmap: (variable * variable) list;
 }
 
-(* let empty = {lhs = Formula.empty; rhs = Formula.empty; cvars = []; pvarmap = []} *)
-
 let empty_exformula = {f = Formula.empty; cnt_cvars = 0; root = Undef}
+
+let empty = {lhs = Formula.empty; rhs = Formula.empty; cvars = 0; pvarmap = []}
 
 let pvarmap_to_string pvarmap =
 	CL.Util.list_to_string (fun (x,y) ->
@@ -30,7 +30,7 @@ let pvarmap_to_string pvarmap =
 		pvarmap
 
 let to_string c =
-  "Count of Contract local VARS: " ^ (* Formula.lvariables_to_string *) string_of_int c.cvars ^ "\n"
+  "Count of Contract local VARS: " ^ string_of_int c.cvars ^ "\n"
   ^ "LHS: " ^ Formula.to_string c.lhs ^ "\n"
   ^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
   ^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap ^ "\n"
@@ -147,6 +147,31 @@ let rec agrs_to_exformula args ef =
   | arg::tl -> let ef_arg = operand_to_exformula arg ef in
     let (roots,all_ef) = agrs_to_exformula tl ef_arg in
     ((ef_arg.root)::roots, all_ef)
+
+(* SUBCONTRACT *)
+
+(* subcontract contains in lhs and rhs only clauses with variables from vars
+   and related variables
+   doesn't reduce count of contract variables
+   vars - list of Exp, but expect CVar and Var only *)
+(* FIXME vars should contain Xs from moves (_->X) *)
+let rec subcontract vars c =
+	match vars with
+	| [] -> empty
+	| _ ->
+		let (lhs_vars,new_lhs) = subformula vars c.lhs in
+		let (rhs_vars,new_rhs) = subformula vars c.rhs in
+		let tl_c = subcontract (lhs_vars @ rhs_vars)
+			{lhs = (Formula.diff c.lhs new_lhs);
+			 rhs = (Formula.diff c.rhs new_rhs);
+			 cvars = c.cvars;
+			 pvarmap = c.pvarmap} in
+		{lhs = Formula.disjoint_union new_lhs tl_c.lhs;
+		 rhs = Formula.disjoint_union new_rhs tl_c.rhs;
+		 cvars = c.cvars;
+		 pvarmap = c.pvarmap}
+
+(* CREATING CONTRACTS *)
 
 (* replace dst in postcondition (rhs) *)
 let rewrite_dst root c =
@@ -305,14 +330,15 @@ let contract_for_builtin dst called args =
 
 (****** CONTRACTS CALLED FUNCTIONS ******)
 
+(* roots - aguments of called function
+   vars - parameters of called function *)
 let rec substitute_arguments roots vars f =
 	match roots,vars with
-	| [],_ -> f
+	| [],[] -> f
 	| root::rtl,var::vtl ->
 		let subf = substitute_vars_cvars root (Var var) f in
 		substitute_arguments rtl vtl subf
-	| _,_ -> assert false (* should be less or eq operands then args *)
-
+	| _,_ -> assert false (* TODO: variable number of arguments unsupported *)
 
 (* rename dst and args in given contract c *)
 (* TODO: first 3 lines should be as argumets and called from outside *)
@@ -320,9 +346,8 @@ let contract_for_called_fnc dst args vars c =
 	let init_ef = {f = Formula.empty; cnt_cvars = c.cvars; root = Undef} in
 	let dst_ef = operand_to_exformula dst init_ef in
 	let (roots,args_ef) = agrs_to_exformula args dst_ef in
-	let dst_lhs = substitute_vars_cvars dst_ef.root (CVar 0) c.lhs in
+	let new_lhs = substitute_arguments roots vars c.lhs in
 	let dst_rhs = substitute_vars_cvars dst_ef.root (CVar 0) c.rhs in
-	let new_lhs = substitute_arguments roots vars dst_lhs in
 	let new_rhs = substitute_arguments roots vars dst_rhs in
 	let new_c = {lhs = {sigma = new_lhs.sigma @ args_ef.f.sigma;
 						pi = new_lhs.pi @ args_ef.f.pi};
