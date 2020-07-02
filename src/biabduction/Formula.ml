@@ -273,8 +273,7 @@ let find_vars form =
    all_vars are all variables in expr *)
 let rec find_expr_contains_vars vars expr =
   match expr with
-  | Exp.Var _ -> ([expr], List.mem expr vars)
-  | CVar _ -> ([expr], List.mem expr vars)
+  | Exp.Var _ | CVar _ -> ([expr], List.mem expr vars)
   | UnOp (_,a) -> find_expr_contains_vars vars a
   | BinOp (_,a,b) ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
