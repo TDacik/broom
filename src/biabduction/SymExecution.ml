@@ -234,8 +234,14 @@ let get_fnc_contract fixed_vars tmp_vars states =
     match ss with
     | [] -> []
     | s::tl -> State.print s;
-      let c = (state2contract s (tmp_vars @ s.lvars) 0) in
-      (Contract.subcontract fixed c) :: (fnc_contract tl)
+      (* let c = (state2contract s (tmp_vars @ s.lvars) 0) in
+      (Contract.subcontract fixed c) :: (fnc_contract tl) *)
+      let subs = State.substate fixed s in
+      State.print subs;
+      let remove_vars = tmp_vars @ subs.lvars in
+        (* FIXME should be used subset of tmp_vars *)
+        (* (find_vars subs.miss) @ (find_vars subs.act) in *)
+      (state2contract subs remove_vars 0) :: (fnc_contract tl)
   in
   fnc_contract states
 

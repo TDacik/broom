@@ -16,6 +16,33 @@ let to_string state =
 let print state =
   print_string (to_string state)
 
+(* substate contains in miss and act only clauses with variables from fixed_vars
+   and related variables
+   fixed_vars - list of Exp, but expect CVar and Var only *)
+let substate fixed_vars state =
+	let get_lvar var =
+		match var with
+		| Formula.Exp.Var v -> if (List.mem v state.lvars) then Some v else None
+		| _ -> None
+	in
+	let rec substate_rec vars s =
+		match vars with
+		| [] -> empty
+		| _ ->
+			let (miss_vars,new_miss) = Formula.subformula vars s.miss in
+			let (act_vars,new_act) = Formula.subformula vars s.act in
+			let new_vars = CL.Util.list_join_unique miss_vars act_vars in
+			let all_vars = List.filter_map get_lvar (new_vars @ vars) in
+			let tl_s = substate_rec new_vars
+				{miss = (Formula.diff s.miss new_miss);
+				 act = (Formula.diff s.act new_act);
+				 lvars = all_vars} in
+			{miss = Formula.disjoint_union new_miss tl_s.miss;
+			 act = Formula.disjoint_union new_act tl_s.act;
+			 lvars = CL.Util.list_join_unique tl_s.lvars all_vars}
+	in
+	substate_rec fixed_vars state
+
 let rec simplify_ll gvars evars state = 
   let equiv=Formula.get_varmap state.act.pi in
   match evars with
