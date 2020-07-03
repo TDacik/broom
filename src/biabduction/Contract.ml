@@ -294,16 +294,25 @@ let contract_for_malloc dst size =
 	let c = {lhs = lhs; rhs = rhs; cvars = ef_size.cnt_cvars; pvarmap = []} in
 	rewrite_dst ef_dst.root c
 
-(* PRE: base(src)=src & len(src)=_ & points-to for each field
-   POS: freed(src) *)
+(* PRE: base(src)=src POS: freed(src)
+   PRE: src=NULL      POS:
+*)
 let contract_for_free src =
 	let ef_src = operand_to_exformula src empty_exformula in
 	let lhs = ef_src.f in
 	(* let len = Exp.BinOp ( Peq, (UnOp (Len, ef_src.root)), Undef) in *)
 	let base = Exp.BinOp ( Peq, (UnOp (Base, ef_src.root)), ef_src.root) in
-	let free_pi = Exp.UnOp (Freed, ef_src.root) in
-	let rhs = {pi = free_pi :: lhs.pi; sigma = []} in
-	{lhs = {pi = base :: lhs.pi; sigma = lhs.sigma}; rhs = rhs; cvars = ef_src.cnt_cvars; pvarmap = []}
+	let freed_pi = Exp.UnOp (Freed, ef_src.root) in
+	let c1 = {lhs = {pi = base :: lhs.pi; sigma = lhs.sigma};
+		      rhs = {pi = freed_pi :: lhs.pi; sigma = lhs.sigma};
+		      cvars = ef_src.cnt_cvars;
+		      pvarmap = []} in
+	let null_pi = Exp.BinOp ( Peq, ef_src.root, Exp.null) in
+	let c2 = {lhs = {pi = null_pi :: lhs.pi; sigma = lhs.sigma};
+		      rhs = Formula.empty;
+		      cvars = ef_src.cnt_cvars;
+		      pvarmap = []} in
+	c1::c2::[]
 
 let contract_nondet dst =
 	match dst.data with
@@ -321,7 +330,7 @@ let contract_for_builtin dst called args =
 	match fnc_name, args with
 	| "abort", [] -> (contract_fail)::[]
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
-	| "free", src::[] -> (contract_for_free src)::[]
+	| "free", src::[] -> contract_for_free src
 	| "__VERIFIER_error", [] -> (contract_fail)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
