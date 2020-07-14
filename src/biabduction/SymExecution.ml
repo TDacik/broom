@@ -266,7 +266,7 @@ let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
           let res = contract_application ctx solv z3_names s c
             ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
           match res with
-          | CAppFail -> [] (* FIXME error handling *)
+          | CAppFail -> solve_contract tl (* FIXME error handling *)
           | CAppOk s -> let simple_s = State.simplify s in
             State.print simple_s;
             simple_s::(solve_contract tl)
