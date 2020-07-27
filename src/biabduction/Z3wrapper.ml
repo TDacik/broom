@@ -29,7 +29,9 @@ let mk_bvfalse ctx = BitVector.mk_numeral ctx "0" bw_width
 
 (* if bool == true then "-1" else "0" *)
 let mk_bool2bv ctx z3expr =
-  Boolean.mk_ite ctx z3expr (mk_bvtrue ctx) (mk_bvfalse ctx)
+  if Boolean.is_true z3expr then (mk_bvtrue ctx)
+  else if Boolean.is_false z3expr then (mk_bvfalse ctx)
+  else Boolean.mk_ite ctx z3expr (mk_bvtrue ctx) (mk_bvfalse ctx)
 
 (* if bv == "0" then false else true *)
 let mk_bv2bool ctx z3expr =
@@ -57,6 +59,14 @@ let boolexpr_to_solver ctx mk_expr a b =
     | false,true -> mk_expr ctx a (mk_bool2bv ctx b)
     | _,_ -> raise (NoZ3Translation "Unsupported Boolean expression in Z3")
   )
+
+(* for binary logical operators *)
+let logicexpr_to_solver ctx mk_boolexpr mk_bvexpr a b =
+  match (Boolean.is_bool a),(Boolean.is_bool b) with
+  | true,false -> mk_bvexpr ctx (mk_bool2bv ctx a) (mk_binary_bv ctx b)
+  | false,true -> mk_bvexpr ctx (mk_binary_bv ctx a) (mk_bool2bv ctx b)
+  | false,false -> mk_bvexpr ctx (mk_binary_bv ctx a) (mk_binary_bv ctx b)
+  | true,true -> mk_boolexpr ctx a b
 
 let const_to_solver ctx c =
   match c with
@@ -93,9 +103,17 @@ let rec expr_to_solver ctx func expr =
         boolexpr_to_solver ctx mk_neq (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Pless ->  BitVector.mk_slt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Plesseq -> BitVector.mk_sle ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-      | Pand -> Boolean.mk_and ctx [(expr_to_solver ctx func a); (expr_to_solver ctx func b)]
-      | Por -> Boolean.mk_or ctx [(expr_to_solver ctx func a); (expr_to_solver ctx func b)]
-      | Pxor -> Boolean.mk_xor ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pand ->
+        let mk_and_two ctx a b = Boolean.mk_and ctx [a;b] in
+        logicexpr_to_solver ctx mk_and_two BitVector.mk_add
+          (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Por ->
+        let mk_or_two ctx a b = Boolean.mk_or ctx [a;b] in
+        logicexpr_to_solver ctx mk_or_two BitVector.mk_or
+          (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pxor ->
+        logicexpr_to_solver ctx Boolean.mk_xor BitVector.mk_xor
+          (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Pplus -> BitVector.mk_add ctx  (expr_to_solver ctx func a) (expr_to_solver ctx func b) 
       | Pminus -> BitVector.mk_sub ctx  (expr_to_solver ctx func a) (expr_to_solver ctx func b) 
       | Pmult -> BitVector.mk_mul ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
