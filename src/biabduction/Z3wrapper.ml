@@ -131,9 +131,9 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     (* local_c[123] = alloc(base a)
         /\ base(a) = base(base(a))
         /\ len(a) >=size 
-	/\ a>0 
-	/\ base(a)<=a 
-	/\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector*)
+        /\ a>0 
+        /\ base(a)<=a 
+        /\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector*)
     let x=alloc a in
     let local_c1= Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]] in
     let local_c2= Boolean.mk_eq ctx
@@ -146,7 +146,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     let local_c4 = BitVector.mk_sgt ctx x (BitVector.mk_numeral ctx "0" bw_width) in
     let local_c5 = BitVector.mk_sle ctx (Expr.mk_app ctx func.base [x]) x in
     let local_c6 = BitVector.mk_sle ctx x (BitVector.mk_add ctx x (expr_to_solver ctx func size) ) in
-    	
+      
     (* Create constrains for two space predicates *)
     (*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
     (* fit_len: x<=y<x+len(x) \/ y<=x<y+len(y) => base(x) = base(y) *)
@@ -157,17 +157,19 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     in
     let dist_fields x size_x y size_y = Boolean.mk_implies ctx (base_eq x y) (no_overlap x size_x y size_y) in
     let fit_len x y = Boolean.mk_implies ctx 
-		(Boolean.mk_or ctx [
-			Boolean.mk_and ctx [
-				BitVector.mk_sle ctx x y;
-				BitVector.mk_slt ctx y (BitVector.mk_add ctx x (Expr.mk_app ctx func.len [x]))
-			];
-			Boolean.mk_and ctx [
-				BitVector.mk_sle ctx y x;
-				BitVector.mk_slt ctx x (BitVector.mk_add ctx y (Expr.mk_app ctx func.len [y]))
-			]
-		])
-    		(base_eq x y) 
+      (Boolean.mk_or ctx [
+        Boolean.mk_and ctx [
+          BitVector.mk_sle ctx x y;
+          BitVector.mk_slt ctx y
+            (BitVector.mk_add ctx x (Expr.mk_app ctx func.len [x]))
+        ];
+        Boolean.mk_and ctx [
+          BitVector.mk_sle ctx y x;
+          BitVector.mk_slt ctx x
+            (BitVector.mk_add ctx y (Expr.mk_app ctx func.len [y]))
+        ]
+      ])
+      (base_eq x y)
     in
     let two_sp_preds_c al sp_rule = 
       match sp_rule with
@@ -175,7 +177,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         Boolean.mk_and ctx
         [(Boolean.mk_not ctx (Boolean.mk_eq ctx al (alloc aa)));
         (dist_fields al size (alloc aa) size_aa);
-	(fit_len al (alloc aa))]
+        (fit_len al (alloc aa))]
       | Slseg (aa,bb,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
         Boolean.mk_or ctx
         [ Boolean.mk_not ctx (base_eq al (alloc aa));
