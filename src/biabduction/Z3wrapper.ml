@@ -1,16 +1,10 @@
-(* in Utop use
-  #load "Formula.cmo" or #mod_use "Formula.ml"
-     #require "z3"
-*)
-
 open Z3
 (*open Z3.Symbol*)
-(* open Z3.Arithmetic *)
 (* open Z3.BitVector *)
 open Formula
 
 
-(* width of the bitvector *)
+(* width of the bitvector TODO: as a config parameter *)
 let bw_width=64
 
 (* The functions base, len, size, etc in SL are used as uninterpreted functions in z3 *)
@@ -27,11 +21,42 @@ let get_sl_functions_z3 ctx =
     alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc") [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
   }
 
+(* Boolean <-> Bitvector conversion *)
+
+let mk_bvtrue ctx = BitVector.mk_numeral ctx "-1" bw_width
+
+let mk_bvfalse ctx = BitVector.mk_numeral ctx "0" bw_width
+
+(* if bool == true then "-1" else "0" *)
+let mk_bool2bv ctx z3expr =
+  Boolean.mk_ite ctx z3expr (mk_bvtrue ctx) (mk_bvfalse ctx)
+
+(* if bv == "0" then false else true *)
+let mk_bv2bool ctx z3expr =
+  let eq0 = Boolean.mk_eq ctx z3expr (mk_bvfalse ctx) in
+  Boolean.mk_ite ctx eq0 (Boolean.mk_false ctx) (Boolean.mk_true ctx)
+
+(* if bv == "0" then bv else "-1" *)
+let mk_binary_bv ctx z3expr =
+  let eq0 = Boolean.mk_eq ctx z3expr (mk_bvfalse ctx) in
+  Boolean.mk_ite ctx eq0 z3expr (mk_bvtrue ctx)
 
 
 (* Pure part translation into Z3 solver internal representation *)
 
 exception NoZ3Translation of string
+
+(* check and set, if all operands of boolean experession are in same sort *)
+let boolexpr_to_solver ctx mk_expr a b =
+  let sort_a = Expr.get_sort a in
+  let sort_b = Expr.get_sort b in
+  if Sort.equal sort_a sort_b
+  then mk_expr ctx a b
+  else (match (Boolean.is_bool a),(Boolean.is_bool b) with
+    | true,false -> mk_expr ctx (mk_bool2bv ctx a) b
+    | false,true -> mk_expr ctx a (mk_bool2bv ctx b)
+    | _,_ -> raise (NoZ3Translation "Unsupported Boolean expression in Z3")
+  )
 
 let const_to_solver ctx c =
   match c with
@@ -42,9 +67,6 @@ let const_to_solver ctx c =
   | Exp.Float _ -> raise (NoZ3Translation "Can't translate Float expression to Z3")
   (*| Exp.String a -> a *)
   (* | Exp.Float a -> Real.mk_numeral_i ctx a *)
-
-
-
 
 
 let rec expr_to_solver ctx func expr =
@@ -65,8 +87,10 @@ let rec expr_to_solver ctx func expr =
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
-      | Peq ->  Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
-      | Pneq -> Boolean.mk_not ctx (Boolean.mk_eq ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b))
+      | Peq -> boolexpr_to_solver ctx Boolean.mk_eq (expr_to_solver ctx func a) (expr_to_solver ctx func b)
+      | Pneq ->
+        let mk_neq ctx a b = Boolean.mk_not ctx (Boolean.mk_eq ctx a b) in
+        boolexpr_to_solver ctx mk_neq (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Pless ->  BitVector.mk_slt ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Plesseq -> BitVector.mk_sle ctx (expr_to_solver ctx func a) (expr_to_solver ctx func b)
       | Pand -> Boolean.mk_and ctx [(expr_to_solver ctx func a); (expr_to_solver ctx func b)]
@@ -208,6 +232,14 @@ let rec sigma_to_solver ctx names_z3 sigma =
   | [] -> []
   | first::rest -> List.append (spatial_pred_to_solver ctx first rest names_z3) (sigma_to_solver ctx names_z3 rest)
 
+let rec formula_to_string exprs =
+  match exprs with
+  | [] -> ""
+  | expr::tl -> let sort = Expr.get_sort expr in
+    "SORT:"^(Sort.to_string sort)^"~~~"^
+    (Expr.to_string expr)^"\n"^
+    (formula_to_string tl)
+
 let formula_to_solver ctx form =
   let names_z3=get_sl_functions_z3 ctx in
   let pi= pi_to_solver ctx names_z3 form.pi in
@@ -216,8 +248,8 @@ let formula_to_solver ctx form =
   let base0=Boolean.mk_eq ctx
     (BitVector.mk_numeral ctx "0" bw_width)
     (Expr.mk_app ctx names_z3.base [BitVector.mk_numeral ctx "0" bw_width]) in
-  List.append pi (List.append sigma [null_not_alloc; base0])
-  (*List.append pi (List.append sigma global_constr)*)
+  pi @ sigma @ [null_not_alloc; base0]
+  (* pi @ sigma @ global_constr *)
 
 
 (* check the lambda within the Slseq predicates,
