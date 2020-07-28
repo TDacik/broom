@@ -89,7 +89,10 @@ let rec expr_to_solver ctx func expr =
     ( match op with
       | Base -> Expr.mk_app ctx func.base [(expr_to_solver ctx func a)]
       | Len ->  Expr.mk_app ctx func.len [(expr_to_solver ctx func a)]
-      | Freed -> Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [(expr_to_solver ctx func a)])
+      | Freed -> Boolean.mk_and ctx [ 
+      		(Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [(expr_to_solver ctx func a)]));
+      		(Boolean.mk_not ctx (Boolean.mk_eq ctx (expr_to_solver ctx func a) (BitVector.mk_numeral ctx "0" bw_width)))
+		]
       | BVnot -> BitVector.mk_not ctx (expr_to_solver ctx func a)
       | Pnot -> Boolean.mk_not ctx (expr_to_solver ctx func a)
       | Puminus -> BitVector.mk_neg ctx (expr_to_solver ctx func a)
