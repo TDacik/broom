@@ -52,6 +52,7 @@ module Exp = struct (*$< Exp *)
 
     and variable = int
 
+let one = Const (Int 1L)
 let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
 

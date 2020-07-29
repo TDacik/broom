@@ -52,6 +52,7 @@ module Exp : sig
 
     and variable = int
 
+  val one : t
   val zero : t
   val null : t
   val variable_to_string : ?lvars:variable list -> variable -> string
