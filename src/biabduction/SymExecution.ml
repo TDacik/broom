@@ -13,11 +13,17 @@ type contract_app_res =
    * we assume that contract variables are not used within the state s,
    * only the program variables may appear in both contract and state, they are used as anchors
 *)
+let prune_expr ctx solv z3_names form_z3 expr =
+	let query= (Boolean.mk_not ctx (expr_to_solver ctx z3_names expr)) :: form_z3 in
+	(Solver.check solv query)=SATISFIABLE
+
 let apply_contract ctx solv z3_names state c pvars =
   match (Abduction.biabduction ctx solv z3_names state.act c.Contract.lhs pvars) with
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
-    let missing= {pi=state.miss.pi @ miss.pi; sigma=state.miss.sigma @ miss.sigma } in
+    (* prune useless constrains in miss.pi *)
+    let pruned_miss_pi=List.filter (prune_expr ctx solv z3_names (formula_to_solver ctx state.act)) miss.pi in
+    let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
     let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
 
     CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
