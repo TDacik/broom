@@ -698,7 +698,7 @@ let try_split ctx solv z3_names form1 form2 level _ =
 (****************************************************)
 (* Test SAT of (form1 /\ form2) and check finish *)
 type sat_test_res =
-| Finish of Formula.t
+| Finish of Formula.t * Formula.t
 | NoFinish
 | SatFail
 
@@ -707,7 +707,8 @@ let test_sat ctx solv __names form1 form2 =
   if (Solver.check solv query)=UNSATISFIABLE then SatFail
   else
   if (List.length form2.sigma)>0 then NoFinish
-  else Finish {pi=form1.pi; sigma=form1.sigma} (* return FRAME, pi may be not empty --- To be Checked *)
+  (* FINISH TRUE, return MISSING pure part (form2.pi) and FRAME (form1) *)
+  else Finish ({pi=form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
 
 (* main biabduction function *)
 (* The result is:  "missing, frame, added_lvars" *)
@@ -724,7 +725,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
   match (test_sat ctx solv z3_names form1 form2) with
   | SatFail ->
     print_string "SAT fail"; BFail
-  | Finish frame -> print_string "Finish true, "; Bok ( {pi=[];sigma=[]} ,frame, [])
+  | Finish (missing,frame) -> print_string "Finish true, "; Bok ( missing,frame, [])
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   let rules=[
