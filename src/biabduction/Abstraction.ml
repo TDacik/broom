@@ -636,8 +636,27 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 pvars =
 	)
 	(*| _ -> AbstractionFail*)
 
+(* try list abstraction - first tries the last added *)
+let lseg_abstaction ctx solv z3_names form pvars =
+	let rec f i j =
+		Printf.printf "%d,%d\n" i j;
+		let result = try_abstraction_to_lseg ctx solv z3_names form i j pvars in
+		match result with
+		| AbstractionApply new_form -> new_form
+		| AbstractionFail -> (
+			match i,j with
+			| 1,_ -> form (* nothing change *)
+			| _,0 -> f (i-1) (i-2)
+			| _,_ -> f i (j-1)
+		)
+	in
+	let n = List.length form.sigma in
+	assert (n>1);
+	f (n-1) (n-2)
+
+
 (***** Experiments *****)
-let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))
+(* let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))
 
 let form_abstr1 = {
     sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
@@ -696,7 +715,7 @@ let form_abstr5 = {
 
 let form_abstr6 = {
     sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
-    	Hpointsto (Var 10,ptr_size, Var 1); 
+    	Hpointsto (Var 10,ptr_size, Var 1);
     	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto (BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 11);
     	Hpointsto (Var 11,ptr_size, Var 2)
 	];
@@ -709,7 +728,7 @@ let form_abstr6 = {
     	BinOp ( Peq, Var 11, UnOp ( Base, Var 11));
         ]
 }
-let form_abstr7 = 
+let form_abstr7 =
     let lambda= {param=[1;2] ;form={
       	sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[] }}
     in
@@ -726,7 +745,7 @@ let form_abstr7 =
     	BinOp ( Peq, UnOp ( Len, Var 2), Const (Int (Int64.of_int 16)));
         ]
 }
-let form_abstr8 = 
+let form_abstr8 =
     {
     sigma = [ Hpointsto (Var 1,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
     	 Hpointsto (Var 10,ptr_size, Var 1); Hpointsto(BinOp ( Pplus, Var 10, ptr_size),ptr_size, Var 10);
@@ -745,7 +764,7 @@ let form_abstr8 =
         ]
 }
 
-let form_abstr9 = 
+let form_abstr9 =
     let lambda= {param=[1;2] ;form={
       	sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[] }}
     in
@@ -755,7 +774,7 @@ let form_abstr9 =
     pi = [BinOp ( Peq, Var 3, UnOp ( Base, Var 3));]
 }
 
-let form_abstr10 = 
+let form_abstr10 =
     let lambda= {param=[1;2] ;form={
       	sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));] }}
     in
@@ -765,11 +784,11 @@ let form_abstr10 =
     pi = [BinOp ( Peq, Var 3, UnOp ( Base, Var 3));]
 }
 
-let form_abstr11 = 
+let form_abstr11 =
     let lambda= {param=[1;2] ;form={
       	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
     	 Hpointsto (Var 10,ptr_size, Var 1); Hpointsto(BinOp ( Pplus, Var 10, ptr_size),ptr_size, Var 10);
-	]; 
+	];
 	pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
 	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
     	BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
@@ -777,7 +796,7 @@ let form_abstr11 =
 	] }}
     in
     {
-    sigma = [  Slseg (Var 1, Var 2, lambda); Slseg (Var 2, Const (Ptr 0), lambda); 
+    sigma = [  Slseg (Var 1, Var 2, lambda); Slseg (Var 2, Const (Ptr 0), lambda);
     	Hpointsto (Var 3,ptr_size, Var 1); Hpointsto(BinOp ( Pplus, Var 3, ptr_size),ptr_size, Var 10);
     	 Hpointsto (Var 10,ptr_size, Var 3); Hpointsto(BinOp ( Pplus, Var 10, ptr_size),ptr_size, Var 10);
 	];
@@ -789,11 +808,11 @@ let form_abstr11 =
     	]
 }
 
-let form_abstr12 = 
+let form_abstr12 =
     let lambda= {param=[1;2] ;form={
       	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 1, ptr_size),ptr_size, Var 10);
     	 Hpointsto (Var 10,ptr_size, Var 1); Hpointsto(BinOp ( Pplus, Var 10, ptr_size),ptr_size, Var 10);
-	]; 
+	];
 	pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
 	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
     	BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
@@ -801,7 +820,7 @@ let form_abstr12 =
 	] }}
     in
     {
-    sigma = [  Slseg (Var 1, Var 2, lambda); 
+    sigma = [  Slseg (Var 1, Var 2, lambda);
     	Hpointsto (Var 2,ptr_size, Var 3); Hpointsto(BinOp ( Pplus, Var 2, ptr_size),ptr_size, Var 10);
     	 Hpointsto (Var 10,ptr_size, Var 2); Hpointsto(BinOp ( Pplus, Var 10, ptr_size),ptr_size, Var 10);
 	];
@@ -813,7 +832,7 @@ let form_abstr12 =
     	]
 }
 
-let form_abstr13 = 
+let form_abstr13 =
     let lambda= {param=[1;2] ;form={
       	sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ]; pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));] }}
     in
@@ -822,7 +841,7 @@ let form_abstr13 =
 	];
     pi = [BinOp ( Peq, Var 2, UnOp ( Base, Var 2));]
 }
-
+ *)
 
 
 (*
