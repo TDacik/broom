@@ -636,13 +636,15 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 pvars =
 	)
 	(*| _ -> AbstractionFail*)
 
-(* try list abstraction - first tries the last added *)
-let lseg_abstaction ctx solv z3_names form pvars =
+(* try list abstraction - first tries the last added, at least 2 predicates in
+	sigma *)
+let rec lseg_abstaction ctx solv z3_names form pvars =
 	let rec f i j =
-		Printf.printf "%d,%d\n" i j;
+		(* Printf.printf "%d,%d\n" i j; *)
 		let result = try_abstraction_to_lseg ctx solv z3_names form i j pvars in
 		match result with
-		| AbstractionApply new_form -> new_form
+		| AbstractionApply new_form ->
+			lseg_abstaction ctx solv z3_names new_form pvars
 		| AbstractionFail -> (
 			match i,j with
 			| 1,_ -> form (* nothing change *)
@@ -651,8 +653,8 @@ let lseg_abstaction ctx solv z3_names form pvars =
 		)
 	in
 	let n = List.length form.sigma in
-	assert (n>1);
-	f (n-1) (n-2)
+	(* assert (n>1); *)
+	if (n<2) then form else f (n-1) (n-2)
 
 
 (***** Experiments *****)
