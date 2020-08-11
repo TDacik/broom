@@ -55,6 +55,9 @@ let rec print_list to_string args =
 		Printf.printf "%s, " str_arg;
 		print_list to_string tl
 
+let is_loop_closing_block bb_uid insn =
+	List.mem bb_uid insn.Fnc.loop_closing_targets
+
 let is_void op =
 	match op.Operand.data with
 	| OpVoid -> true

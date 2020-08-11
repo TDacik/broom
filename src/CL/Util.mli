@@ -35,6 +35,9 @@ val list_to_string: ('a -> string) -> 'a list -> string
 	[to_string] on each elm *)
 val print_list: ('a -> string) -> 'a list -> unit
 
+(** [is_loop_closing_block bb_uid insn] *)
+val is_loop_closing_block: Loc.cl_uid -> Fnc.insn -> bool
+
 (** [is_viod op] if operand is void *)
 val is_void: Operand.t -> bool
 

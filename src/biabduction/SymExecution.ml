@@ -279,9 +279,30 @@ let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
     in
     (solve_contract contracts) @ (apply_contracts_on_states ctx solv z3_names fuid tl contracts)
 
+(* Try abstraction on each miss anad act of each state,
+   for now only list abstraction *)
+let try_abstraction_on_states ctx solv z3_names fuid states =
+  let pvars = ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
+  let rec try_abstraction states =
+    match states with
+    | [] -> []
+    | s::tl ->
+      let new_miss = Abstraction.lseg_abstaction ctx solv z3_names s.miss pvars in
+      let new_act = Abstraction.lseg_abstaction ctx solv z3_names s.act pvars in
+      let abstract_state = {miss = new_miss; act = new_act; lvars=s.lvars} in
+      (* TODO: update lvars *)
+      abstract_state :: (try_abstraction tl)
+  in
+  Printf.printf ">>> trying list abstraction\n";
+  try_abstraction states
+
 let rec exec_block tbl states (uid, bb) fuid =
-  Printf.printf ">>> executing block L%i:\n" uid;
-  exec_insns tbl states bb.CL.Fnc.insns fuid
+  if (states = [])
+  then states
+  else (
+    Printf.printf ">>> executing block L%i:\n" uid;
+    exec_insns tbl states bb.CL.Fnc.insns fuid
+  )
 
 and exec_insn tbl states insn fuid =
   let new_states_for_insn c =
@@ -292,16 +313,28 @@ and exec_insn tbl states insn fuid =
   CL.Printer.print_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
-    exec_block tbl states bb fuid
+    let s_jmp = (
+      if (CL.Util.is_loop_closing_block uid insn)
+      then try_abstraction_on_states ctx solv z3_names fuid states
+      else states) in
+    exec_block tbl s_jmp bb fuid
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
     let s_then = apply_contracts_on_states ctx solv z3_names fuid states
                  [(List.hd c)] in
     let s_else = apply_contracts_on_states ctx solv z3_names fuid states
                  [(List.nth c 1)] in
+    let ss_then = (
+      if (CL.Util.is_loop_closing_block uid_then insn)
+      then try_abstraction_on_states ctx solv z3_names fuid s_then
+      else s_then) in
+    let ss_else = (
+      if (CL.Util.is_loop_closing_block uid_else insn)
+      then try_abstraction_on_states ctx solv z3_names fuid s_else
+      else s_else) in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
-    (exec_block tbl s_then bb_then fuid) @ (exec_block tbl s_else bb_else fuid)
+    (exec_block tbl ss_then bb_then fuid) @ (exec_block tbl ss_else bb_else fuid)
   | InsnSWITCH _ -> assert false
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
