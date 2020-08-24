@@ -173,19 +173,6 @@ let rec subcontract vars c =
 
 (* CREATING CONTRACTS *)
 
-(* replace dst in postcondition (rhs) *)
-let rewrite_dst2 root c =
-	match root with
-	| Exp.Var puid ->
-		let cuid = c.cvars + 1 in
-		let new_rhs = substitute_vars_cvars (CVar cuid) (Var puid) c.rhs in
-		{lhs = c.lhs; rhs = new_rhs; cvars = cuid; pvarmap = (puid, cuid) :: c.pvarmap}
-	| CVar old_cuid ->
-		let cuid = c.cvars + 1 in
-		let new_rhs = substitute_vars_cvars (CVar cuid) (CVar old_cuid) c.rhs in
-		{lhs = c.lhs; rhs = new_rhs; cvars = cuid; pvarmap = c.pvarmap}
-	| _ -> c
-
 (* replace dst, return new dst and pvarmap for contract *)
 let rewrite_dst dst =
 	match dst.root with
@@ -367,20 +354,24 @@ let rec substitute_arguments roots vars f =
 	| _,_ -> assert false (* TODO: variable number of arguments unsupported *)
 
 (* rename dst and args in given contract c;
-   dst and args could be rewritten in rhs *)
+   dst and args (TODO) could be rewritten in rhs *)
 (* TODO: first 3 lines should be as argumets and called from outside *)
 let contract_for_called_fnc dst args vars c =
 	let ef_init = {f = Formula.empty; cnt_cvars = c.cvars; root = Undef} in
 	let ef_dst = operand_to_exformula dst ef_init in
 	let (roots,ef_args) = agrs_to_exformula args ef_dst in
 	let new_lhs = substitute_arguments roots vars c.lhs in
-	let dst_rhs = substitute_vars_cvars ef_dst.root (CVar 0) c.rhs in
+
+	let (new_dst, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=ef_args.cnt_cvars; root=ef_dst.root} in
+	let dst_rhs = substitute_vars_cvars new_dst.root (CVar 0) c.rhs in
 	let new_rhs = substitute_arguments roots vars dst_rhs in
-	let new_c = {lhs = {sigma = new_lhs.sigma @ ef_args.f.sigma;
-						pi = new_lhs.pi @ ef_args.f.pi};
-				rhs = new_rhs;
-				cvars = ef_args.cnt_cvars; pvarmap = []} in
-	rewrite_dst2 ef_dst.root new_c
+	{
+		lhs = {sigma = new_lhs.sigma @ ef_args.f.sigma;
+			pi = new_lhs.pi @ ef_args.f.pi};
+		rhs = new_rhs;
+		cvars = new_dst.cnt_cvars;
+		pvarmap = pvarmap
+	}
 
 
 let get_contract insn =
