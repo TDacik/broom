@@ -724,7 +724,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
    *)
   match (test_sat ctx solv z3_names form1 form2) with
   | SatFail ->
-    print_string "SAT fail"; BFail
+    print_string "SAT fail\n"; BFail
   | Finish (missing,frame) -> print_string "Finish true, "; Bok ( missing,frame, [])
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
