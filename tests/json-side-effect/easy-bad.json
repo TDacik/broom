@@ -113,7 +113,7 @@
          "typ": 1162,
          "scope": "CL_SCOPE_GLOBAL"
        },
-       "vars": [ 1, 2, 3],
+       "vars": [ 1, 2 ],
        "args": [],
        "loc": ("tests/easy-10-err.c", 10, 5),
        "cfg": [

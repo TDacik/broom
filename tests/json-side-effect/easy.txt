@@ -26,3 +26,13 @@ ACTUAL:
 (base(%mF1:p)=%mF1:p) & 
 (Undef=%l6) &
 (0<=%l6) & 
+
+??? When funcs.vars aren't in order: [1, 4] instead of [1, 2]
+	Fatal error: exception Biabd.SymExecution.State_lhs_contains_forbidden_vars
+
+??? When funcs.vars aren't [1, 2, 3], but program contains only 1, 2
+
+	%l3 -(%mF1:p)->Undef * 
+
+
+
