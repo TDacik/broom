@@ -1,0 +1,243 @@
+{
+  "types": [
+    (1162,
+     {
+       "code": <"TypeFnc": [ { "typ": 10 } ]>,
+       "size": 0,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (10,
+     {
+       "code": "TypeInt",
+       "name": "int",
+       "size": 4,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (1161,
+     {
+       "code": <"TypePtr": 1160>,
+       "size": 8,
+       "is_unsigned": true,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (1160,
+     {
+       "code": <"TypeStruct":
+         [
+           { "name": "next", "offset": 0, "typ": 1161 },
+           { "name": "size", "offset": 8, "typ": 10 }
+         ]
+       >,
+       "name": "sll_node",
+       "size": 16,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (1064,
+     {
+       "code": <"TypeFnc": [ { "typ": 26 }, { "typ": 934 } ]>,
+       "size": 0,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (934,
+     {
+       "code": "TypeInt",
+       "name": "size_t",
+       "size": 8,
+       "is_unsigned": true,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (26,
+     {
+       "code": <"TypePtr": 24>,
+       "size": 8,
+       "is_unsigned": true,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (24,
+     {
+       "code": "TypeVoid",
+       "name": "void",
+       "size": 0,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     }),
+    (13,
+     {
+       "code": "TypeInt",
+       "name": "long unsigned int",
+       "size": 8,
+       "is_unsigned": true,
+       "is_const": false,
+       "scope": "CL_SCOPE_GLOBAL"
+     })
+  ],
+  "vars": [
+    (1,
+     {
+       "code": "VAR_LC",
+       "typ": 1161,
+       "name": "p",
+       "loc": ("tests/easy-10-err.c", 11, 19),
+       "initialized": false
+     }),
+    (4,
+     {
+       "code": "VAR_LC",
+       "typ": 10,
+       "loc": ("tests/easy-10-err.c", 14, 9),
+       "initialized": false
+     })
+  ],
+  "fncs": [
+    (3214,
+     {
+       "def": {
+         "data": <"OpCst":
+           {
+             "data": <"CstFnc":
+               {
+                 "uid": 3214,
+                 "name": "main",
+                 "loc": ("tests/easy-10-err.c", 10, 5)
+               }
+             >
+           }
+         >,
+         "typ": 1162,
+         "scope": "CL_SCOPE_GLOBAL"
+       },
+       "vars": [ 1, 4, 2, 3 ],
+       "args": [],
+       "loc": ("tests/easy-10-err.c", 10, 5),
+       "cfg": [
+         (1,
+          {
+            "name": "L1",
+            "insns": [
+              {
+                "code": <"InsnCALL":
+                  [
+                    {
+                      "data": <"OpVar": 1>,
+                      "typ": 1161,
+                      "scope": "CL_SCOPE_FUNCTION"
+                    },
+                    {
+                      "data": <"OpCst":
+                        {
+                          "data": <"CstFnc":
+                            {
+                              "uid": 1176,
+                              "name": "malloc",
+                              "is_extern": true,
+                              "loc": ("/usr/include/stdlib.h", 160, 7, true)
+                            }
+                          >
+                        }
+                      >,
+                      "typ": 1064,
+                      "scope": "CL_SCOPE_GLOBAL"
+                    },
+                    {
+                      "data": <"OpCst": { "data": <"CstInt": "0x10"> }>,
+                      "typ": 13,
+                      "scope": "CL_SCOPE_GLOBAL"
+                    }
+                  ]
+                >,
+                "loc": ("tests/easy-10-err.c", 11, 23)
+              },
+              {
+                "code": <"InsnCALL":
+                  [
+                    {
+                      "data": <"OpVar": 1>,
+                      "typ": 1161,
+                      "scope": "CL_SCOPE_FUNCTION"
+                    },
+                    {
+                      "data": <"OpCst":
+                        {
+                          "data": <"CstFnc":
+                            {
+                              "uid": 1176,
+                              "name": "malloc",
+                              "is_extern": true,
+                              "loc": ("/usr/include/stdlib.h", 160, 7, true)
+                            }
+                          >
+                        }
+                      >,
+                      "typ": 1064,
+                      "scope": "CL_SCOPE_GLOBAL"
+                    },
+                    {
+                     "data": <"OpVar": 1>,
+                     "typ": 10,
+                     "accessor": [
+                       { "typ": 1161, "data": <"Deref"> },
+                       { "typ": 1160, "data": <"Item": 1> }
+                     ],
+                     "scope": "CL_SCOPE_FUNCTION"
+                   }
+                  ]
+                >,
+                "loc": ("tests/easy-10-err.c", 12, 6)
+              },
+              {
+                "code": <"InsnUNOP":
+                  (<"CL_UNOP_ASSIGN">,
+                   {
+                     "data": <"OpVar": 4>,
+                     "typ": 10,
+                     "scope": "CL_SCOPE_FUNCTION"
+                   },
+                   {
+                     "data": <"OpCst": { "data": <"CstInt": 0> }>,
+                     "typ": 10,
+                     "scope": "CL_SCOPE_GLOBAL"
+                   })
+                >,
+                "loc": ("tests/easy-10-err.c", 14, 9)
+              },
+              {
+                "code": <"InsnJMP": 2>,
+                "loc": ("tests/easy-10-err.c", 14, 9)
+              }
+            ],
+            "targets": [ 2 ],
+            "inbounds": []
+          }),
+         (2,
+          {
+            "name": "L2",
+            "insns": [
+              {
+                "code": <"InsnLABEL": "<anon_label>">,
+                "loc": ("tests/easy-10-err.c", 15, 1)
+              },
+              {
+                "code": <"InsnRET":
+                  {
+                    "data": <"OpVar": 4>,
+                    "typ": 10,
+                    "scope": "CL_SCOPE_FUNCTION"
+                  }
+                >,
+                "loc": ("", 0, 0)
+              }
+            ],
+            "targets": [],
+            "inbounds": [ 1 ]
+          })
+       ]
+     })
+  ]
+}
