@@ -87,7 +87,7 @@
        "loc": ("tests/easy-10-err.c", 11, 19),
        "initialized": false
      }),
-    (2,
+    (4,
      {
        "code": "VAR_LC",
        "typ": 10,
@@ -113,7 +113,7 @@
          "typ": 1162,
          "scope": "CL_SCOPE_GLOBAL"
        },
-       "vars": [ 1, 2, 3],
+       "vars": [ 1, 4 ],
        "args": [],
        "loc": ("tests/easy-10-err.c", 10, 5),
        "cfg": [
@@ -195,7 +195,7 @@
                 "code": <"InsnUNOP":
                   (<"CL_UNOP_ASSIGN">,
                    {
-                     "data": <"OpVar": 2>,
+                     "data": <"OpVar": 4>,
                      "typ": 10,
                      "scope": "CL_SCOPE_FUNCTION"
                    },
@@ -226,7 +226,7 @@
               {
                 "code": <"InsnRET":
                   {
-                    "data": <"OpVar": 2>,
+                    "data": <"OpVar": 4>,
                     "typ": 10,
                     "scope": "CL_SCOPE_FUNCTION"
                   }

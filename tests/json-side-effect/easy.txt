@@ -11,28 +11,18 @@ Split2, Match1, Finish true, EXISTS: %l8, %l6, %l7
 MISS: (base(%mF1:p)=base(%l7)) & (base(%mF1:p)=base((%l7+4))) & (%mF1:p<=%l7) & ((%l7+4)<=(%mF1:p+16)) & (%l7=(%mF1:p+8)) & (base(%l7)=base(%mF1:p))
 
 ACTUAL: 
-%l8 -(8)->Undef * 
-(%l8+8) -(4)->%l6 &
-(%l8+12) -(4)->Undef * 
+%l2 -(8)->Undef * 
+(%l2+8) -(4)->%l6 & 
+(%l2+12) -(4)->Undef * 
 
 %mF1:p -(%l6)->Undef * 
 
-(len(%l8)=16) &
-(base(%l8)=%l8) & 
-(base(%l8)=base(%l8+8)) & 
-(base(%l8)=base((%l8+12))) & 
+(len(%l2)=16) & 
+(base(%l2)=%l2) & 
+(base(%l2)=base(%l2+8)) & 
+(base(%l2)=base((%l2+12))) 
 
 (len(%mF1:p)=%l6) & 
 (base(%mF1:p)=%mF1:p) & 
-(Undef=%l6) &
+(Undef=%l6) & 
 (0<=%l6) & 
-
-??? When funcs.vars aren't in order: [1, 4] instead of [1, 2]
-	Fatal error: exception Biabd.SymExecution.State_lhs_contains_forbidden_vars
-
-??? When funcs.vars aren't [1, 2, 3], but program contains only 1, 2
-
-	%l3 -(%mF1:p)->Undef * 
-
-
-
