@@ -17,7 +17,7 @@ For JSON dumper see [code-listener/README](https://github.com/versokova/predator
 
 ### Install dependencies
 ```
-bew install opam                                         # for MacOS
+brew install opam                                         # for MacOS
 ```
 ```
 $COMPILER="ocaml-variants.4.09.1+flambda"
