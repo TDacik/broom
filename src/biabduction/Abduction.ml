@@ -728,6 +728,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
   | Finish (missing,frame) -> print_string "Finish true, "; Bok ( missing,frame, [])
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
+  (* Match4 and Split4 is applied only in case that nothing else can be applied *)
   let rules=[
     (try_match,1,"Match1");
     (try_split,1,"Split1");
@@ -736,10 +737,10 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
     (try_match,3,"Match3");
     (try_learn_pointsto,1,"Learn1-Pointsto");
     (try_learn_slseg,1,"Learn1-Slseg");
+    (try_learn_pointsto,3,"Learn3-Pointsto");
+    (try_learn_slseg,2,"Learn3-Slseg");
     (try_match,4,"Match4");
     (try_split,4,"Split4");
-    (try_learn_pointsto,3,"Learn3-Pointsto");
-    (try_learn_slseg,2,"Learn3-Slseg")
   ] in
   (* try the rules till an applicable if founded *)
   let rec try_rules todo=

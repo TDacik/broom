@@ -32,12 +32,12 @@ let apply_contract ctx solv z3_names state c pvars =
    pvars - a list of program variables (global vars + vars used in function) *)
 let rec rename_contract_vars_ll state c seed pvars =
   let svars= (find_vars state.act) @ (find_vars state.miss) in
-  let rec cvars_pvarmap pvarmap =
-  	match pvarmap with
-	| [] -> []
-	| (a,_)::rest -> CL.Util.list_join_unique [a] (cvars_pvarmap rest)
+  let rec seq_list i =
+	if (i=0) 
+	then []
+	else (seq_list (i-1))@[i]
   in
-  let cvars= (find_vars c.Contract.lhs) @ (find_vars c.rhs) @ (cvars_pvarmap c.pvarmap) in
+  let cvars = seq_list c.Contract.cvars in
   let conflicts = svars @ cvars @ pvars in
   let mem x l =
     let eq y= (x=y) in
@@ -48,14 +48,6 @@ let rec rename_contract_vars_ll state c seed pvars =
     then get_fresh_var (s+1) confl
     else s
   in
-  (* let rec substitutelist newv oldv l =
-    match l with
-    | [] -> []
-    | first::rest ->
-      if first=oldv
-      then newv::(substitutelist newv oldv rest)
-      else first::(substitutelist newv oldv rest)
-  in *)
   (* contract variable is only second *)
   let rec substitute_varmap newv oldv l =
     match l with
