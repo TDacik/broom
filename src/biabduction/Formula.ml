@@ -301,10 +301,10 @@ let rec subsigma vars sigma =
   | [] -> ([],[])
   | Hpointsto (a,size,b)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
-    let (size_vars,size_found) = find_expr_contains_vars vars size in
-    let (b_vars,b_found) = find_expr_contains_vars vars b in
+    let (size_vars,_) = find_expr_contains_vars vars size in
+    let (b_vars,_) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
-    if (a_found || size_found || b_found)
+    if (a_found) (* must be reach from pointer *)
     then
       let new_vars = CL.Util.list_diff (a_vars @ size_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Hpointsto (a,size,b)::subtl)
@@ -314,21 +314,38 @@ let rec subsigma vars sigma =
     let (a_vars,a_found) = find_expr_contains_vars vars a in
     let (b_vars,b_found) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
-    if (a_found || b_found)
+    if (a_found || b_found) (* TODO must be reach from pointer *)
     then
       let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l)::subtl)
     else
       (tl_vars,subtl)
 
-(* returns a subformula that contains clauses with
-   variables from vars and related variables to them and list of all variables
-   in subformula expect vars
+(* returns a subformula that contains clauses with variables from vars and
+   related variables to them and list of all variables that may be in
+   subformula and flag if something was removed from spatial part
    vars - list of Exp, but expect CVar and Var only *)
-let subformula vars f =
-  let (pi_vars,pi_f) = subpi vars f.pi in
-  let (sigma_vars,sigma_f) = subsigma vars f.sigma in
-  ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
+let rec subformula vars f =
+  (* returns a subformula that contains only clauses with variables from vars
+     and list of all variables in subformula expect vars *)
+  let subformula_only only_vars ff =
+    let (pi_vars,pi_f) = subpi only_vars ff.pi in
+    let (sigma_vars,sigma_f) = subsigma only_vars ff.sigma in
+    ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
+  in
+
+  match vars with
+  | [] ->
+	  (* print_string ("END\n"); *)
+    let removed_sigma = if (f.sigma = []) then false else true in
+    (removed_sigma,vars,empty)
+  | _ ->
+    let (new_vars,new_f) = subformula_only vars f in
+    let (flag,tl_vars,tl_f) = subformula new_vars (diff f new_f) in
+    let all_vars = (vars @ tl_vars) in
+	  (* print_string (CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
+	  print_string (CL.Util.list_to_string (Exp.to_string) all_vars ^ "ALL\n"); *)
+    (flag,all_vars, disjoint_union new_f tl_f)
 
 (**** FORMULA SIMPLIFICATION ****)
 (* Function to simplify formula by removing equivalent existential variables *)

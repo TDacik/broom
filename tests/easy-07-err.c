@@ -1,9 +1,10 @@
 #include <stdlib.h>
+#include <stdint.h>
 
 /* error: free called on non-pointer value */
 
 int main() {
-	int ret = 1;
-	free(ret); // invalid free
+	intptr_t ret = 1;
+	free((void*)ret); // invalid free
 	return ret;
 }

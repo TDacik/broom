@@ -114,11 +114,13 @@ val find_vars : t -> Exp.variable list
 
 (** {3 Formula simplification} *)
 
-(** [subformula vars form] returns a subformula that contains clauses with
-    variables from [vars] and related variables to them and list of all
-    variables in subformula expect [vars]
+(** [subformula vars form] returns
+    flag if something was removed from spatial part
+    list of all variables that may be in subformula
+    a subformula that contains clauses with variables from [vars] and related
+    variables to them
     vars - list of Exp, but expect CVar and Var only *)
-val subformula : Exp.t list -> t -> Exp.t list * t
+val subformula : Exp.t list -> t -> bool * Exp.t list * t
 
 (** [get_varmap f] simplify formula by removing equivalent existential variables
     get a list of pair of equal variables from Pure part *)

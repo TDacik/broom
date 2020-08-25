@@ -159,8 +159,9 @@ let rec subcontract vars c =
 	match vars with
 	| [] -> empty
 	| _ ->
-		let (lhs_vars,new_lhs) = subformula vars c.lhs in
-		let (rhs_vars,new_rhs) = subformula vars c.rhs in
+		let (_,lhs_vars,new_lhs) = subformula vars c.lhs in
+		let (_,rhs_vars,new_rhs) = subformula vars c.rhs in
+		(* FIXME removing spatial part ignored *)
 		let tl_c = subcontract (CL.Util.list_join_unique lhs_vars rhs_vars)
 			{lhs = (Formula.diff c.lhs new_lhs);
 			 rhs = (Formula.diff c.rhs new_rhs);

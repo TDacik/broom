@@ -6,6 +6,9 @@ type t = {
     lvars: variable list;
 }
 
+(** Raise in case of ... *)
+exception RemovedSpatialPartFromMiss
+
 let empty = {miss = Formula.empty; act = Formula.empty; lvars = []}
 
 let to_string state =
@@ -18,30 +21,32 @@ let print state =
 
 (* substate contains in miss and act only clauses with variables from fixed_vars
    and related variables
-   fixed_vars - list of Exp, but expect CVar and Var only *)
+   fixed_vars - list of Exp, but expect CVar and Var only
+
+   miss_vars = fixed_vars + related
+   act_vars = fixed_vars + related from miss + related from act *)
+(* TODO errors/warnings handling *)
 let substate fixed_vars state =
 	let get_lvar var =
 		match var with
 		| Formula.Exp.Var v -> if (List.mem v state.lvars) then Some v else None
 		| _ -> None
 	in
-	let rec substate_rec vars s =
-		match vars with
-		| [] -> empty
-		| _ ->
-			let (miss_vars,new_miss) = Formula.subformula vars s.miss in
-			let (act_vars,new_act) = Formula.subformula vars s.act in
-			let new_vars = CL.Util.list_join_unique miss_vars act_vars in
-			let all_vars = List.filter_map get_lvar (new_vars @ vars) in
-			let tl_s = substate_rec new_vars
-				{miss = (Formula.diff s.miss new_miss);
-				 act = (Formula.diff s.act new_act);
-				 lvars = all_vars} in
-			{miss = Formula.disjoint_union new_miss tl_s.miss;
-			 act = Formula.disjoint_union new_act tl_s.act;
-			 lvars = CL.Util.list_join_unique tl_s.lvars all_vars}
-	in
-	substate_rec fixed_vars state
+	(* print_string (CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) fixed_vars ^ "FIXED\n"); *)
+	let (miss_removed_sigma,miss_vars,new_miss) =
+		Formula.subformula fixed_vars state.miss in
+	if (miss_removed_sigma)
+	then raise RemovedSpatialPartFromMiss;
+	(* print_string (CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
+	let (act_removed_sigma,act_vars,new_act) =
+		Formula.subformula miss_vars state.act in
+	if (act_removed_sigma)
+	then print_string "!!! MEMORY LEAK\n";
+		(* print_string (CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) act_vars ^ "AFTER ACT\n"); *)
+	let all_vars = List.filter_map get_lvar (act_vars) in
+	{miss = new_miss;
+	 act = new_act;
+	 lvars = all_vars}
 
 let rec simplify_ll gvars evars state = 
   let equiv=Formula.get_varmap state.act.pi in

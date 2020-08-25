@@ -27,6 +27,8 @@ val print : t -> unit
    if removes cvars, doesn't reduce count of contract variables
    vars - list of Exp, but expect CVar and Var only *)
 (* FIXME vars should contain Xs from moves (_->X) *)
+(* FIXME removing spatial part ignored *)
+(* Don't use this function, use substate if possible ! *)
 val subcontract : Exp.t list -> t -> t
 
 (** [contract_for_called_fnc dst args vars c] renames dst and args in given
