@@ -304,7 +304,7 @@ let rec subsigma vars sigma =
     let (size_vars,_) = find_expr_contains_vars vars size in
     let (b_vars,_) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
-    if (a_found) (* must be reach from pointer *)
+    if (a_found) (* must be reach from source pointer *)
     then
       let new_vars = CL.Util.list_diff (a_vars @ size_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Hpointsto (a,size,b)::subtl)
@@ -312,9 +312,9 @@ let rec subsigma vars sigma =
       (tl_vars,subtl)
   | Slseg (a,b,l)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
-    let (b_vars,b_found) = find_expr_contains_vars vars b in
+    let (b_vars,_) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
-    if (a_found || b_found) (* TODO must be reach from pointer *)
+    if (a_found) (* must be reach from source pointer *)
     then
       let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l)::subtl)
