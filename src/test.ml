@@ -7,7 +7,7 @@
 
 open Format
 
-open Z3
+(* open Z3 *)
 (* The following would have to be here if we removed (wrapped false)
    from lib/dune. If I do that, however, the runtest target breaks
    because the default test extraction does not preface to module
@@ -15,11 +15,11 @@ open Z3
    modules. For now I'll keep it this way. *)
 (*open Llbiabd*)
 open Biabd
-open Z3wrapper
+(* open Z3wrapper *)
 open Formula
-open Abstraction
+(* open Abstraction *)
 
-let cfg = [("model", "true"); ("proof", "false")]
+(* let cfg = [("model", "true"); ("proof", "false")]
 let ctx = (mk_context cfg)
 let solv = (Solver.mk_solver ctx None)
 let z3_names=get_sl_functions_z3 ctx
@@ -33,10 +33,15 @@ let form1 = {
           BinOp ( Peq, Var 1, Var 2332 );
           BinOp ( Peq, Var 2, Exp.null) ]
     (*evars = [ 2 ]*)
+} *)
+
+let form_false = {
+    sigma = [];
+    pi = [  Const (Bool false); Exp.BinOp ( Plesseq, Exp.one, Exp.zero) ]
 }
 
 let () =
-let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
+(* let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
  let form5=
   let lambda= {param=[1;2] ;form={
       sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (Var 2, ptr_size, Var 3) ]; pi=[] }}
@@ -49,7 +54,7 @@ let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
             BinOp ( Peq, Var 1, Var 2332 );
             BinOp ( Peq, Var 2, Exp.null) ]
   }
-in 
+in
 
 print_with_lambda form5;
 let z3_form5=formula_to_solver ctx form5 in
@@ -58,7 +63,11 @@ print_with_lambda form_abstr12;
 let aa=try_abstraction_to_lseg ctx solv z3_names form_abstr12 0 1 [1]
 in match aa with
 | AbstractionFail -> print_string "FF\n"
-| AbstractionApply x -> print_string "AA";print_with_lambda x
+| AbstractionApply x -> print_string "AA";print_with_lambda x *)
+print_string ("form_false: " ^ (to_string form_false) ^ "\n");
+let form_new = remove_useless_conjuncts form_false [] in
+print_string ("form_new: " ^ (to_string form_new) ^ "\n")
+
 
 
 
