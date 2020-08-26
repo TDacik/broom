@@ -44,7 +44,12 @@ dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
   ```
 
 * Z3 Installation failed on MacOS with `clang: error: unsupported option '-fopenmp'`:
-  a newer compiler must be used (e.g. `brew install llvm` and set `$CC` and `$CXX` to a newer clang).
+  a compiler with OpenMPI support must be used (e.g. from `brew` and set `$CC` and `$CXX` to a newer clang).
+  ```
+  brew install llvm
+  export CC=/usr/local/opt/llvm/bin/clang
+  export CXX=/usr/local/opt/llvm/bin/clang++
+  ```
 
 * If scripts doesn't work due to Z3, set the search path for shared libraries
   ```
