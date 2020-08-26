@@ -456,10 +456,9 @@ let rec remove_redundant_eq pi =
   | [] -> []
   | first::rest ->
     match first with
-    | Exp.BinOp (Peq,a,b) -> if a=b
-      then remove_redundant_eq rest
-      else Exp.BinOp (Peq,a,b) :: (remove_redundant_eq rest)
-    | x -> x:: (remove_redundant_eq rest)
+    | Exp.BinOp (Peq,a,b) when a=b ->
+      remove_redundant_eq rest
+    | _ -> first :: (remove_redundant_eq rest)
 
 (* remove usless conjuncts from pure part
    - a conjunct is useless iff
@@ -468,16 +467,19 @@ let rec remove_redundant_eq pi =
       --- r1 != e1 (r1 referenced, e1 existential) => this conjunct is not needed
    2) there is no transitive reference from spatial part or program variables *)
 
-let rec get_referenced_conjuncts_ll sigma ref_vars =
+let rec get_referenced_conjuncts_ll pi ref_vars =
   let mem x =
     let eq y= (x=y) in
     List.exists eq ref_vars
   in
   let nomem x = not (mem x) in
-  match sigma with
+  match pi with
   | [] -> [],[]
   | first::rest ->
     match first with
+    (* | Exp.Const (Bool false) ->
+      let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
+        first::ref_conjuncts,transitive_refs *)
     | Exp.BinOp ( Pneq, a, b) -> ( (* handle the case 1b *)
       let a_vars=find_vars_expr a in
       let b_vars=find_vars_expr b in
@@ -503,12 +505,14 @@ let rec get_referenced_conjuncts_ll sigma ref_vars =
         let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
           first::ref_conjuncts, (CL.Util.list_join_unique transitive_refs nrefs)
 
-let rec get_referenced_conjuncts sigma ref_vars =
-  let res,new_refs=get_referenced_conjuncts_ll sigma ref_vars in
-  match new_refs with
-  | [] -> res
-  | _ -> get_referenced_conjuncts sigma (ref_vars @ new_refs)
-
+let get_referenced_conjuncts pi referenced_vars =
+  let rec get_referenced_conjuncts_rec ref_vars =
+    let res,new_refs=get_referenced_conjuncts_ll pi ref_vars in
+    match new_refs with
+    | [] -> res
+    | _ -> get_referenced_conjuncts_rec (ref_vars @ new_refs)
+  in
+  get_referenced_conjuncts_rec referenced_vars
 
 let remove_useless_conjuncts form evars =
   let mem x =
