@@ -25,8 +25,12 @@ let apply_contract ctx solv z3_names state c pvars =
     let pruned_miss_pi=List.filter (prune_expr ctx solv z3_names (formula_to_solver ctx state.act)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
     let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
-
-    CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
+    (* check that both parts of the resulting state are satisfiable *)
+    let sat_query_actual=formula_to_solver ctx actual in
+    let sat_query_missing=formula_to_solver ctx missing in
+    if ((Solver.check solv sat_query_actual)=SATISFIABLE) && ((Solver.check solv sat_query_missing)=SATISFIABLE)
+    then  CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
+    else (print_string "SAT Fail"; CAppFail)
 
 (* to avoid conflicts, we rename the contract variables, which appear in state 
    pvars - a list of program variables (global vars + vars used in function) *)
