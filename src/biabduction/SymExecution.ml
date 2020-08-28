@@ -25,12 +25,11 @@ let apply_contract ctx solv z3_names state c pvars =
     let pruned_miss_pi=List.filter (prune_expr ctx solv z3_names (formula_to_solver ctx state.act)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
     let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
-    (* check that both parts of the resulting state are satisfiable *)
-    let sat_query_actual=formula_to_solver ctx actual in
-    let sat_query_missing=formula_to_solver ctx missing in
-    if ((Solver.check solv sat_query_actual)=SATISFIABLE) && ((Solver.check solv sat_query_missing)=SATISFIABLE)
-    then  CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
-    else (print_string "SAT Fail"; CAppFail)
+    (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
+       The post_contract_application function takes care about it. *)
+    CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
+
+
 
 (* to avoid conflicts, we rename the contract variables, which appear in state 
    pvars - a list of program variables (global vars + vars used in function) *)
@@ -93,18 +92,17 @@ let rec post_contract_application_vars state pvarmap seed pvars=
   match pvarmap with
   | [] -> state
   | (a,b)::rest ->
-    if mem (find_vars state.miss) b
-    then raise State_lhs_contains_forbidden_vars
-    else
       let new_var=get_fresh_var seed conflicts in
       let tmp_act=substitute_vars new_var a state.act in
       let new_act=substitute_vars a b tmp_act in
+      let tmp_miss=substitute_vars new_var a state.miss in
+      let new_miss=substitute_vars a b tmp_miss in
       let new_lvars=
         let eq y= not (b=y) in
         List.filter eq state.lvars
       in
       let new_state={ act=new_act;
-          miss= state.miss;
+          miss= new_miss;
           lvars=new_lvars @ [new_var];
         } in
       (post_contract_application_vars new_state rest (new_var+1) pvars)
@@ -176,7 +174,13 @@ let post_contract_application state ctx solv z3_names pvarmap pvars =
       not (List.exists eq l)
   in
   let new_lvars=List.filter (notmem pvars) vars in
-  {miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=new_lvars}
+  let final_contract={miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=new_lvars} in
+   (* check that both parts of the resulting state are satisfiable *)
+  let sat_query_actual=formula_to_solver ctx final_contract.act in
+  let sat_query_missing=formula_to_solver ctx final_contract.miss in
+  if ((Solver.check solv sat_query_actual)=SATISFIABLE) && ((Solver.check solv sat_query_missing)=SATISFIABLE)
+  then  CAppOk final_contract
+  else (print_string "SAT Fail"; CAppFail)
 
 (* FIND CONTRACT FOR CALLING FUNCTION *)
 
@@ -209,8 +213,7 @@ let contract_application ctx solv z3_names state c pvars =
   let c_rename = rename_contract_vars_ll state c 1 pvars in
   match (apply_contract ctx solv z3_names state c_rename pvars) with
   | CAppFail -> CAppFail
-  | CAppOk s_applied ->
-    CAppOk (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap pvars)
+  | CAppOk s_applied -> (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap pvars)
 
 (* PREPARE STATE FOR CONTRACT
   rename all variables expect parameters and global (fixed_vars) -
