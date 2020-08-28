@@ -11,13 +11,13 @@ fancy introduction...
      - dune
      - ppx_compare, ppx_deriving
      - qtest
-     - z3                = 4.8.1
+     - z3              = 4.8.8-1
 
 For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 
 ### Install dependencies
 ```
-brew install opam                                         # for MacOS
+brew install opam                                        # for MacOS
 ```
 ```
 $COMPILER="ocaml-variants.4.09.1+flambda"
@@ -42,20 +42,20 @@ dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
   ```
   git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
   ```
+* `ld: warning: directory not found for option '-L/opt/local/lib'` appears
+  during compilation on MacOS. The cause is `zarith` (dependence from Z3).
+  To suppress the message, create the `/opt/local/lib` folder.
 
 * Z3 Installation failed on MacOS with `clang: error: unsupported option '-fopenmp'`:
-  a compiler with OpenMPI support must be used (e.g. from `brew` and set `$CC` and `$CXX` to a newer clang).
-  ```
-  brew install llvm
-  export CC=/usr/local/opt/llvm/bin/clang
-  export CXX=/usr/local/opt/llvm/bin/clang++
-  ```
+  Z3 <=4.8.1 requires a compiler with OpenMP support. The minimum required
+  version of Z3 is 4.8.8-1.
 
 * If scripts doesn't work due to Z3, set the search path for shared libraries
   ```
   export LD_LIBRARY_PATH=`opam config var z3:lib`
   export DYLD_LIBRARY_PATH=`opam config var z3:lib`      # for MacOS
   ```
+  Version Z3 4.8.8-1 uses static libraries. This stap indicates that you use an old version.
 
 To run the tests:
 ```

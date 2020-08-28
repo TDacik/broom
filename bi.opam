@@ -18,8 +18,8 @@ depends: [
   "core"
   "cppo"
   "dune"
-  "ocaml"
+  "ocaml" {>="4.08.0"}
   "qtest"
-  "z3" {= "4.8.1"}
+  "z3" {= "4.8.8-1"}
   "utop"
 ]
