@@ -29,7 +29,7 @@ let var_to_string uid =
 	let uid_str = Printf.sprintf "%i" uid in
 	let scope = (match v.code with
 		| VAR_GL -> "S"
-		| VAR_LC -> "F"
+		| VAR_LC | VAR_FNC_ARG -> "F"
 		| _ -> "") in
 	match v.name with
 		| Some name ->  "%m" ^ scope ^ uid_str ^ ":" ^ name

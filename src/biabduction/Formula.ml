@@ -68,7 +68,8 @@ let lvariable_to_string v = variable_to_string ~lvars:[v] v
 
 let cvariable_to_string v =
   match v with
-  | 0 -> "%ret" (* special variable *)
+  | 0 -> "%ret" (* special var for return value *)
+  | _ when v < 0 -> "%arg" ^ string_of_int (-v) (* special vars for arguments *)
   | _ -> "%c" ^ string_of_int v
 
 let const_to_string c =
@@ -76,7 +77,7 @@ let const_to_string c =
   | Ptr a -> if a==0 then "NULL" else Printf.sprintf "0x%x" a
   | Int a -> Int64.to_string a
   | Bool a -> string_of_bool a
-  | String a -> a
+  | String a -> "\"" ^ String.escaped a ^ "\""
   | Float a ->  string_of_float a
 
 let unop_to_string o =
