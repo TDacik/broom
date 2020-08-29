@@ -55,6 +55,7 @@ module Exp = struct (*$< Exp *)
 let one = Const (Int 1L)
 let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
+let ret = CVar 0
 
 let variable_to_string ?lvars:(lvars=[]) v =
   let var = if (lvars <> [] && List.mem v lvars)
@@ -271,7 +272,8 @@ let find_vars form =
   CL.Util.list_join_unique (find_vars_sigma form.sigma) (find_vars_pi form.pi)
 
 (*** FIND SUBFORMULA ***)
-(* returns (all_vars,true) if expr contains at least one variable from vars,
+(* returns (all_vars,true)
+   true if expr contains at least one variable from vars,
    all_vars are all variables in expr *)
 let rec find_expr_contains_vars vars expr =
   match expr with
@@ -280,10 +282,11 @@ let rec find_expr_contains_vars vars expr =
   | BinOp (_,a,b) ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
     let (b_vars,b_found) = find_expr_contains_vars vars b in
+	let all_vars = List.append a_vars b_vars in
     if (a_found || b_found) then
-      (List.append a_vars b_vars, true)
+      (all_vars, true)
     else
-      ([],false)
+      (all_vars,false)
     | Const _ | Void | Undef -> ([],false)
 
 let rec subpi vars pi =
@@ -344,7 +347,7 @@ let rec subformula vars f =
     let (new_vars,new_f) = subformula_only vars f in
     let (flag,tl_vars,tl_f) = subformula new_vars (diff f new_f) in
     let all_vars = (vars @ tl_vars) in
-	  (* print_string (CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
+	  (* print_string ("subformula:"^CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
 	  print_string (CL.Util.list_to_string (Exp.to_string) all_vars ^ "ALL\n"); *)
     (flag,all_vars, disjoint_union new_f tl_f)
 

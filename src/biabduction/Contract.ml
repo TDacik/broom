@@ -141,11 +141,11 @@ let operand_to_exformula op ef =
 
 (* return tuple (args,ef) where args is list of arguments and ef is formula
    describing all arguments *)
-let rec agrs_to_exformula args ef =
+let rec args_to_exformula args ef =
   match args with
   | [] -> ([], ef)
   | arg::tl -> let ef_arg = operand_to_exformula arg ef in
-    let (roots,all_ef) = agrs_to_exformula tl ef_arg in
+    let (roots,all_ef) = args_to_exformula tl ef_arg in
     ((ef_arg.root)::roots, all_ef)
 
 (* SUBCONTRACT *)
@@ -191,7 +191,7 @@ let contract_for_ret ret =
 	| Exp.Undef -> []
 	| _ -> (
 		let lhs = ef_ret.f in
-		let assign = Exp.BinOp ( Peq, CVar 0, ef_ret.root) in
+		let assign = Exp.BinOp ( Peq, Exp.ret, ef_ret.root) in
 		let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
 		[{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}] )
 
@@ -344,28 +344,29 @@ let contract_for_builtin dst called args =
 
 (****** CONTRACTS CALLED FUNCTIONS ******)
 
-(* roots - aguments of called function
+(* roots - aguments of called function in reverse order
    vars - parameters of called function *)
-let rec substitute_arguments roots vars f =
-	match roots,vars with
-	| [],[] -> f
-	| root::rtl,var::vtl ->
-		let subf = substitute_vars_cvars root (Var var) f in
-		substitute_arguments rtl vtl subf
+let rec substitute_arguments roots num f =
+	match roots,num with
+	| [],0 -> f
+	| root::rtl,num when num>0 ->
+		let subf = substitute_vars_cvars root (CVar (-num)) f in
+		substitute_arguments rtl (num-1) subf
 	| _,_ -> assert false (* TODO: variable number of arguments unsupported *)
 
 (* rename dst and args in given contract c;
    dst and args (TODO) could be rewritten in rhs *)
 (* TODO: first 3 lines should be as argumets and called from outside *)
-let contract_for_called_fnc dst args vars c =
+let contract_for_called_fnc dst args num_args c =
 	let ef_init = {f = Formula.empty; cnt_cvars = c.cvars; root = Undef} in
 	let ef_dst = operand_to_exformula dst ef_init in
-	let (roots,ef_args) = agrs_to_exformula args ef_dst in
-	let new_lhs = substitute_arguments roots vars c.lhs in
+	let (roots,ef_args) = args_to_exformula args ef_dst in
+	let roots_rev = List.rev roots in
+	let new_lhs = substitute_arguments roots_rev num_args c.lhs in
 
 	let (new_dst, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=ef_args.cnt_cvars; root=ef_dst.root} in
-	let dst_rhs = substitute_vars_cvars new_dst.root (CVar 0) c.rhs in
-	let new_rhs = substitute_arguments roots vars dst_rhs in
+	let dst_rhs = substitute_vars_cvars new_dst.root (Exp.ret) c.rhs in
+	let new_rhs = substitute_arguments roots_rev num_args dst_rhs in
 	{
 		lhs = {sigma = new_lhs.sigma @ ef_args.f.sigma;
 			pi = new_lhs.pi @ ef_args.f.pi};

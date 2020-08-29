@@ -32,17 +32,17 @@ let substate fixed_vars state =
 		| Formula.Exp.Var v -> if (List.mem v state.lvars) then Some v else None
 		| _ -> None
 	in
-	(* print_string (CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) fixed_vars ^ "FIXED\n"); *)
+	(* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) fixed_vars ^ "FIXED\n"); *)
 	let (miss_removed_sigma,miss_vars,new_miss) =
 		Formula.subformula fixed_vars state.miss in
 	if (miss_removed_sigma)
 	then raise RemovedSpatialPartFromMiss;
-	(* print_string (CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
+	(* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
 	let (act_removed_sigma,act_vars,new_act) =
 		Formula.subformula miss_vars state.act in
 	if (act_removed_sigma)
 	then print_string "!!! MEMORY LEAK\n";
-		(* print_string (CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) act_vars ^ "AFTER ACT\n"); *)
+		(* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) act_vars ^ "AFTER ACT\n"); *)
 	let all_vars = List.filter_map get_lvar (act_vars) in
 	{miss = new_miss;
 	 act = new_act;

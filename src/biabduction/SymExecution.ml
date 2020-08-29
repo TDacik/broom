@@ -188,12 +188,12 @@ let find_fnc_contract tbl dst args fuid =
   let patterns = SpecTable.find_opt tbl fuid in
   match patterns with
   | None -> assert false (* wrong order; recursive function not supported *)
-  | Some p -> let vars = CL.Util.get_fnc_args fuid in
+  | Some p -> let num_args = List.length (CL.Util.get_fnc_args fuid) in
     let rec rename_fnc_contract c =
       match c with
       | [] -> []
       | pattern::tl ->
-        let c_rename = Contract.contract_for_called_fnc dst args vars pattern in
+        let c_rename = Contract.contract_for_called_fnc dst args num_args pattern in
         let c_rest = rename_fnc_contract tl in
         c_rename::c_rest
     in
@@ -230,16 +230,25 @@ let rec state2contract s vars cvar =
         lvars = []} in
       state2contract new_s tl new_cvar
 
+(* TODO substitues all global vars, not just those occurring in function *)
+let rec add_gvar_moves gvars c =
+  match gvars with
+  | [] -> c
+  | gvar::tl -> let new_cvar = c.Contract.cvars + 1 in
+    let new_rhs = substitute_vars_cvars (CVar new_cvar) (Var gvar) c.rhs in
+    let new_c = {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap} in
+	(add_gvar_moves tl new_c)
+
 (* TODO errors handling *)
-let get_fnc_contract fixed_vars tmp_vars states =
+let get_fnc_contract anchors gvars tmp_vars states =
   let constr v =
-    Exp.Var v
+    if v<0 then Exp.CVar v else Exp.Var v
   in
-  let fixed = (Exp.CVar 0)::(List.map constr fixed_vars) in
+  let fixed = (Exp.ret)::(List.map constr (anchors @ gvars)) in
   let rec fnc_contract ss =
     match ss with
     | [] -> []
-    | s::tl -> State.print s;
+    | s::tl -> (* State.print s; *)
       (* let c = (state2contract s (tmp_vars @ s.lvars) 0) in
       (Contract.subcontract fixed c) :: (fnc_contract tl) *)
       try
@@ -248,7 +257,8 @@ let get_fnc_contract fixed_vars tmp_vars states =
         let remove_vars = tmp_vars @ subs.lvars in
           (* FIXME should be used subset of tmp_vars *)
           (* (find_vars subs.miss) @ (find_vars subs.act) in *)
-        (state2contract subs remove_vars 0) :: (fnc_contract tl)
+        let c = (state2contract subs remove_vars 0) in
+        (add_gvar_moves gvars c) :: (fnc_contract tl)
       with State.RemovedSpatialPartFromMiss -> (
         print_string "!!! error: impossible precondition\n";
         fnc_contract tl
@@ -359,20 +369,83 @@ and exec_insns tbl states insns fuid =
   | insn::tl -> let s = exec_insn tbl states insn fuid in
     exec_insns tbl s tl fuid
 
+(* create anchors (contract vars with negative uid) for arguments of function *)
+let init_state args =
+  let get_anchor idx elm =
+    Exp.BinOp ( Peq, CVar (-(idx+1)), Var elm)
+  in
+  let pi = List.mapi get_anchor args in
+  let f = {sigma = []; pi = pi} in
+  {miss = f; act = f; lvars = []}
 
-(* execute initials of all global variables, if they are initialized
+(* check if main is called with int argc and char **argv *)
+(* TODO error handling *)
+let check_main_args_type args =
+  let arg1 = CL.Util.get_var (List.nth args 0) in
+  let arg2 = CL.Util.get_var (List.nth args 1) in
+  let arg1_typ = CL.Util.get_type arg1.typ in
+  let arg1_ok = (match arg1_typ.code with
+  | TypeInt -> true
+  | _ -> Printf.printf "!!! warning: first argument of 'main' should be 'int'\n"; false) in
+  let arg2_typ = CL.Util.get_type arg2.typ in
+  let arg2_ok = (match arg2_typ.code with
+    | TypePtr typ2 -> (let arg2_typ2 = CL.Util.get_type typ2 in
+      match arg2_typ2.code with
+      | TypePtr typ3 -> (let arg2_typ3 = CL.Util.get_type typ3 in
+        match arg2_typ3.code with
+        | TypeChar | TypeInt when arg2_typ3.size=1 -> true
+        | _ -> Printf.printf "!!! warning: second argument of 'main' should be 'char **'\n"; false)
+      | _ -> Printf.printf "!!! warning: second argument of 'main' should be 'char **'\n"; false)
+    | _ -> Printf.printf "!!! warning: second argument of 'main' should be 'char **'\n"; false) in
+  (arg1_ok || arg2_ok)
+
+(* add anchors into LHS, if main(int argc, char **argv)
+   MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
+        (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
+   ACTUAL: arg1=argc & arg2=argv
+
+   execute initials of all global variables, if they are initialized
    fuid belons to function 'main' *)
 (* FIXME no need tbl argument *)
-let exec_init_global_vars tbl fuid =
-  Printf.printf ">>> initializing global variables\n";
-  let rec init_global_var states vars =
+let init_state_main tbl args fuid =
+  let set_anchors () =
+    let anchor_state = init_state args in
+    if not (check_main_args_type args)
+    then
+      anchor_state
+    else
+      let new_var = (CL.Util.list_max_positive (CL.Util.get_fnc_vars fuid))+1 in
+      let len = Exp.BinOp ( Peq, (UnOp (Len, CVar (-2))), Var new_var) in
+      let base = Exp.BinOp ( Peq, (UnOp (Base, CVar (-2))), CVar (-2)) in
+      let size = Exp.BinOp ( Plesseq, Exp.zero, Var new_var) in
+      let arg2 = CL.Util.get_var (List.nth args 1) in
+      let ptr_size = CL.Util.get_type_size (arg2.typ) in
+      let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
+      let block = Exp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, CVar (-1), exp_ptr_size))) in
+      let sig_add = Hpointsto (CVar (-2), Var new_var, Undef) in
+      let new_miss =
+        {pi = len :: base :: size :: block :: anchor_state.miss.pi;
+        sigma = sig_add :: anchor_state.miss.sigma} in
+      let init = {miss = new_miss; act = anchor_state.act; lvars = [new_var]} in
+      State.print init; init
+  in
+
+  let rec exec_init_global_var states vars =
     match vars with
     | [] -> states
     | uid::tl -> let gv = CL.Util.get_var uid in
-      init_global_var (exec_insns tbl states gv.initials fuid) tl
+      exec_init_global_var (exec_insns tbl states gv.initials fuid) tl
   in
-  init_global_var (State.empty::[]) CL.Util.stor.global_vars
-
+  let num_args = List.length args in
+  let init_state = (match num_args with
+  | 0 -> State.empty
+  | 2 -> set_anchors ()
+  | _ -> Printf.printf "!!! warning: 'main' takes only zero or two arguments";
+    (* TODO error handling *)
+    State.empty
+  ) in
+  Printf.printf ">>> initializing global variables\n";
+  (exec_init_global_var (init_state::[]) CL.Util.stor.global_vars)
 
 let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
@@ -381,21 +454,27 @@ let exec_fnc fnc_tbl f =
     Printf.printf ":\n";
     let fuid = CL.Util.get_fnc_uid f in
     let fname = CL.Printer.get_fnc_name f in
-    let init_states = (
+    let init_states =
       if fname = "main"
-      then exec_init_global_vars fnc_tbl fuid
-      else State.empty::[]) in
+      then init_state_main fnc_tbl f.args fuid
+      else (init_state f.args)::[] in
     let states = exec_block fnc_tbl init_states (List.hd f.cfg) fuid in
     Printf.printf ">>> final contract\n";
+    let anchors = List.mapi (fun idx _ -> (-(idx+1))) f.args in
+	let gvars = CL.Util.stor.global_vars in
+    (* let fixed_vars = anchors @ gvars_fnc in *)
+    let temporary_vars = CL.Util.list_diff f.vars gvars in
     print_string "PVARS:";
     CL.Util.print_list Exp.variable_to_string f.vars; print_string "\n";
     print_string "ARGS:";
     CL.Util.print_list Exp.variable_to_string f.args; print_string "\n";
     print_string "GVARS:";
-    CL.Util.print_list Exp.variable_to_string CL.Util.stor.global_vars; print_string "\n";
-    let fixed_vars = f.args @ CL.Util.stor.global_vars in
-    let temporary_vars = CL.Util.list_diff f.vars fixed_vars in
-    let fnc_c = get_fnc_contract fixed_vars temporary_vars states in
+    CL.Util.print_list Exp.variable_to_string gvars; print_string "\n";
+    (* print_string "FIXED:";
+    CL.Util.print_list Exp.variable_to_string fixed_vars; print_string "\n"; *)
+    (* print_string "TEMPORARY:";
+    CL.Util.print_list Exp.variable_to_string temporary_vars; print_string "\n"; *)
+    let fnc_c = get_fnc_contract anchors gvars temporary_vars states in
     SpecTable.add fnc_tbl fuid fnc_c;
     CL.Util.print_list Contract.to_string fnc_c
   )

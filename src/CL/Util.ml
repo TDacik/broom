@@ -39,6 +39,12 @@ let rec list_join_unique l1 l2 =
 		then list_join_unique rest l2
 		else list_join_unique rest (first::l2)
 
+(* find max positive number in list *)
+let rec list_max_positive l =
+	match l with
+	| [] -> 0
+	| n::tl -> max n (list_max_positive tl)
+
 let rec list_to_string to_string args =
 	match args with
 	| [] -> ""

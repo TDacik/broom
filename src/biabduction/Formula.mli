@@ -55,6 +55,7 @@ module Exp : sig
   val one : t
   val zero : t
   val null : t
+  val ret : t
   val variable_to_string : ?lvars:variable list -> variable -> string
   val cvariable_to_string : int -> string
   val const_to_string : const_val -> string
