@@ -23,7 +23,8 @@ let print_spec uid contracts =
 	print_string ">>> spec of function ";
 	CL.Printer.print_fnc_declaration (CL.Util.get_fnc uid);
 	print_endline ":";
-	CL.Util.print_list Contract.to_string contracts
+	CL.Util.print_list Contract.to_string contracts;
+	print_newline ()
 
 let print tbl =
 	print_endline ("FUNCTIONS: " ^ (Int.to_string (Hashtbl.length tbl)));

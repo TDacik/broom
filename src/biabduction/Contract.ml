@@ -33,9 +33,9 @@ let to_string c =
   "Count of Contract local VARS: " ^ string_of_int c.cvars ^ "\n"
   ^ "LHS: " ^ Formula.to_string c.lhs ^ "\n"
   ^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
-  ^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap ^ "\n"
+  ^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap
 
-let print c = print_string (to_string c)
+let print c = print_endline (to_string c)
 
 (* var is Exp.t but only Var/CVar, last C represents root
    returns tuple (debub_string, ef) where debug_string contains the order of

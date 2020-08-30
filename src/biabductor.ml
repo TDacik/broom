@@ -8,6 +8,5 @@ let () =
 		| (_, fnc)::tl -> Biabd.SymExecution.exec_fnc tbl fnc; exec tbl tl
 	in
 	exec fnc_tbl CL.Util.stor.fncs;
-	(* %! to flush the buffer *)
-	Printf.printf "===============================================\n%!";
+	print_endline "===============================================";
 	Biabd.SpecTable.print fnc_tbl

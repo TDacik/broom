@@ -218,10 +218,10 @@ and to_string_with_lambda ?lvars:(lvars=[]) f lambda_level =
 let to_string ?lvars:(lvars=[]) f = to_string_with_lambda ~lvars:lvars f 0
 
 let print_with_lambda ?lvars:(lvars=[]) f =
-  print_string (to_string_with_lambda ~lvars:lvars f 1)
+  print_endline (to_string_with_lambda ~lvars:lvars f 1)
 
 let print ?lvars:(lvars=[]) f =
-  print_string (to_string_with_lambda ~lvars:lvars f 0)
+  print_endline (to_string_with_lambda ~lvars:lvars f 0)
 
 let diff {pi = pi1; sigma = sigma1} {pi = pi2; sigma = sigma2} =
   {pi = CL.Util.list_diff pi1 pi2;

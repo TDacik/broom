@@ -14,10 +14,10 @@ let empty = {miss = Formula.empty; act = Formula.empty; lvars = []}
 let to_string state =
   "EXISTS: " ^ Formula.lvariables_to_string state.lvars
   ^ "\nMISS: " ^ Formula.to_string ~lvars:state.lvars state.miss
-  ^ "\nACTUAL: " ^ Formula.to_string ~lvars:state.lvars state.act ^ "\n"
+  ^ "\nACTUAL: " ^ Formula.to_string ~lvars:state.lvars state.act
   
 let print state =
-  print_string (to_string state)
+  print_endline (to_string state)
 
 (* [substate fixed_vars state] contains in miss and act only clauses with
    variables from [fixed_vars] and related variables

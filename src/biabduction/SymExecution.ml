@@ -180,7 +180,7 @@ let post_contract_application state ctx solv z3_names pvarmap pvars =
   let sat_query_missing=formula_to_solver ctx final_contract.miss in
   if ((Solver.check solv sat_query_actual)=SATISFIABLE) && ((Solver.check solv sat_query_missing)=SATISFIABLE)
   then  CAppOk final_contract
-  else (print_string "SAT Fail"; CAppFail)
+  else (prerr_endline "SAT Fail"; CAppFail)
 
 (* FIND CONTRACT FOR CALLING FUNCTION *)
 
@@ -272,9 +272,11 @@ let get_fnc_contract anchors gvars tmp_vars states =
         State.print rems;
         let removed_vars = tmp_vars @ rems.lvars in
         let c = (state2contract rems removed_vars 0) in
-        (add_gvar_moves gvars c) :: (fnc_contract tl)
+        let new_c = add_gvar_moves gvars c in
+        Contract.print new_c;
+        new_c :: (fnc_contract tl)
       with State.RemovedSpatialPartFromMiss -> (
-        print_string "!!! error: impossible precondition\n";
+        prerr_endline "!!! error: impossible precondition";
         fnc_contract tl
       )
   in
@@ -324,14 +326,14 @@ let try_abstraction_on_states ctx solv z3_names fuid states =
       (* TODO: update lvars *)
       abstract_state :: (try_abstraction tl)
   in
-  Printf.printf ">>> trying list abstraction\n";
+  print_endline ">>> trying list abstraction";
   try_abstraction states
 
 let rec exec_block tbl states (uid, bb) fuid =
   if (states = [])
   then states
   else (
-    Printf.printf ">>> executing block L%i:\n" uid;
+    Printf.printf ">>> executing block L%i:\n%!" uid;
     exec_insns tbl states bb.CL.Fnc.insns fuid
   )
 
@@ -402,7 +404,7 @@ let check_main_args_type args =
   let arg1_typ = CL.Util.get_type arg1.typ in
   let arg1_ok = (match arg1_typ.code with
   | TypeInt -> true
-  | _ -> Printf.printf "!!! warning: first argument of 'main' should be 'int'\n"; false) in
+  | _ -> prerr_endline "!!! warning: first argument of 'main' should be 'int'"; false) in
   let arg2_typ = CL.Util.get_type arg2.typ in
   let arg2_ok = (match arg2_typ.code with
     | TypePtr typ2 -> (let arg2_typ2 = CL.Util.get_type typ2 in
@@ -410,9 +412,9 @@ let check_main_args_type args =
       | TypePtr typ3 -> (let arg2_typ3 = CL.Util.get_type typ3 in
         match arg2_typ3.code with
         | TypeChar | TypeInt when arg2_typ3.size=1 -> true
-        | _ -> Printf.printf "!!! warning: second argument of 'main' should be 'char **'\n"; false)
-      | _ -> Printf.printf "!!! warning: second argument of 'main' should be 'char **'\n"; false)
-    | _ -> Printf.printf "!!! warning: second argument of 'main' should be 'char **'\n"; false) in
+        | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
+      | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
+    | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false) in
   (arg1_ok || arg2_ok)
 
 (* add anchors into LHS, if main(int argc, char **argv)
@@ -456,18 +458,18 @@ let init_state_main tbl args fuid =
   let init_state = (match num_args with
   | 0 -> State.empty
   | 2 -> set_anchors ()
-  | _ -> Printf.printf "!!! warning: 'main' takes only zero or two arguments";
+  | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
     (* TODO error handling *)
     State.empty
   ) in
-  Printf.printf ">>> initializing global variables\n";
+  print_endline ">>> initializing global variables";
   (exec_init_global_var (init_state::[]) CL.Util.stor.global_vars)
 
 let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
     Printf.printf ">>> executing function ";
     CL.Printer.print_fnc_declaration f;
-    Printf.printf ":\n";
+    print_endline ":";
     let fuid = CL.Util.get_fnc_uid f in
     let fname = CL.Printer.get_fnc_name f in
     let init_states =
@@ -475,24 +477,23 @@ let exec_fnc fnc_tbl f =
       then init_state_main fnc_tbl f.args fuid
       else (init_state f.args)::[] in
     let states = exec_block fnc_tbl init_states (List.hd f.cfg) fuid in
-    Printf.printf ">>> final contract\n";
+    print_endline ">>> final contract";
     let anchors = List.mapi (fun idx _ -> (-(idx+1))) f.args in
-	let gvars = CL.Util.stor.global_vars in
+    let gvars = CL.Util.stor.global_vars in
     (* let fixed_vars = anchors @ gvars_fnc in *)
     let temporary_vars = CL.Util.list_diff f.vars gvars in
     print_string "PVARS:";
-    CL.Util.print_list Exp.variable_to_string f.vars; print_string "\n";
+    CL.Util.print_list Exp.variable_to_string f.vars; print_newline ();
     print_string "ANCHORS:";
-    CL.Util.print_list Exp.variable_to_string anchors; print_string "\n";
+    CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
     print_string "GVARS:";
-    CL.Util.print_list Exp.variable_to_string gvars; print_string "\n";
+    CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
     (* print_string "FIXED:";
     CL.Util.print_list Exp.variable_to_string fixed_vars; print_string "\n"; *)
     (* print_string "TEMPORARY:";
     CL.Util.print_list Exp.variable_to_string temporary_vars; print_string "\n"; *)
     let fnc_c = get_fnc_contract anchors gvars temporary_vars states in
     SpecTable.add fnc_tbl fuid fnc_c;
-    CL.Util.print_list Contract.to_string fnc_c
   )
 
 (********************************************)

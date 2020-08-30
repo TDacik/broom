@@ -724,8 +724,9 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
    *)
   match (test_sat ctx solv z3_names form1 form2) with
   | SatFail ->
-    print_string "SAT fail\n"; BFail
-  | Finish (missing,frame) -> print_string "Finish true, "; Bok ( missing,frame, [])
+    prerr_endline "SAT fail"; BFail
+  | Finish (missing,frame) ->
+    print_string "Finish true, "; flush stdout; Bok ( missing,frame, [])
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
@@ -748,7 +749,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
     | (func_name,rule_arg,rule_name) :: rest ->
       (match (func_name ctx solv z3_names form1 form2 rule_arg pvars) with
       | Apply (f1,f2,missing,n_lvars) ->
-        print_string (rule_name ^", ");
+        print_string (rule_name ^", "); flush stdout;
         Apply (f1,f2,missing,n_lvars)
       | Fail ->
         try_rules rest
@@ -762,7 +763,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
   | Fail ->
-    print_string "No applicable rule"; BFail
+    prerr_endline "No applicable rule"; BFail
 
 
 (****************************************************)
@@ -813,7 +814,7 @@ let rec entailment_ll ctx solv z3_names form1 form2 evars=
   | -1 ->
      (match (try_match ctx solv z3_names form1 form2 1 []) with
      | Apply (f1,f2,_,_) ->
-  print_string "Match, ";
+  print_string "Match, "; flush stdout;
   (entailment_ll ctx solv z3_names f1 f2 evars)
      | Fail -> false)
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")

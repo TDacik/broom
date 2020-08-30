@@ -10,7 +10,7 @@ open Fnc
 #define ILOC (Printf.sprintf "%s:%i:" __FILE__ __LINE__)
 
 
-let empty_output = Printf.printf ""
+let empty_output = ()
 
 
 
@@ -76,7 +76,7 @@ and back_accessors accs =
 			and id_str = Printf.sprintf "%i" off
 			and sign = (if off >= 0 then "+" else "") in
 			".<" ^ sign ^ id_str ^ ">" ^ rest
-		| Ref -> Util.error ILOC "invalid reference accessor"; "&"
+		| Ref -> Util.error ILOC "invalid reference accessor"; ""
 		| _ -> Util.error ILOC "unsupported accessor"; "")
 
 and middle_var uid accs =
@@ -88,12 +88,18 @@ and front_accessors uid accs =
 	match accs with
 	| [] -> middle_var uid []
 	| ac::tl -> ( match ac.acc_data with
-		| Ref -> let rest = front_accessors uid tl in "&" ^ rest
 		| Deref -> let rest = front_accessors uid tl in "*" ^ rest
 		| _ -> middle_var uid (ac::tl) )
 
 and op_var_to_string uid accs =
-	front_accessors uid accs
+	if (accs != []) then ( (* last accessor could be reference *)
+		let rev_accs = List.rev accs in
+		let ac = List.hd rev_accs in
+		match ac.acc_data with
+			| Ref -> "&" ^ (front_accessors uid (List.rev (List.tl rev_accs)))
+			| _ -> front_accessors uid accs)
+	else
+		middle_var uid accs
 
 and const_ptr_to_string ptr accs =
 	let str_acc = ( match accs with
@@ -124,11 +130,11 @@ and constant_to_string data accs =
 let get_fnc_name f = operand_to_string f.Fnc.def
 
 let print_fnc_declaration f =
-	if Util.is_fnc_static f then Printf.printf "static ";
+	if Util.is_fnc_static f then print_string "static ";
 	let str = get_fnc_name f in
 		Printf.printf "%s(" str;
 		Util.print_list var_to_string f.args;
-		Printf.printf ")"
+		print_string ")"
 
 (* Print unary CL instruction *)
 let print_unary_insn code dst src =
@@ -144,7 +150,7 @@ let print_unary_insn code dst src =
 		| _ -> "") in
 	let str_dst = operand_to_string dst in
 	let str_src = operand_to_string src in
-		Printf.printf "\t\t%s := %s%s%s\n" str_dst unop str_src e
+		Printf.printf "\t\t%s := %s%s%s\n%!" str_dst unop str_src e
 
 (* Print binary CL instruction *)
 let print_binary_insn code dst src1 src2 =
@@ -177,7 +183,7 @@ let print_binary_insn code dst src1 src2 =
 	let str_dst = operand_to_string dst in
 	let str_src1 = operand_to_string src1 in
 	let str_src2 = operand_to_string src2 in
-		Printf.printf "\t\t%s := (%s %s %s)\n" str_dst str_src1 binop str_src2
+		Printf.printf "\t\t%s := (%s %s %s)\n%!" str_dst str_src1 binop str_src2
 
 (* Print call instruction; ops = dst, called, ?args+ *)
 let print_call_insn ops =
@@ -190,23 +196,23 @@ let print_call_insn ops =
 			else Printf.printf "\t\t";
 		Printf.printf "%s(" str_called;
 		Util.print_list operand_to_string args;
-		Printf.printf ")\n"
+		Printf.printf ")\n%!"
 	| _ -> Util.error ILOC "wrong call instruction"
 
 (* Print CL instruction *)
 let print_insn insn =
 	match insn.code with
-	| InsnNOP -> Printf.printf "\t\tnop\n"
-	| InsnJMP uid -> Printf.printf "\t\tgoto L%i\n" uid
+	| InsnNOP -> Printf.printf "\t\tnop\n%!"
+	| InsnJMP uid -> Printf.printf "\t\tgoto L%i\n%!" uid
 	| InsnCOND (cond, tg_then, tg_else) -> let op = operand_to_string cond in
-		Printf.printf "\t\tif (%s)\n\t\t\tgoto L%i\n\t\telse\n\t\t\tgoto L%i\n"  op tg_then tg_else
+		Printf.printf "\t\tif (%s)\n\t\t\tgoto L%i\n\t\telse\n\t\t\tgoto L%i\n%!"  op tg_then tg_else
 	| InsnRET ret -> if not (Util.is_void ret)
 		then let op = operand_to_string ret in
-			Printf.printf "\t\treturn %s\n" op
-		else Printf.printf "\t\treturn\n"
+			Printf.printf "\t\treturn %s\n%!" op
+		else Printf.printf "\t\treturn\n%!"
 	| InsnCLOBBER var -> let op = operand_to_string var in
-		Printf.printf "\t\tclobber %s\n" op
-	| InsnABORT -> Printf.printf "\t\tabort\n"
+		Printf.printf "\t\tclobber %s\n%!" op
+	| InsnABORT -> Printf.printf "\t\tabort\n%!"
 	| InsnUNOP (code, dst, src) -> print_unary_insn code dst src
 	| InsnBINOP (code, dst, src1, src2) -> print_binary_insn code dst src1 src2
 	| InsnCALL ops -> print_call_insn ops
@@ -214,7 +220,7 @@ let print_insn insn =
 	| InsnLABEL _ -> empty_output (* unused *)
 
 let print_block apply_on (uid, bb) =
-	Printf.printf "\tL%i:\n" uid;
+	Printf.printf "\tL%i:\n%!" uid;
 	List.iter apply_on bb.insns
 
 let rec print_cfg apply_on_insn cfg =
@@ -228,5 +234,5 @@ let print_fnc ?apply_on_insn:(apply = print_insn) (_, f) =
 	let str = get_fnc_name f in
 		Printf.printf "%s(" str;
 		Util.print_list var_to_string f.args;
-		Printf.printf "):\n";
+		Printf.printf "):\n%!";
 	print_cfg apply f.cfg

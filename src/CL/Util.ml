@@ -5,7 +5,7 @@ module AGU = Atdgen_runtime.Util
 open Type
 open Operand
 
-let error loc msg = Printf.eprintf "%s error: %s\n" loc msg
+let error loc msg = Printf.eprintf "%s error: %s\n%!" loc msg
 
 (* TODO: only if develop mode *)
 let internal_error loc msg = failwith (loc ^ " " ^ msg)
@@ -56,9 +56,9 @@ let rec print_list to_string args =
 	match args with
 	| [] -> ()
 	| lst::[] -> let str_arg = to_string lst in
-		Printf.printf "%s" str_arg
+		print_string str_arg
 	| hd::tl ->  let str_arg = to_string hd in
-		Printf.printf "%s, " str_arg;
+		print_string str_arg; print_string ", ";
 		print_list to_string tl
 
 let is_loop_closing_block bb_uid insn =
