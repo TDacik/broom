@@ -5,7 +5,7 @@ module Exp = struct (*$< Exp *)
                                     a function
                             pvars - program variables, unique in the scope of
                                     a file *)
-      | CVar of int
+      | CVar of int (** spetial cases: cvar 0 - return, cvar uid<0 arguments *)
       | Const of const_val
       (* todo | Interval... *)
       | UnOp of unop * t
@@ -283,10 +283,7 @@ let rec find_expr_contains_vars vars expr =
     let (a_vars,a_found) = find_expr_contains_vars vars a in
     let (b_vars,b_found) = find_expr_contains_vars vars b in
 	let all_vars = List.append a_vars b_vars in
-    if (a_found || b_found) then
-      (all_vars, true)
-    else
-      (all_vars,false)
+    (all_vars, a_found || b_found)
     | Const _ | Void | Undef -> ([],false)
 
 let rec subpi vars pi =
@@ -328,6 +325,7 @@ let rec subsigma vars sigma =
 (* returns a subformula that contains clauses with variables from vars and
    related variables to them and list of all variables that may be in
    subformula and flag if something was removed from spatial part
+   form - expect satisfiable formula only
    vars - list of Exp, but expect CVar and Var only *)
 let rec subformula vars f =
   (* returns a subformula that contains only clauses with variables from vars
@@ -481,9 +479,6 @@ let rec get_referenced_conjuncts_ll pi ref_vars =
   | [] -> [],[]
   | first::rest ->
     match first with
-    (* | Exp.Const (Bool false) ->
-      let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-        first::ref_conjuncts,transitive_refs *)
     | Exp.BinOp ( Pneq, a, b) -> ( (* handle the case 1b *)
       let a_vars=find_vars_expr a in
       let b_vars=find_vars_expr b in
@@ -518,6 +513,7 @@ let get_referenced_conjuncts pi referenced_vars =
   in
   get_referenced_conjuncts_rec referenced_vars
 
+(* expect satisfiable formula only *)
 let remove_useless_conjuncts form evars =
   let mem x =
       let eq y= (x=y) in
@@ -531,7 +527,8 @@ let remove_useless_conjuncts form evars =
 
 
 (* now we have everything for global simplify function,
-   evars is a list of Ex. q. variables, which can be renamed/removed/etc...*)
+   evars is a list of Ex. q. variables, which can be renamed/removed/etc...
+   form - expect satisfiable formula only *)
 let simplify form evars=
   let mem x =
     let eq y= (x=y) in

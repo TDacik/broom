@@ -4,7 +4,7 @@ module Exp : sig
                                     a function
                             pvars - program variables, unique in the scope of
                                     a file *)
-      | CVar of int
+      | CVar of int (** spetial cases: cvar 0 - return, cvar uid<0 arguments *)
       | Const of const_val
       (* todo | Interval... *)
       | UnOp of unop * t
@@ -108,7 +108,7 @@ val find_var_pointsto : Exp.t -> sigma -> int -> (Exp.t * int)
 (** [find_vars_expr expr] *)
 val find_vars_expr : Exp.t -> Exp.variable list
 
-(** [find_vars form] provides a list of all variables used in the formula form
+(** [find_vars form] provides a list of all variables used in the formula [form]
     expect contract variables *)
 val find_vars : t -> Exp.variable list
 
@@ -120,7 +120,8 @@ val find_vars : t -> Exp.variable list
     list of all variables that may be in subformula
     a subformula that contains clauses with variables from [vars] and related
     variables to them
-    vars - list of Exp, but expect CVar and Var only *)
+    [form] - expect satisfiable formula only
+    [vars] - list of Exp, but expect CVar and Var only *)
 val subformula : Exp.t list -> t -> bool * Exp.t list * t
 
 (** [get_varmap f] simplify formula by removing equivalent existential variables
@@ -143,14 +144,24 @@ val substitute : Exp.variable -> Exp.variable list -> t -> t
     formula *)
 val remove_redundant_eq : pi -> pi
 
+(** [remove_useless_conjuncts form evars] removes usless conjuncts from pure
+    part of [form] - a conjunct is useless iff
+      1a) contains vars only from [evars] only
+      1b) it is of the form exp1 != exp2 and evars are not togather with
+          referenced ars in exp1/2
+          i.e. r1 != e1 (r1 referenced, e1 existential) => not needed
+      2) there is no transitive reference from spatial part or program variables
+    [form] expect satisfiable formula only *)
 val remove_useless_conjuncts : t -> Exp.variable list -> t
 
 (** [simplify_ll gvars evars form] simplify the formula, where [gvars] are
-    global variables and [evars] are existential variables *)
+    global variables and [evars] are existential variables
+    [form] expect satisfiable formula only *)
 val simplify_ll : Exp.variable list -> Exp.variable list -> t -> t
 
 (** [simplify form evars] is global simplify function, [evars] is a list of Ex.
-    q. variables, which can be renamed/removed/etc...*)
+    q. variables, which can be renamed/removed/etc...
+    [form] - expect satisfiable formula only *)
 val simplify : t -> Exp.variable list -> t
 
 

@@ -19,9 +19,10 @@ let to_string state =
 let print state =
   print_string (to_string state)
 
-(* substate contains in miss and act only clauses with variables from fixed_vars
-   and related variables
-   fixed_vars - list of Exp, but expect CVar and Var only
+(* [substate fixed_vars state] contains in miss and act only clauses with
+   variables from [fixed_vars] and related variables
+   [state] - expect satisfiable state only
+   [fixed_vars] - list of Exp, but expect CVar and Var only
 
    miss_vars = fixed_vars + related
    act_vars = fixed_vars + related from miss + related from act *)
@@ -65,6 +66,7 @@ let rec simplify_ll gvars evars state =
     let lvars1 = List.filter (notmem eq_vars_ex) state.lvars in
       simplify_ll gvars todo_evars {miss=miss1; act=act1; lvars=lvars1}
 
+(* state - expect satisfiable state only *)
 let simplify state =
   let mem lst x =
     let eq y= (x=y) in
