@@ -144,6 +144,11 @@ val substitute : Exp.variable -> Exp.variable list -> t -> t
     formula *)
 val remove_redundant_eq : pi -> pi
 
+(** [remove_equiv_vars gvars evars form] renames equivalent variables as one,
+    where [gvars] are global variables and [evars] are existential
+    variables *)
+val remove_equiv_vars : Exp.variable list -> Exp.variable list -> t -> t
+
 (** [remove_useless_conjuncts form evars] removes usless conjuncts from pure
     part of [form] - a conjunct is useless iff
       1a) contains vars only from [evars] only
@@ -153,11 +158,6 @@ val remove_redundant_eq : pi -> pi
       2) there is no transitive reference from spatial part or program variables
     [form] expect satisfiable formula only *)
 val remove_useless_conjuncts : t -> Exp.variable list -> t
-
-(** [simplify_ll gvars evars form] simplify the formula, where [gvars] are
-    global variables and [evars] are existential variables
-    [form] expect satisfiable formula only *)
-val simplify_ll : Exp.variable list -> Exp.variable list -> t -> t
 
 (** [simplify form evars] is global simplify function, [evars] is a list of Ex.
     q. variables, which can be renamed/removed/etc...

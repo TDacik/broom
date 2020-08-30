@@ -26,6 +26,7 @@ val print : t -> unit
    from vars and related variables
    if removes cvars, doesn't reduce count of contract variables
    vars - list of Exp, but expect CVar and Var only *)
+(* FIXME not removes false predicates *)
 (* FIXME vars should contain Xs from moves (_->X) *)
 (* FIXME removing spatial part ignored *)
 (* Don't use this function, use substate if possible ! *)

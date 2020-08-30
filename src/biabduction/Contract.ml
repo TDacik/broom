@@ -154,6 +154,7 @@ let rec args_to_exformula args ef =
    and related variables
    doesn't reduce count of contract variables
    vars - list of Exp, but expect CVar and Var only *)
+(* FIXME not removes false predicates *)
 (* FIXME vars should contain Xs from moves (_->X) *)
 let rec subcontract vars c =
 	match vars with
@@ -280,7 +281,6 @@ let contract_for_unop code dst src =
    if size<0 or unsuccesful alloc : dst=null
    else         len(dst)=size & base(dst)=dst & dst-(size)->undef
    allowd create object of size 0
-   TODO: if dst is void, generate memory leak, or add points-to without assign
    TODO: if size is constant, don't generate 0<=size
 *)
 let contract_for_malloc dst size =

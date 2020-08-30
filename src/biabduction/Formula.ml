@@ -434,24 +434,6 @@ let rec substitute var1 eqvarlist form =
     let form1=substitute_vars var1 first form in
       substitute var1 rest form1
 
-
-(* simplify the formula,
-   gvars - global variables, evars - existential variables *)
-let rec simplify_ll gvars evars form =
-  let equiv=get_varmap form.pi in
-  match gvars with
-  | [] -> form
-  | a :: rest ->
-    let eq_vars=(get_eq_vars [a] equiv) in
-    let mem x =
-      let eq y= (x=y) in
-      List.exists eq evars
-    in
-    let eq_vars_ex = List.filter mem eq_vars in
-    let form1= substitute a eq_vars_ex form in
-      simplify_ll rest evars form1
-
-
 (* remove redundant equalities from pure part formula *)
 let rec remove_redundant_eq pi =
   match pi with
@@ -461,6 +443,27 @@ let rec remove_redundant_eq pi =
     | Exp.BinOp (Peq,a,b) when a=b ->
       remove_redundant_eq rest
     | _ -> first :: (remove_redundant_eq rest)
+
+(* simplify the formula, that rename equivalent variables as one and
+   remove redundant equalities from pure part
+   gvars - global variables, evars - existential variables *)
+let remove_equiv_vars gvars evars f =
+  let rec rename_eqviv_vars gvars form =
+    let equiv=get_varmap form.pi in
+    match gvars with
+    | [] -> form
+    | a :: rest ->
+      let eq_vars=(get_eq_vars [a] equiv) in
+      let mem x =
+        let eq y= (x=y) in
+        List.exists eq evars
+      in
+      let eq_vars_ex = List.filter mem eq_vars in
+      let form1= substitute a eq_vars_ex form in
+        rename_eqviv_vars rest form1
+  in
+  let f_rename = rename_eqviv_vars gvars f in
+  {pi = remove_redundant_eq f_rename.pi; sigma = f_rename.sigma}
 
 (* remove usless conjuncts from pure part
    - a conjunct is useless iff
@@ -534,12 +537,10 @@ let simplify form evars=
     let eq y= (x=y) in
     not (List.exists eq evars )
   in
-  let vars=find_vars form in
-  let gvars=List.filter mem vars in
-  let form1 = simplify_ll gvars evars form in
-  let form2 = remove_useless_conjuncts form1 evars in
-  { sigma=form2.sigma;
-    pi=remove_redundant_eq form2.pi }
+  let vars = find_vars form in
+  let gvars = List.filter mem vars in
+  let form1 = remove_equiv_vars gvars evars form in
+  remove_useless_conjuncts form1 evars
 
 
 (*** RENAME CONFLICTING LOGICAL VARIABLES ***)
