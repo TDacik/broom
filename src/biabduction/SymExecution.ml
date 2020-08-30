@@ -240,9 +240,21 @@ let rec add_gvar_moves gvars c =
 	(add_gvar_moves tl new_c)
 
 (* TODO errors handling *)
+(* anchors - existential vars representing arguments of function
+   gvars - global variables
+   tmp_vars - local program variables *)
+(* FIXME may be more variables in lvars than are in simplified state *)
 let get_fnc_contract anchors gvars tmp_vars states =
   let constr v =
     Exp.Var v
+  in
+  let unpack v =
+    match v with
+    | Exp.Var a -> Some a
+    | _ -> None
+  in
+  let get_uids l =
+	  List.filter_map unpack l
   in
   let fixed = (Exp.ret)::(List.map constr (anchors @ gvars)) in
   let rec fnc_contract ss =
@@ -253,11 +265,13 @@ let get_fnc_contract anchors gvars tmp_vars states =
       (Contract.subcontract fixed c) :: (fnc_contract tl) *)
       try
         let subs = State.substate fixed s in
-        State.print subs;
+        (* State.print subs; *)
         let remove_vars = tmp_vars @ subs.lvars in
-          (* FIXME should be used subset of tmp_vars *)
           (* (find_vars subs.miss) @ (find_vars subs.act) in *)
-        let c = (state2contract subs remove_vars 0) in
+        let rems = State.remove_equiv_vars (get_uids fixed) remove_vars subs in
+        State.print rems;
+        let removed_vars = tmp_vars @ rems.lvars in
+        let c = (state2contract rems removed_vars 0) in
         (add_gvar_moves gvars c) :: (fnc_contract tl)
       with State.RemovedSpatialPartFromMiss -> (
         print_string "!!! error: impossible precondition\n";
@@ -468,8 +482,8 @@ let exec_fnc fnc_tbl f =
     let temporary_vars = CL.Util.list_diff f.vars gvars in
     print_string "PVARS:";
     CL.Util.print_list Exp.variable_to_string f.vars; print_string "\n";
-    print_string "ARGS:";
-    CL.Util.print_list Exp.variable_to_string f.args; print_string "\n";
+    print_string "ANCHORS:";
+    CL.Util.print_list Exp.variable_to_string anchors; print_string "\n";
     print_string "GVARS:";
     CL.Util.print_list Exp.variable_to_string gvars; print_string "\n";
     (* print_string "FIXED:";

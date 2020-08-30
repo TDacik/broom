@@ -30,7 +30,7 @@ let print state =
 let substate fixed_vars state =
   let get_lvar var =
     match var with
-    | Formula.Exp.Var v -> if (List.mem v state.lvars) then Some v else None
+    | Formula.Exp.Var v when (List.mem v state.lvars) -> Some v
     | _ -> None
   in
   (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) fixed_vars ^ "FIXED\n"); *)
