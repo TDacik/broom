@@ -42,7 +42,9 @@ let substate fixed_vars state =
   let (act_removed_sigma,act_vars,new_act) =
     Formula.subformula miss_vars state.act in
   if (act_removed_sigma)
-  then print_string "!!! MEMORY LEAK\n";
+  then (if (Unix.isatty Unix.stderr) (* TODO more general *)
+    then prerr_endline "\027[1;31m!!! MEMORY LEAK\027[0m"
+    else prerr_endline "!!! MEMORY LEAK");
     (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) act_vars ^ "AFTER ACT\n"); *)
   let all_vars = List.filter_map get_lvar (act_vars) in
   {miss = new_miss;
