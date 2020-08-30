@@ -98,6 +98,9 @@ let get_fnc_args uid =
 	let f = get_fnc uid in
 	f.args
 
+let get_anchors_uid uid =
+	List.mapi (fun idx _ -> (-(idx+1))) (get_fnc_args uid)
+
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 
 let rec check_fncs uid fncs =

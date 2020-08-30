@@ -354,7 +354,7 @@ let rec substitute_arguments roots num f =
 	match roots,num with
 	| [],0 -> f
 	| root::rtl,num when num>0 ->
-		let subf = substitute_vars_cvars root (CVar (-num)) f in
+		let subf = substitute_vars_cvars root (Var (-num)) f in
 		substitute_arguments rtl (num-1) subf
 	| _,_ -> assert false (* TODO: variable number of arguments unsupported *)
 

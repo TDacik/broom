@@ -242,7 +242,7 @@ let rec add_gvar_moves gvars c =
 (* TODO errors handling *)
 let get_fnc_contract anchors gvars tmp_vars states =
   let constr v =
-    if v<0 then Exp.CVar v else Exp.Var v
+    Exp.Var v
   in
   let fixed = (Exp.ret)::(List.map constr (anchors @ gvars)) in
   let rec fnc_contract ss =
@@ -277,6 +277,8 @@ let z3_names=get_sl_functions_z3 ctx
 
 (* Applay each contract on each state *)
 let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
+  let pvars = 0::((CL.Util.get_anchors_uid fuid) @
+    (CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
   match states with
   | [] -> []
   | s::tl ->
@@ -284,8 +286,7 @@ let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
       match contracts with
       | [] -> []
       | c::tl -> Contract.print c;
-          let res = contract_application ctx solv z3_names s c
-            ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
+          let res = contract_application ctx solv z3_names s c pvars in
           match res with
           | CAppFail -> solve_contract tl (* FIXME error handling *)
           | CAppOk s -> let simple_s = State.simplify s in
@@ -297,7 +298,8 @@ let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
 (* Try abstraction on each miss anad act of each state,
    for now only list abstraction *)
 let try_abstraction_on_states ctx solv z3_names fuid states =
-  let pvars = ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
+  let pvars = 0::(CL.Util.get_anchors_uid fuid) @
+    ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
   let rec try_abstraction states =
     match states with
     | [] -> []
@@ -372,7 +374,7 @@ and exec_insns tbl states insns fuid =
 (* create anchors (contract vars with negative uid) for arguments of function *)
 let init_state args =
   let get_anchor idx elm =
-    Exp.BinOp ( Peq, CVar (-(idx+1)), Var elm)
+    Exp.BinOp ( Peq, Var (-(idx+1)), Var elm)
   in
   let pi = List.mapi get_anchor args in
   let f = {sigma = []; pi = pi} in
@@ -415,14 +417,14 @@ let init_state_main tbl args fuid =
       anchor_state
     else
       let new_var = (CL.Util.list_max_positive (CL.Util.get_fnc_vars fuid))+1 in
-      let len = Exp.BinOp ( Peq, (UnOp (Len, CVar (-2))), Var new_var) in
-      let base = Exp.BinOp ( Peq, (UnOp (Base, CVar (-2))), CVar (-2)) in
+      let len = Exp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
+      let base = Exp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
       let size = Exp.BinOp ( Plesseq, Exp.zero, Var new_var) in
       let arg2 = CL.Util.get_var (List.nth args 1) in
       let ptr_size = CL.Util.get_type_size (arg2.typ) in
       let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-      let block = Exp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, CVar (-1), exp_ptr_size))) in
-      let sig_add = Hpointsto (CVar (-2), Var new_var, Undef) in
+      let block = Exp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-1), exp_ptr_size))) in
+      let sig_add = Hpointsto (Var (-2), Var new_var, Undef) in
       let new_miss =
         {pi = len :: base :: size :: block :: anchor_state.miss.pi;
         sigma = sig_add :: anchor_state.miss.sigma} in

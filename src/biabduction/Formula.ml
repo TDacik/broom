@@ -3,9 +3,11 @@ module Exp = struct (*$< Exp *)
     type t =
         Var of variable (** lvars - existential local variables in the scope of
                                     a function
+                                  - spetial cases: var 0 - return, var uid<0
+                                    arguments
                             pvars - program variables, unique in the scope of
                                     a file *)
-      | CVar of int (** spetial cases: cvar 0 - return, cvar uid<0 arguments *)
+      | CVar of int
       | Const of const_val
       (* todo | Interval... *)
       | UnOp of unop * t
@@ -55,23 +57,21 @@ module Exp = struct (*$< Exp *)
 let one = Const (Int 1L)
 let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
-let ret = CVar 0
+let ret = Var 0
 
 let variable_to_string ?lvars:(lvars=[]) v =
   let var = if (lvars <> [] && List.mem v lvars)
     then None
     else CL.Util.get_var_opt v in
   match var with
+  | None when v=0 -> "%ret" (* special var for return value *)
+  | None when v<0 -> "%arg"^string_of_int (-v) (* special vars for arguments *)
   | None -> "%l" ^ string_of_int v
   | Some _ -> CL.Printer.var_to_string v
 
 let lvariable_to_string v = variable_to_string ~lvars:[v] v
 
-let cvariable_to_string v =
-  match v with
-  | 0 -> "%ret" (* special var for return value *)
-  | _ when v < 0 -> "%arg" ^ string_of_int (-v) (* special vars for arguments *)
-  | _ -> "%c" ^ string_of_int v
+let cvariable_to_string v = "%c" ^ string_of_int v
 
 let const_to_string c =
   match c with

@@ -35,8 +35,8 @@ let form1 = {
     (*evars = [ 2 ]*)
 } *)
 
-let gvars = [1; 5]
-let evars = [2; 3; 4; 6]
+let gvars = [-1; 5]
+let evars = [2; 3; 4; 6; 7]
 
 let form_false = {
     sigma = [];
@@ -45,19 +45,20 @@ let form_false = {
 
 (* 1=2 2=3 6=5 4=4 4=5 *)
 let form_eq = {
-    sigma = [ Hpointsto (Var 1, Const (Int 4L), Const (Int 8L))];
+    sigma = [ Hpointsto (Var (-1), Const (Int 4L), Const (Int 8L))];
     pi = [
-		Exp.BinOp ( Peq, Var 1, Var 2);
+		Exp.BinOp ( Peq, Var (-1), Var 2);
 		Exp.BinOp ( Peq, Var 2, Var 3);
-		Exp.BinOp ( Peq, Var 6, Var 5);
+		Exp.BinOp ( Peq, Var 5, Var 6);
 		Exp.BinOp ( Peq, Var 4, Var 4);
-		Exp.BinOp ( Peq, Var 4, Var 5)
+		Exp.BinOp ( Peq, Var 4, Var 5);
+		Exp.BinOp ( Peq, Var 7, Var 7)
 		]
 }
 
 let form_eq2 = {
     sigma = [ Hpointsto (Var 4, Const (Int 8L), Var 4)];
-    pi = []
+    pi = [Exp.BinOp ( Peq, Var 2, Var 3)]
 }
 
 
