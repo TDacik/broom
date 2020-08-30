@@ -86,8 +86,12 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let cvar_itm = cvars_obj + 1 in
 			let cvar_last = cvar_itm + 1 in
 			let (_,itm_off,itm_typ) = CL.Util.get_accessor_item ac in
-			let pi_add = [ Exp.BinOp ( Peq, CVar cvar_itm,
-			BinOp ( Pplus, obj, Const (Int (Int64.of_int itm_off))));
+			let field = (if (itm_off != 0)
+			then
+				Exp.BinOp ( Peq, CVar cvar_itm, BinOp ( Pplus, obj, Const (Int (Int64.of_int itm_off))))
+			else
+				Exp.BinOp ( Peq, CVar cvar_itm, obj)) in
+			let pi_add = [ field;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_itm)), (UnOp (Base, obj))) ] in
 			(* let exp_obj = (match obj with (* move to LHS only! *)
 				| CVar _ ->
