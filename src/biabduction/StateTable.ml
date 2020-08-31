@@ -29,7 +29,7 @@ let rec entailment_states old_states states =
 					else entailment_one tl1
 				else entailment_one tl1
 		in
-		(entailment_states old_states tl2) @ (entailment_one old_states)
+		(entailment_one old_states) @ (entailment_states old_states tl2)
 
 let entailment_check tbl uid states =
 	let found = Hashtbl.find_opt tbl uid in
