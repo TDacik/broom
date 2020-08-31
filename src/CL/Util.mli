@@ -24,6 +24,10 @@ val get_var_opt: Loc.cl_uid -> Var.t option
     list as a homogeneous set *)
 val list_diff: 'a list -> 'a list -> 'a list
 
+(** [list_inter list1 list2] gets intersection of two lists;
+    list as a homogeneous set *)
+val list_inter: 'a list -> 'a list -> 'a list
+
 (** [list_max_positive l] finds max positive number in list *)
 val list_max_positive: int list -> int
 
@@ -61,6 +65,11 @@ val get_fnc_args: Loc.cl_uid -> Loc.cl_uid list
 
 (** [get_anchors_uid uid] *)
 val get_anchors_uid: Loc.cl_uid -> int list
+
+(** [get_pvars_for_fnc uid] gets uids of program variables used in function
+    (include global variables) given by uid, anchors for arguments and variable
+    for return of function *)
+val get_pvars_for_fnc: Loc.cl_uid -> int list
 
 (** [get_insns_from_block uid] *)
 val get_insns_from_block: Loc.cl_uid -> Fnc.insn list

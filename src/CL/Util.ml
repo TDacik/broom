@@ -26,6 +26,8 @@ let get_var_opt uid = List.assoc_opt uid stor.Storage.vars
 
 let list_diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
 
+let list_inter l1 l2 = List.filter (fun x -> (List.mem x l2)) l1
+
 (* add missing elements of list l1 to l2 *)
 let rec list_join_unique l1 l2 =
 	let mem x =
@@ -100,6 +102,9 @@ let get_fnc_args uid =
 
 let get_anchors_uid uid =
 	List.mapi (fun idx _ -> (-(idx+1))) (get_fnc_args uid)
+
+let get_pvars_for_fnc uid =
+	0::(get_anchors_uid uid) @ (get_fnc_vars uid) (* @ stor.global_vars *)
 
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 
