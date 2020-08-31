@@ -387,36 +387,6 @@ and exec_insns tbl states insns fuid =
   | insn::tl -> let s = exec_insn tbl states insn fuid in
     exec_insns tbl s tl fuid
 
-(* create anchors (contract vars with negative uid) for arguments of function *)
-let init_state args =
-  let get_anchor idx elm =
-    Exp.BinOp ( Peq, Var (-(idx+1)), Var elm)
-  in
-  let pi = List.mapi get_anchor args in
-  let f = {sigma = []; pi = pi} in
-  {miss = f; act = f; lvars = []}
-
-(* check if main is called with int argc and char **argv *)
-(* TODO error handling *)
-let check_main_args_type args =
-  let arg1 = CL.Util.get_var (List.nth args 0) in
-  let arg2 = CL.Util.get_var (List.nth args 1) in
-  let arg1_typ = CL.Util.get_type arg1.typ in
-  let arg1_ok = (match arg1_typ.code with
-  | TypeInt -> true
-  | _ -> prerr_endline "!!! warning: first argument of 'main' should be 'int'"; false) in
-  let arg2_typ = CL.Util.get_type arg2.typ in
-  let arg2_ok = (match arg2_typ.code with
-    | TypePtr typ2 -> (let arg2_typ2 = CL.Util.get_type typ2 in
-      match arg2_typ2.code with
-      | TypePtr typ3 -> (let arg2_typ3 = CL.Util.get_type typ3 in
-        match arg2_typ3.code with
-        | TypeChar | TypeInt when arg2_typ3.size=1 -> true
-        | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
-      | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
-    | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false) in
-  (arg1_ok || arg2_ok)
-
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
         (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
@@ -426,28 +396,6 @@ let check_main_args_type args =
    fuid belons to function 'main' *)
 (* FIXME no need tbl argument *)
 let init_state_main tbl args fuid =
-  let set_anchors () =
-    let anchor_state = init_state args in
-    if not (check_main_args_type args)
-    then
-      anchor_state
-    else
-      let new_var = (CL.Util.list_max_positive (CL.Util.get_fnc_vars fuid))+1 in
-      let len = Exp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
-      let base = Exp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
-      let size = Exp.BinOp ( Plesseq, Exp.zero, Var new_var) in
-      let arg2 = CL.Util.get_var (List.nth args 1) in
-      let ptr_size = CL.Util.get_type_size (arg2.typ) in
-      let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-      let block = Exp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-1), exp_ptr_size))) in
-      let sig_add = Hpointsto (Var (-2), Var new_var, Undef) in
-      let new_miss =
-        {pi = len :: base :: size :: block :: anchor_state.miss.pi;
-        sigma = sig_add :: anchor_state.miss.sigma} in
-      let init = {miss = new_miss; act = anchor_state.act; lvars = [new_var]} in
-      State.print init; init
-  in
-
   let rec exec_init_global_var states vars =
     match vars with
     | [] -> states
@@ -457,7 +405,7 @@ let init_state_main tbl args fuid =
   let num_args = List.length args in
   let init_state = (match num_args with
   | 0 -> State.empty
-  | 2 -> set_anchors ()
+  | 2 -> let s = State.init_main args fuid in State.print s; s
   | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
     (* TODO error handling *)
     State.empty
@@ -475,7 +423,7 @@ let exec_fnc fnc_tbl f =
     let init_states =
       if fname = "main"
       then init_state_main fnc_tbl f.args fuid
-      else (init_state f.args)::[] in
+      else (State.init f.args)::[] in
     let states = exec_block fnc_tbl init_states (List.hd f.cfg) fuid in
     print_endline ">>> final contract";
     let anchors = List.mapi (fun idx _ -> (-(idx+1))) f.args in
