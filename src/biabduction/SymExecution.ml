@@ -290,7 +290,7 @@ let solver = config_solver ()
 
 (* Applay each contract on each state *)
 let rec apply_contracts_on_states solver fuid states contracts =
-  let pvars = CL.Util.get_pvars_for_fnc fuid in
+  let pvars = CL.Util.get_pvars fuid in
   match states with
   | [] -> []
   | s::tl ->
@@ -396,7 +396,17 @@ let init_state_main tbl bb_tbl args fuid =
     match vars with
     | [] -> states
     | uid::tl -> let gv = CL.Util.get_var uid in
-      exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl
+      if (gv.initials=[]) && not(gv.is_extern) then
+        match states with (* implicit initialization *)
+        | [s] -> let assign = Exp.BinOp (Peq, Var uid, Exp.zero) in
+          let new_s = {
+            miss = s.miss;
+            act = {pi=assign::s.act.pi; sigma=s.act.sigma};
+            lvars = s.lvars} in
+          exec_init_global_var [new_s] tl
+        | _ -> assert false
+      else (* explicit initialization *)
+        exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl
   in
   let num_args = List.length args in
   let init_state = (match num_args with
@@ -432,7 +442,7 @@ let exec_fnc fnc_tbl f =
     print_string "ANCHORS:";
     CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
     print_string "GVARS:";
-    CL.Util.print_list Exp.variable_to_string used_gvars; print_newline ();
+    CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
     (* print_string "FIXED:";
     CL.Util.print_list Exp.variable_to_string fixed_vars; print_string "\n"; *)
     (* print_string "TEMPORARY:";

@@ -103,8 +103,12 @@ let get_fnc_args uid =
 let get_anchors_uid uid =
 	List.mapi (fun idx _ -> (-(idx+1))) (get_fnc_args uid)
 
+let get_pvars uid =
+	0::(get_anchors_uid uid) @
+	(list_join_unique (get_fnc_vars uid) stor.global_vars)
+
 let get_pvars_for_fnc uid =
-	0::(get_anchors_uid uid) @ (get_fnc_vars uid) (* @ stor.global_vars *)
+	0::(get_anchors_uid uid) @ (get_fnc_vars uid)
 
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 

@@ -66,6 +66,11 @@ val get_fnc_args: Loc.cl_uid -> Loc.cl_uid list
 (** [get_anchors_uid uid] *)
 val get_anchors_uid: Loc.cl_uid -> int list
 
+(** [get_pvars uid] gets uids of program variables used in function (include
+    all global variables) given by uid, anchors for arguments and variable
+    for return of function *)
+val get_pvars: Loc.cl_uid -> int list
+
 (** [get_pvars_for_fnc uid] gets uids of program variables used in function
     (include global variables) given by uid, anchors for arguments and variable
     for return of function *)
