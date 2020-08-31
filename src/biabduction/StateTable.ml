@@ -39,6 +39,4 @@ let entailment_check tbl uid states =
 		let new_states = entailment_states old_states states in
 		Hashtbl.replace tbl uid (old_states @ new_states); new_states
 
-let find_opt tbl x = Hashtbl.find_opt tbl x
-
 let reset = Hashtbl.reset
