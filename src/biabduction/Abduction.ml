@@ -35,7 +35,7 @@ let to_hpointsto_unsafe hpred = match hpred with
 (* The level parameter gives the level of match, the only difference is in check_match function *)
 
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
-let check_match ctx solv z3_names form1 i1 form2 i2 level =
+let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
   let lhs_ll,flag_l =
     match (List.nth form1.sigma i1) with
@@ -145,11 +145,11 @@ let check_match ctx solv z3_names form1 i1 form2 i2 level =
   | _ -> false
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *)
-let rec find_match_ll ctx solv z3_names form1 i1 form2 level=
+let rec find_match_ll solver form1 i1 form2 level=
   let (*rec*) try_with_rhs i2 =
     if (List.length form2.sigma) <= i2
     then -1
-    else (if (check_match ctx solv z3_names form1 i1 form2 i2 level)
+    else (if (check_match solver form1 i1 form2 i2 level)
       then i2
       else -1)
   in
@@ -157,11 +157,11 @@ let rec find_match_ll ctx solv z3_names form1 i1 form2 level=
   then (-1,-1)
   else
     match (try_with_rhs 0) with
-    | -1 -> (find_match_ll ctx solv z3_names form1 (i1+1) form2 level)
+    | -1 -> (find_match_ll solver form1 (i1+1) form2 level)
     | x -> (i1,x)
 
-let find_match ctx solv z3_names form1 form2 level =
-  find_match_ll ctx solv z3_names form1 0 form2 level
+let find_match solver form1 form2 level =
+  find_match_ll solver form1 0 form2 level
 
 
 (* apply the match rule to i=(i1,i2)
@@ -208,8 +208,8 @@ let apply_match i pred_type form1 form2 pvars =
   M - the learned part
 2:  unfolded Slseg in form1/form2 and added equality x=y
 *)
-let try_match ctx solv z3_names form1 form2 level pvars =
-  let m=find_match ctx solv z3_names form1 form2 level in
+let try_match solver form1 form2 level pvars =
+  let m=find_match solver form1 form2 level in
   match m with
   | (-1,-1) -> Fail
   | (i1,i2) ->
@@ -274,7 +274,7 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
         0...k: the index of "z" (if level=1)
      -3: possible (if level=3)
 *)
-let check_learn_pointsto ctx solv z3_names form1 form2 i2 level =
+let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 level =
   match (List.nth form2.sigma i2) with
   | Slseg _ -> -1 (* Slseg is skipped, only Hpointsto is allowed in this function *)
   | Hpointsto (a,_,_) ->
@@ -307,13 +307,13 @@ let check_learn_pointsto ctx solv z3_names form1 form2 i2 level =
 
 
 (* try to apply learn1 rule for pointsto *)
-let try_learn_pointsto ctx solv z3_names form1 form2 level _ =
+let try_learn_pointsto solver form1 form2 level _ =
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
     then (-1,-1)
     else
-      let res=check_learn_pointsto ctx solv z3_names form1 form2 i level in
+      let res=check_learn_pointsto solver form1 form2 i level in
       if res=(-1)
       then  get_index (i+1)
       else (res,i) (* res - index of z, i - index of x*)
@@ -346,7 +346,7 @@ let try_learn_pointsto ctx solv z3_names form1 form2 level _ =
      true: possible
 *)
 
-let check_learn_slseg ctx solv z3_names form1 form2 i2 level =
+let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 level =
   match (List.nth form2.sigma i2) with
   | Hpointsto (_,_,_) ->  false (* This funmction cover slseg learn only *)
   | Slseg (a,_,_) ->
@@ -384,13 +384,13 @@ let check_learn_slseg ctx solv z3_names form1 form2 i2 level =
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 (* try to apply learn rule for slseg *)
-let try_learn_slseg ctx solv z3_names form1 form2 level _=
+let try_learn_slseg solver form1 form2 level _=
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
     then -1
     else
-      if (check_learn_slseg ctx solv z3_names form1 form2 i level)
+      if (check_learn_slseg solver form1 form2 i level)
       then i
       else get_index (i+1)
   in
@@ -409,7 +409,7 @@ let try_learn_slseg ctx solv z3_names form1 form2 level _=
 (************************************************************)
 (******* SPLIT rules ******)
 
-let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
+let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
   let lhs,lhs_size,lhs_dest =
     match (List.nth form1.sigma i1) with
@@ -465,7 +465,7 @@ let check_split_left ctx solv z3_names form1 i1 form2 i2 level =
       ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
-let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
+let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
   let lhs,lhs_size =
     match (List.nth form1.sigma i1) with
@@ -523,13 +523,13 @@ let check_split_right ctx solv z3_names form1 i1 form2 i2 level =
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 
-let rec find_split_ll ctx solv z3_names form1 i1 form2 level=
+let rec find_split_ll solver form1 i1 form2 level=
   let (*rec*) try_with_rhs i2 =
     if (List.length form2.sigma) <= i2
     then -1,-1
-    else (if (check_split_left ctx solv z3_names form1 i1 form2 i2 level)
+    else (if (check_split_left solver form1 i1 form2 i2 level)
       then i2,1
-      else ( if (check_split_right ctx solv z3_names form1 i1 form2 i2 level)
+      else ( if (check_split_right solver form1 i1 form2 i2 level)
         then i2,2
         else -1,-1))
   in
@@ -537,15 +537,15 @@ let rec find_split_ll ctx solv z3_names form1 i1 form2 level=
   then (-1,-1,-1)
   else
     match (try_with_rhs 0) with
-    | -1,_ -> (find_split_ll ctx solv z3_names form1 (i1+1) form2 level)
+    | -1,_ -> (find_split_ll solver form1 (i1+1) form2 level)
     | x,lr -> (i1,x,lr)
 
-let find_split ctx solv z3_names form1 form2 level =
-  find_split_ll ctx solv z3_names form1 0 form2 level
+let find_split solver form1 form2 level =
+  find_split_ll solver form1 0 form2 level
 
 
-let try_split ctx solv z3_names form1 form2 level _ =
-  let m=find_split ctx solv z3_names form1 form2 level in
+let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
+  let m=find_split {ctx;solv;z3_names} form1 form2 level in
   let nequiv a b = not (a=b) in
   let remove k form =
     { pi=form.pi;
@@ -702,7 +702,7 @@ type sat_test_res =
 | NoFinish
 | SatFail
 
-let test_sat ctx solv __names form1 form2 =
+let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
   if (Solver.check solv query)=UNSATISFIABLE then SatFail
   else
@@ -712,17 +712,16 @@ let test_sat ctx solv __names form1 form2 =
 
 (* main biabduction function *)
 (* The result is:  "missing, frame, added_lvars" *)
-
 type abduction_res =
 | Bok of Formula.t * Formula.t * variable list
 | BFail
 
-let rec biabduction ctx solv z3_names form1 form2 pvars =
+let rec biabduction solver form1 form2 pvars =
   (* First test SAT of form1 and form2.
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
      The conflicts may be removed by application of a match rule.
    *)
-  match (test_sat ctx solv z3_names form1 form2) with
+  match (test_sat solver form1 form2) with
   | SatFail ->
     prerr_endline "SAT fail"; BFail
   | Finish (missing,frame) ->
@@ -747,7 +746,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
   let rec try_rules todo=
     match todo with
     | (func_name,rule_arg,rule_name) :: rest ->
-      (match (func_name ctx solv z3_names form1 form2 rule_arg pvars) with
+      (match (func_name solver form1 form2 rule_arg pvars) with
       | Apply (f1,f2,missing,n_lvars) ->
         print_string (rule_name ^", "); flush stdout;
         Apply (f1,f2,missing,n_lvars)
@@ -758,7 +757,7 @@ let rec biabduction ctx solv z3_names form1 form2 pvars =
   in
   match try_rules rules with
   | Apply (f1,f2,missing,n_lvars) ->
-    (match biabduction ctx solv z3_names f1 f2 pvars with
+    (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
@@ -773,7 +772,7 @@ type entailment_slseg_remove =
 | RemOk of Formula.pi
 | RemFail
 
-let (*rec*) check_entailment_finish ctx solv __names form1 form2 evars=
+let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
   if (List.length form1.sigma)>0 then -1
   else
   (* First all Slseg(x,y,_) are replaced by x=y --- i.e. empty list *)
@@ -806,20 +805,20 @@ let (*rec*) check_entailment_finish ctx solv __names form1 form2 evars=
     if (Solver.check solv query)=UNSATISFIABLE then 1
     else 0
 
-let rec entailment_ll ctx solv z3_names form1 form2 evars=
+let rec entailment_ll solver form1 form2 evars=
 (* check entailment between form1 and form2 using match1 rules *)
-  match (check_entailment_finish ctx solv z3_names form1 form2 evars) with
+  match (check_entailment_finish solver form1 form2 evars) with
   | 0 -> false
   | 1 -> true
   | -1 ->
-     (match (try_match ctx solv z3_names form1 form2 1 []) with
+     (match (try_match solver form1 form2 1 []) with
      | Apply (f1,f2,_,_) ->
   print_string "Match, "; flush stdout;
-  (entailment_ll ctx solv z3_names f1 f2 evars)
+  (entailment_ll solver f1 f2 evars)
      | Fail -> false)
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
-let (*rec*) entailment ctx solv z3_names form1 form2 evars=
+let entailment solver form1 form2 evars=
   (* get fresh names for the evars to avoid conflicts in the entailment query *)
   let conflicts1=find_vars form1 in
   let form2_rename,evars2=match (rename_ex_variables form2 evars conflicts1) with
@@ -829,24 +828,20 @@ let (*rec*) entailment ctx solv z3_names form1 form2 evars=
   let form1_rename,evars1=match (rename_ex_variables form1 evars conflicts2) with
     | f -> f
   in
-  let query=(formula_to_solver ctx form1_rename) @ (formula_to_solver ctx form2_rename) in
-  (Solver.check solv query)=SATISFIABLE && (entailment_ll ctx solv z3_names form1_rename form2_rename (evars@evars1@evars2))
+  let query=(formula_to_solver solver.ctx form1_rename) @ (formula_to_solver solver.ctx form2_rename) in
+  (Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
 
 
 
 (*  Experiments
-let cfg = [("model", "true"); ("proof", "false")]
-let ctx = (mk_context cfg)
-let solv = (Solver.mk_solver ctx None)
-let z3_names=get_sl_functions_z3 ctx
+let solver = config_solver ()
 
+check_match solver form1 0 pre_free 0 1
 
-check_match ctx solv z3_names form1 0 pre_free 0 1
+check_learn1 solver pre_free form2 1;;
 
-check_learn1 ctx solv z3_names pre_free form2 1;;
+try_learn1 solver form1 form2;;
 
-try_learn1 ctx solv z3_names form1 form2;;
-
-find_match_ll ctx solv z3_names form1 0 pre_free
+find_match_ll solver form1 0 pre_free
 
 *)

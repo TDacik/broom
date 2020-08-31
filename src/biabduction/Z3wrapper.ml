@@ -12,14 +12,30 @@ type sl_function_names_z3 = {
   base : FuncDecl.func_decl;
   len : FuncDecl.func_decl;
   alloc : FuncDecl.func_decl;
-  }
+}
+
+type solver = {
+  ctx : Z3.context;
+  solv : Z3.Solver.solver;
+  z3_names : sl_function_names_z3;
+}
 
 let get_sl_functions_z3 ctx =
   {
-    base=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "base") [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
-    len=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "len") [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
-    alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc") [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
+    base=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "base")
+      [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
+    len=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "len")
+      [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
+    alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc")
+      [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
   }
+
+let config_solver () =
+  let cfg = [("model", "true"); ("proof", "false")] in
+  let ctx = (Z3.mk_context cfg) in
+  let solv = (Z3.Solver.mk_solver ctx None) in
+  let z3_names = get_sl_functions_z3 ctx in
+  {ctx = ctx; solv = solv; z3_names = z3_names}
 
 (* Boolean <-> Bitvector conversion *)
 

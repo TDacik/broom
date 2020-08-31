@@ -135,7 +135,7 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 (* use entailment form the Abduction module to check entailment between lambdas 
   results: 0: no entailment, 1: lambda1 |= lambda2, 2: lambda2 |= lambda1 
 *)
-let check_lambda_entailment ctx solv z3_names lambda1 lambda2 =
+let check_lambda_entailment solver lambda1 lambda2 =
 	if not ((List.length lambda1.param) = (List.length lambda2.param)) then 0
 	else
 	let variables= (find_vars lambda1.form) @ (find_vars lambda2.form) in
@@ -158,8 +158,8 @@ let check_lambda_entailment ctx solv z3_names lambda1 lambda2 =
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
 	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
-	match (Abduction.entailment ctx solv z3_names lambda1_new lambda2_new variables), 
-		(Abduction.entailment ctx solv z3_names lambda2_new lambda1_new variables)
+	match (Abduction.entailment solver lambda1_new lambda2_new variables), 
+		(Abduction.entailment solver lambda2_new lambda1_new variables)
 	with
 	| true,_ -> 1
 	| false,true -> 2
@@ -239,7 +239,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
 			] in
 		(* check entailment between l1 and l2 *)
-		let entailment_res=check_lambda_entailment ctx solv z3_names l1 l2 in
+		let entailment_res=check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
@@ -535,7 +535,7 @@ let fold_pointsto form i1 i2 res_triples =
 
 
 
-let try_abstraction_to_lseg ctx solv z3_names form i1 i2 pvars =
+let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 pvars =
 (* try to abstract two predicates i1 and i2 into a list segment,
   pvars = program variables (global vars + vars of function).
       Internal nodes of the list segment can not be pointed by global variables*)
@@ -600,7 +600,7 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 pvars =
 			else (List.nth ll index) :: remove_i1_i2 ll (index+1) 
 		in
 			
-		(match (check_lambda_entailment ctx solv z3_names l1 l2) with
+		(match (check_lambda_entailment {ctx; solv; z3_names} l1 l2) with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail
@@ -638,13 +638,13 @@ let try_abstraction_to_lseg ctx solv z3_names form i1 i2 pvars =
 
 (* try list abstraction - first tries the last added, at least 2 predicates in
 	sigma *)
-let rec lseg_abstaction ctx solv z3_names form pvars =
+let rec lseg_abstaction solver form pvars =
 	let rec f i j =
 		(* Printf.printf "%d,%d\n" i j; *)
-		let result = try_abstraction_to_lseg ctx solv z3_names form i j pvars in
+		let result = try_abstraction_to_lseg solver form i j pvars in
 		match result with
 		| AbstractionApply new_form ->
-			lseg_abstaction ctx solv z3_names new_form pvars
+			lseg_abstaction solver new_form pvars
 		| AbstractionFail -> (
 			match i,j with
 			| 1,_ -> form (* nothing change *)

@@ -13,16 +13,16 @@ type contract_app_res =
    * we assume that contract variables are not used within the state s,
    * only the program variables may appear in both contract and state, they are used as anchors
 *)
-let prune_expr ctx solv z3_names form_z3 expr =
+let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
 	let query= (Boolean.mk_not ctx (expr_to_solver ctx z3_names expr)) :: form_z3 in
 	(Solver.check solv query)=SATISFIABLE
 
-let apply_contract ctx solv z3_names state c pvars =
-  match (Abduction.biabduction ctx solv z3_names state.act c.Contract.lhs pvars) with
+let apply_contract solver state c pvars =
+  match (Abduction.biabduction solver state.act c.Contract.lhs pvars) with
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
     (* prune useless constrains in miss.pi *)
-    let pruned_miss_pi=List.filter (prune_expr ctx solv z3_names (formula_to_solver ctx state.act)) miss.pi in
+    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.act)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
     let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
     (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
@@ -111,7 +111,7 @@ let rec post_contract_application_vars state pvarmap seed pvars=
 
 exception Conflict_between_freed_and_slseg
 
-let remove_freed_parts ctx solv z3_names form =
+let remove_freed_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
   let rec get_freed pure =
     match pure with
     | [] -> []
@@ -166,7 +166,7 @@ let remove_freed_parts ctx solv z3_names form =
   2: for each freed(x) predicate in pure part remove the spatial predicates
      with the equal base
 *)
-let post_contract_application state ctx solv z3_names pvarmap pvars =
+let post_contract_application state solver pvarmap pvars =
   let step1=post_contract_application_vars state pvarmap 1 pvars in
   let vars= CL.Util.list_join_unique (find_vars step1.act) (find_vars step1.miss) in
   let notmem l x =
@@ -174,11 +174,12 @@ let post_contract_application state ctx solv z3_names pvarmap pvars =
       not (List.exists eq l)
   in
   let new_lvars=List.filter (notmem pvars) vars in
-  let final_contract={miss=step1.miss; act=(remove_freed_parts ctx solv z3_names step1.act); lvars=new_lvars} in
+  let final_contract={miss=step1.miss; act=(remove_freed_parts solver step1.act); lvars=new_lvars} in
    (* check that both parts of the resulting state are satisfiable *)
-  let sat_query_actual=formula_to_solver ctx final_contract.act in
-  let sat_query_missing=formula_to_solver ctx final_contract.miss in
-  if ((Solver.check solv sat_query_actual)=SATISFIABLE) && ((Solver.check solv sat_query_missing)=SATISFIABLE)
+  let sat_query_actual=formula_to_solver solver.ctx final_contract.act in
+  let sat_query_missing=formula_to_solver solver.ctx final_contract.miss in
+  if ((Solver.check solver.solv sat_query_actual)=SATISFIABLE) &&
+     ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
   then  CAppOk final_contract
   else (prerr_endline "SAT Fail"; CAppFail)
 
@@ -209,11 +210,11 @@ let find_fnc_contract tbl dst args fuid =
    thery may be some global/local variables, which are not used within state
    and contract
 *)
-let contract_application ctx solv z3_names state c pvars =
+let contract_application solver state c pvars =
   let c_rename = rename_contract_vars_ll state c 1 pvars in
-  match (apply_contract ctx solv z3_names state c_rename pvars) with
+  match (apply_contract solver state c_rename pvars) with
   | CAppFail -> CAppFail
-  | CAppOk s_applied -> (post_contract_application s_applied ctx solv z3_names c_rename.pvarmap pvars)
+  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars)
 
 (* PREPARE STATE FOR CONTRACT
   rename all variables expect parameters and global (fixed_vars) -
@@ -284,15 +285,10 @@ let get_fnc_contract anchors gvars tmp_vars states =
 
 (*** EXECUTION ***)
 
-(* TODO: ctx solv z3_names -> merge into one parameter *)
-
-let cfg = [("model", "true"); ("proof", "false")]
-let ctx = (Z3.mk_context cfg)
-let solv = (Z3.Solver.mk_solver ctx None)
-let z3_names=get_sl_functions_z3 ctx
+let solver = config_solver ()
 
 (* Applay each contract on each state *)
-let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
+let rec apply_contracts_on_states solver fuid states contracts =
   let pvars = 0::((CL.Util.get_anchors_uid fuid) @
     (CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
   match states with
@@ -302,26 +298,26 @@ let rec apply_contracts_on_states ctx solv z3_names fuid states contracts =
       match contracts with
       | [] -> []
       | c::tl -> Contract.print c;
-          let res = contract_application ctx solv z3_names s c pvars in
+          let res = contract_application solver s c pvars in
           match res with
           | CAppFail -> solve_contract tl (* FIXME error handling *)
           | CAppOk s -> let simple_s = State.simplify s in
             State.print simple_s;
             simple_s::(solve_contract tl)
     in
-    (solve_contract contracts) @ (apply_contracts_on_states ctx solv z3_names fuid tl contracts)
+    (solve_contract contracts) @ (apply_contracts_on_states solver fuid tl contracts)
 
 (* Try abstraction on each miss anad act of each state,
    for now only list abstraction *)
-let try_abstraction_on_states ctx solv z3_names fuid states =
+let try_abstraction_on_states solver fuid states =
   let pvars = 0::(CL.Util.get_anchors_uid fuid) @
     ((CL.Util.get_fnc_vars fuid) @ CL.Util.stor.global_vars) in
   let rec try_abstraction states =
     match states with
     | [] -> []
     | s::tl ->
-      let new_miss = Abstraction.lseg_abstaction ctx solv z3_names s.miss pvars in
-      let new_act = Abstraction.lseg_abstaction ctx solv z3_names s.act pvars in
+      let new_miss = Abstraction.lseg_abstaction solver s.miss pvars in
+      let new_act = Abstraction.lseg_abstaction solver s.act pvars in
       let abstract_state = {miss = new_miss; act = new_act; lvars=s.lvars} in
       (* TODO: update lvars *)
       abstract_state :: (try_abstraction tl)
@@ -342,29 +338,29 @@ and exec_insn tbl bb_tbl states insn fuid =
   let new_states_for_insn c =
     if (c = [])
       then states (* no need applaying empty contracts *)
-      else apply_contracts_on_states ctx solv z3_names fuid states c
+      else apply_contracts_on_states solver fuid states c
   in
   CL.Printer.print_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
     let s_jmp = (
       if (CL.Util.is_loop_closing_block uid insn)
-      then try_abstraction_on_states ctx solv z3_names fuid states
+      then try_abstraction_on_states solver fuid states
       else states) in
     exec_block tbl bb_tbl s_jmp bb fuid
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
-    let s_then = apply_contracts_on_states ctx solv z3_names fuid states
+    let s_then = apply_contracts_on_states solver fuid states
                  [(List.hd c)] in
-    let s_else = apply_contracts_on_states ctx solv z3_names fuid states
+    let s_else = apply_contracts_on_states solver fuid states
                  [(List.nth c 1)] in
     let ss_then = (
       if (CL.Util.is_loop_closing_block uid_then insn)
-      then try_abstraction_on_states ctx solv z3_names fuid s_then
+      then try_abstraction_on_states solver fuid s_then
       else s_then) in
     let ss_else = (
       if (CL.Util.is_loop_closing_block uid_else insn)
-      then try_abstraction_on_states ctx solv z3_names fuid s_else
+      then try_abstraction_on_states solver fuid s_else
       else s_else) in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
