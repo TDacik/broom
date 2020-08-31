@@ -329,15 +329,16 @@ let try_abstraction_on_states ctx solv z3_names fuid states =
   print_endline ">>> trying list abstraction";
   try_abstraction states
 
-let rec exec_block tbl states (uid, bb) fuid =
+let rec exec_block tbl bb_tbl states (uid, bb) fuid =
   if (states = [])
   then states
   else (
     Printf.printf ">>> executing block L%i:\n%!" uid;
-    exec_insns tbl states bb.CL.Fnc.insns fuid
+    let new_states = StateTable.add bb_tbl uid states in
+    exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns fuid
   )
 
-and exec_insn tbl states insn fuid =
+and exec_insn tbl bb_tbl states insn fuid =
   let new_states_for_insn c =
     if (c = [])
       then states (* no need applaying empty contracts *)
@@ -350,7 +351,7 @@ and exec_insn tbl states insn fuid =
       if (CL.Util.is_loop_closing_block uid insn)
       then try_abstraction_on_states ctx solv z3_names fuid states
       else states) in
-    exec_block tbl s_jmp bb fuid
+    exec_block tbl bb_tbl s_jmp bb fuid
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
     let s_then = apply_contracts_on_states ctx solv z3_names fuid states
@@ -367,7 +368,7 @@ and exec_insn tbl states insn fuid =
       else s_else) in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
-    (exec_block tbl ss_then bb_then fuid) @ (exec_block tbl ss_else bb_else fuid)
+    (exec_block tbl bb_tbl ss_then bb_then fuid) @ (exec_block tbl bb_tbl ss_else bb_else fuid)
   | InsnSWITCH _ -> assert false
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
@@ -381,11 +382,11 @@ and exec_insn tbl states insn fuid =
   | InsnCLOBBER _ -> states (* TODO: stack allocation *)
   | _ -> let c = Contract.get_contract insn in new_states_for_insn c
 
-and exec_insns tbl states insns fuid =
+and exec_insns tbl bb_tbl states insns fuid =
   match insns with
   | [] -> states
-  | insn::tl -> let s = exec_insn tbl states insn fuid in
-    exec_insns tbl s tl fuid
+  | insn::tl -> let s = exec_insn tbl bb_tbl states insn fuid in
+    exec_insns tbl bb_tbl s tl fuid
 
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
@@ -394,13 +395,13 @@ and exec_insns tbl states insns fuid =
 
    execute initials of all global variables, if they are initialized
    fuid belons to function 'main' *)
-(* FIXME no need tbl argument *)
-let init_state_main tbl args fuid =
+(* FIXME no need tbl and bb_tbl arguments *)
+let init_state_main tbl bb_tbl args fuid =
   let rec exec_init_global_var states vars =
     match vars with
     | [] -> states
     | uid::tl -> let gv = CL.Util.get_var uid in
-      exec_init_global_var (exec_insns tbl states gv.initials fuid) tl
+      exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl
   in
   let num_args = List.length args in
   let init_state = (match num_args with
@@ -415,16 +416,17 @@ let init_state_main tbl args fuid =
 
 let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
-    Printf.printf ">>> executing function ";
+    print_string ">>> executing function ";
     CL.Printer.print_fnc_declaration f;
     print_endline ":";
+    let bb_tbl = StateTable.create in (* for states on basic block entry *)
     let fuid = CL.Util.get_fnc_uid f in
     let fname = CL.Printer.get_fnc_name f in
     let init_states =
       if fname = "main"
-      then init_state_main fnc_tbl f.args fuid
+      then init_state_main fnc_tbl bb_tbl f.args fuid
       else (State.init f.args)::[] in
-    let states = exec_block fnc_tbl init_states (List.hd f.cfg) fuid in
+    let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) fuid in
     print_endline ">>> final contract";
     let anchors = List.mapi (fun idx _ -> (-(idx+1))) f.args in
     let gvars = CL.Util.stor.global_vars in
@@ -441,53 +443,6 @@ let exec_fnc fnc_tbl f =
     (* print_string "TEMPORARY:";
     CL.Util.print_list Exp.variable_to_string temporary_vars; print_string "\n"; *)
     let fnc_c = get_fnc_contract anchors gvars temporary_vars states in
+    StateTable.reset bb_tbl;
     SpecTable.add fnc_tbl fuid fnc_c;
   )
-
-(********************************************)
-(* Experiments
-
-let pre_move = {
-    sigma = [ Hpointsto (Var 1, ptr_size, Var 3) ];
-    pi = [ BinOp ( Peq, Var 1, Var 2332) ]
-}
-let post_move = {
-    sigma = [ Hpointsto (Var 1, ptr_size, Var 3) ];
-    pi = [ BinOp ( Peq, Var 3, Var 2) ]
-}
-
-let c_move={lhs=pre_move; rhs=post_move; cvars=3; pvarmap=[(2332,2)]}
-
-let pre_change = {
-    sigma = [ Hpointsto (Var 1, ptr_size, Var 2) ];
-    pi = [ BinOp ( Peq, Var 1, Var 2332);
-     BinOp ( Peq, Var 1,  UnOp ( Base, Var 1)) ]
-}
-let post_change = {
-    sigma = [ Hpointsto (Var 1, ptr_size, Var 3) ];
-    pi = [ BinOp ( Peq, Var 1, Var 2332);
-     BinOp ( Peq, Var 1,  UnOp ( Base, Var 1))  ]
-}
-
-let c_change={lhs=pre_change; rhs=post_change; cvars=3; pvarmap=[]}
-
-let c_free={lhs=Formula.pre_free; rhs=Formula.post_free; cvars=0; pvarmap=[]};;
-let s={miss={sigma=[];pi=[]};  act=Formula.form1; lvars=[1;2]}
-
-let s1={miss={sigma=[];pi=[]};  act=Formula.form5; lvars=[1;2;4]}
-
-open Z3
-open Z3wrapper
-let cfg = [("model", "true"); ("proof", "false")]
-let ctx = (mk_context cfg)
-let solv = (Solver.mk_solver ctx None)
-let z3_names=get_sl_functions_z3 ctx
-
---------------------------------------------------
-
-let tmp=match contract_application ctx solv z3_names s1 c_move with
-| CAppOk x -> x;;
-
-let s2=simplify tmp;;
-
-*)

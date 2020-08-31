@@ -29,3 +29,5 @@ let print_spec uid contracts =
 let print tbl =
 	print_endline ("FUNCTIONS: " ^ (Int.to_string (Hashtbl.length tbl)));
 	Hashtbl.iter print_spec tbl
+
+let reset = Hashtbl.reset

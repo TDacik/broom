@@ -15,3 +15,5 @@ val add : t -> cl_uid -> Contract.t list -> unit
 val find_opt : t -> cl_uid -> Contract.t list option
 
 val print : t -> unit
+
+val reset : t -> unit
