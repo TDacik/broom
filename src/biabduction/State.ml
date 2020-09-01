@@ -61,7 +61,7 @@ let init_main args fuid =
   then
     anchor_state
   else
-    let new_var = (CL.Util.list_max_positive (CL.Util.get_fnc_vars fuid))+1 in
+    let new_var = (CL.Util.list_max_positive (CL.Util.get_pvars fuid))+1 in
     let len = FExp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
     let base = FExp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
     let size = FExp.BinOp ( Plesseq, FExp.zero, Var new_var) in
