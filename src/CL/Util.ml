@@ -125,6 +125,10 @@ let get_insns_from_block uid =
 
 let get_block uid = (uid, (check_fncs uid stor.Storage.fncs))
 
+let get_type_code uid =
+	let typ = get_type uid in
+	typ.code
+
 let get_type_size uid =
 	let typ = get_type uid in
 	typ.size

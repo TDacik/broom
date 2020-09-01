@@ -342,13 +342,15 @@ and exec_insn tbl bb_tbl states insn fuid =
       then states (* no need applaying empty contracts *)
       else apply_contracts_on_states solver fuid states c
   in
+  let abstract_if_end_loop bb_uid ss =
+    if (CL.Util.is_loop_closing_block bb_uid insn)
+      then try_abstraction_on_states solver fuid ss
+      else ss
+  in
   CL.Printer.print_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
-    let s_jmp = (
-      if (CL.Util.is_loop_closing_block uid insn)
-      then try_abstraction_on_states solver fuid states
-      else states) in
+    let s_jmp = abstract_if_end_loop uid states in
     exec_block tbl bb_tbl s_jmp bb fuid
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
@@ -356,14 +358,8 @@ and exec_insn tbl bb_tbl states insn fuid =
                  [(List.hd c)] in
     let s_else = apply_contracts_on_states solver fuid states
                  [(List.nth c 1)] in
-    let ss_then = (
-      if (CL.Util.is_loop_closing_block uid_then insn)
-      then try_abstraction_on_states solver fuid s_then
-      else s_then) in
-    let ss_else = (
-      if (CL.Util.is_loop_closing_block uid_else insn)
-      then try_abstraction_on_states solver fuid s_else
-      else s_else) in
+    let ss_then = abstract_if_end_loop uid_then s_then in
+    let ss_else = abstract_if_end_loop uid_else s_else in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
     (exec_block tbl bb_tbl ss_then bb_then fuid) @ (exec_block tbl bb_tbl ss_else bb_else fuid)
@@ -386,6 +382,16 @@ and exec_insns tbl bb_tbl states insns fuid =
   | insn::tl -> let s = exec_insn tbl bb_tbl states insn fuid in
     exec_insns tbl bb_tbl s tl fuid
 
+let get_zeroinitializer typ_code =
+  match typ_code with
+  | CL.Type.TypeInt | TypeChar | TypeEnum -> Some Exp.zero
+  | TypePtr _ | TypeString -> Some Exp.null
+  | TypeBool -> Some (Const (Bool false))
+  | TypeReal -> Some (Const (Float 0.0))
+  | TypeStruct _ | TypeUnion _ | TypeArray _ -> assert false (* FIXME *)
+  | TypeFnc _ -> assert false
+  | _ -> None
+
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
         (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
@@ -401,12 +407,17 @@ let init_state_main tbl bb_tbl args fuid =
     | uid::tl -> let gv = CL.Util.get_var uid in
       if (gv.initials=[]) && not(gv.is_extern) then
         match states with (* implicit initialization *)
-        | [s] -> let assign = Exp.BinOp (Peq, Var uid, Exp.zero) in
-          let new_s = {
-            miss = s.miss;
-            act = {pi=assign::s.act.pi; sigma=s.act.sigma};
-            lvars = s.lvars} in
-          exec_init_global_var [new_s] tl
+        | [s] -> (
+          let zero_exp = get_zeroinitializer (CL.Util.get_type_code gv.typ) in
+          match zero_exp with
+          | None -> states
+          | Some exp ->
+            let assign = Exp.BinOp (Peq, Var uid, exp) in
+            let new_s = {
+              miss = s.miss;
+              act = {pi=assign::s.act.pi; sigma=s.act.sigma};
+              lvars = s.lvars} in
+            exec_init_global_var [new_s] tl )
         | _ -> assert false
       else (* explicit initialization *)
         exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl

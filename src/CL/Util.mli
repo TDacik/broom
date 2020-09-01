@@ -81,6 +81,8 @@ val get_insns_from_block: Loc.cl_uid -> Fnc.insn list
 
 val get_block: Loc.cl_uid -> (Loc.cl_uid * Fnc.block)
 
+val get_type_code : Loc.cl_uid -> Type.cl_type_e
+
 val get_type_size : Loc.cl_uid -> int
 
 val get_type_ptr : Loc.cl_uid -> Loc.cl_uid
