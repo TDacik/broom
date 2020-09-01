@@ -73,10 +73,10 @@ let init_main args fuid =
       let exp_ptr_size = FExp.Const (Int (Int64.of_int ptr_size)) in
       let block = FExp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-1), exp_ptr_size))) in
       let sig_add = Formula.Hpointsto (Var (-2), Var new_var, Undef) in
-      let new_miss =
+      let new_f =
         {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
         sigma = sig_add :: anchor_state.miss.sigma} in
-      let s = {miss = new_miss; act = anchor_state.act; lvars = [new_var]} in
+      let s = {miss = new_f; act = new_f; lvars = [new_var]} in
       print s; s)
   | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
     init args (* handling as with an ordinary function *)
