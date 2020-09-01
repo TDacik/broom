@@ -820,16 +820,33 @@ let rec entailment_ll solver form1 form2 evars=
 
 let entailment solver form1 form2 evars=
   (* get fresh names for the evars to avoid conflicts in the entailment query *)
-  let conflicts1=find_vars form1 in
-  let form2_rename,evars2=match (rename_ex_variables form2 evars conflicts1) with
+  let form1_s=Formula.simplify form1 evars in
+  let form2_s=Formula.simplify form2 evars in
+  print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
+  Formula.print form1;
+  print_string "FORM2: ";
+  Formula.print form2;
+  let rec print_evars xx=
+  	match xx with
+	| [] -> print_string "]\n"
+	| a::b -> print_string ((string_of_int a)^", "); (print_evars b)
+  in
+  print_string "EVARS: [ "; print_evars evars;
+  let conflicts1=find_vars form1_s in
+  let form2_rename,evars2=match (rename_ex_variables form2_s evars conflicts1) with
     | f -> f
   in
   let conflicts2=find_vars form2_rename in
-  let form1_rename,evars1=match (rename_ex_variables form1 evars conflicts2) with
+  let form1_rename,evars1=match (rename_ex_variables form1_s evars conflicts2) with
     | f -> f
   in
   let query=(formula_to_solver solver.ctx form1_rename) @ (formula_to_solver solver.ctx form2_rename) in
-  (Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
+  let res=
+  	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
+  in
+  if res then print_string "ENT VALID\n" else print_string "ENT INVALID\n";
+  print_string "XXXXXXXXXXXXXXXXXXXXXX\n"; flush stdout;
+  res
 
 
 
