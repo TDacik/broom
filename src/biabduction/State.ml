@@ -49,31 +49,37 @@ let check_main_args_type args =
         | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
       | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
     | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false) in
-  (arg1_ok || arg2_ok)
+  (arg1_ok && arg2_ok)
 
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
         (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
    ACTUAL: arg1=argc & arg2=argv *)
 let init_main args fuid =
-  let anchor_state = init args in
-  if not (check_main_args_type args)
-  then
-    anchor_state
-  else
-    let new_var = (CL.Util.list_max_positive (CL.Util.get_pvars fuid))+1 in
-    let len = FExp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
-    let base = FExp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
-    let size = FExp.BinOp ( Plesseq, FExp.zero, Var new_var) in
-    let arg2 = CL.Util.get_var (List.nth args 1) in
-    let ptr_size = CL.Util.get_type_size (arg2.typ) in
-    let exp_ptr_size = FExp.Const (Int (Int64.of_int ptr_size)) in
-    let block = FExp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-1), exp_ptr_size))) in
-    let sig_add = Formula.Hpointsto (Var (-2), Var new_var, Undef) in
-    let new_miss =
-      {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
-      sigma = sig_add :: anchor_state.miss.sigma} in
-    {miss = new_miss; act = anchor_state.act; lvars = [new_var]}
+  let num_args = List.length args in
+  match num_args with
+  | 0 -> empty
+  | 2 -> (
+    let anchor_state = init args in
+    if not (check_main_args_type args) then
+      anchor_state
+    else
+      let new_var = (CL.Util.list_max_positive (CL.Util.get_pvars fuid))+1 in
+      let len = FExp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
+      let base = FExp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
+      let size = FExp.BinOp ( Plesseq, FExp.zero, Var new_var) in
+      let arg2 = CL.Util.get_var (List.nth args 1) in
+      let ptr_size = CL.Util.get_type_size (arg2.typ) in
+      let exp_ptr_size = FExp.Const (Int (Int64.of_int ptr_size)) in
+      let block = FExp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-1), exp_ptr_size))) in
+      let sig_add = Formula.Hpointsto (Var (-2), Var new_var, Undef) in
+      let new_miss =
+        {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
+        sigma = sig_add :: anchor_state.miss.sigma} in
+      let s = {miss = new_miss; act = anchor_state.act; lvars = [new_var]} in
+      print s; s)
+  | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
+    init args (* handling as with an ordinary function *)
 
 (* [substate fixed_vars state] contains in miss and act only clauses with
    variables from [fixed_vars] and related variables

@@ -422,14 +422,7 @@ let init_state_main tbl bb_tbl args fuid =
       else (* explicit initialization *)
         exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl
   in
-  let num_args = List.length args in
-  let init_state = (match num_args with
-  | 0 -> State.empty
-  | 2 -> let s = State.init_main args fuid in State.print s; s
-  | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
-    (* TODO error handling *)
-    State.init args (* handling as with an ordinary function *)
-  ) in
+  let init_state = State.init_main args fuid in
   print_endline ">>> initializing global variables";
   (exec_init_global_var (init_state::[]) CL.Util.stor.global_vars)
 
