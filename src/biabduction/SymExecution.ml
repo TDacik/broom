@@ -183,6 +183,59 @@ let post_contract_application state solver pvarmap pvars =
   then  CAppOk final_contract
   else (prerr_endline "SAT Fail"; CAppFail)
 
+(* Do
+   1) rename conflicting contract variables
+   2) apply the contract using biabduction
+   3) apply post contract renaming
+   pvars - a list of global program variables + local program variables (avoid
+           name conflicts)
+   --- the variables used in state/contract are captured automatically, but
+   thery may be some global/local variables, which are not used within state
+   and contract
+*)
+let contract_application solver state c pvars =
+  let c_rename = rename_contract_vars_ll state c 1 pvars in
+  match (apply_contract solver state c_rename pvars) with
+  | CAppFail -> CAppFail
+  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars)
+
+(* Applay each contract on each state *)
+let rec apply_contracts_on_states solver fuid states contracts =
+  let pvars = CL.Util.get_pvars fuid in
+  match states with
+  | [] -> []
+  | s::tl ->
+    let rec solve_contract contracts =
+      match contracts with
+      | [] -> []
+      | c::tl -> Contract.print c;
+          let res = contract_application solver s c pvars in
+          match res with
+          | CAppFail -> solve_contract tl (* FIXME error handling *)
+          | CAppOk s -> let simple_s = State.simplify s in
+            State.print simple_s;
+            simple_s::(solve_contract tl)
+    in
+    (solve_contract contracts) @ (apply_contracts_on_states solver fuid tl contracts)
+
+(* Try abstraction on each miss anad act of each state,
+   for now only list abstraction *)
+let try_abstraction_on_states solver fuid states =
+  let pvars = CL.Util.get_pvars fuid in
+  let rec try_abstraction states =
+    match states with
+    | [] -> []
+    | s::tl ->
+      let new_miss = Abstraction.lseg_abstaction solver s.miss pvars in
+      let new_act = Abstraction.lseg_abstaction solver s.act pvars in
+      let abstract_state = {miss = new_miss; act = new_act; lvars=s.lvars} in
+      (* TODO: update lvars *)
+      abstract_state :: (try_abstraction tl)
+  in
+  print_endline ">>> trying list abstraction";
+  try_abstraction states
+
+
 (* FIND CONTRACT FOR CALLING FUNCTION *)
 
 let find_fnc_contract tbl dst args fuid =
@@ -200,21 +253,6 @@ let find_fnc_contract tbl dst args fuid =
     in
     rename_fnc_contract p
 
-(* Do
-   1) rename conflicting contract variables
-   2) apply the contract using biabduction
-   3) apply post contract renaming
-   pvars - a list of global program variables + local program variables (avoid
-           name conflicts)
-   --- the variables used in state/contract are captured automatically, but
-   thery may be some global/local variables, which are not used within state
-   and contract
-*)
-let contract_application solver state c pvars =
-  let c_rename = rename_contract_vars_ll state c 1 pvars in
-  match (apply_contract solver state c_rename pvars) with
-  | CAppFail -> CAppFail
-  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars)
 
 (* PREPARE STATE FOR CONTRACT
   rename all variables expect parameters and global (fixed_vars) -
@@ -233,13 +271,13 @@ let rec state2contract s vars cvar =
 
 (* substitue gvars used in function of contract c and add corresponding
    pvarmoves *)
-let rec add_gvar_moves gvars c =
+let rec add_gvars_moves gvars c =
   match gvars with
   | [] -> c
   | gvar::tl -> let new_cvar = c.Contract.cvars + 1 in
     let new_rhs = substitute_vars_cvars (CVar new_cvar) (Var gvar) c.rhs in
     let new_c = {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap} in
-	(add_gvar_moves tl new_c)
+	(add_gvars_moves tl new_c)
 
 (* TODO errors handling *)
 (* anchors - existential vars representing arguments of function
@@ -274,7 +312,7 @@ let get_fnc_contract anchors gvars tmp_vars states =
         State.print rems;
         let removed_vars = tmp_vars @ rems.lvars in
         let c = (state2contract rems removed_vars 0) in
-        let new_c = add_gvar_moves gvars c in
+        let new_c = add_gvars_moves gvars c in
         Contract.print new_c;
         new_c :: (fnc_contract tl)
       with State.RemovedSpatialPartFromMiss -> (
@@ -284,45 +322,10 @@ let get_fnc_contract anchors gvars tmp_vars states =
   in
   fnc_contract states
 
+
 (*** EXECUTION ***)
 
 let solver = config_solver ()
-
-(* Applay each contract on each state *)
-let rec apply_contracts_on_states solver fuid states contracts =
-  let pvars = CL.Util.get_pvars fuid in
-  match states with
-  | [] -> []
-  | s::tl ->
-    let rec solve_contract contracts =
-      match contracts with
-      | [] -> []
-      | c::tl -> Contract.print c;
-          let res = contract_application solver s c pvars in
-          match res with
-          | CAppFail -> solve_contract tl (* FIXME error handling *)
-          | CAppOk s -> let simple_s = State.simplify s in
-            State.print simple_s;
-            simple_s::(solve_contract tl)
-    in
-    (solve_contract contracts) @ (apply_contracts_on_states solver fuid tl contracts)
-
-(* Try abstraction on each miss anad act of each state,
-   for now only list abstraction *)
-let try_abstraction_on_states solver fuid states =
-  let pvars = CL.Util.get_pvars_for_fnc fuid in
-  let rec try_abstraction states =
-    match states with
-    | [] -> []
-    | s::tl ->
-      let new_miss = Abstraction.lseg_abstaction solver s.miss pvars in
-      let new_act = Abstraction.lseg_abstaction solver s.act pvars in
-      let abstract_state = {miss = new_miss; act = new_act; lvars=s.lvars} in
-      (* TODO: update lvars *)
-      abstract_state :: (try_abstraction tl)
-  in
-  print_endline ">>> trying list abstraction";
-  try_abstraction states
 
 let rec exec_block tbl bb_tbl states (uid, bb) fuid =
   if (states = [])
