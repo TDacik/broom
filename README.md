@@ -5,8 +5,11 @@ fancy introduction...
 1) Install opam (minimal version 2.0.0) and libyojson-ocaml-dev (we need ydump)
 
    ```
-   sudo apt install opam                    ### for Ubuntu
+   sudo apt install opam                     ### for Ubuntu 20.04
    sudo apt install libyojson-ocaml-dev
+   ```
+   ```
+   brew install opam                         ### for MacOS
    ```
 
 2) Install dependencies by opam:
