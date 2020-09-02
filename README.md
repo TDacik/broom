@@ -2,6 +2,7 @@ fancy introduction...
 
 ## Building from sources
 
+1) Install opam
 
 ### List of dependencies
      - opam             >= 2.0.0,  (Ubuntu: "sudo apt install opam")
