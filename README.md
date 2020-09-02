@@ -3,30 +3,36 @@ fancy introduction...
 ## Building from sources
 
 1) Install opam (minimal version 2.0.0, Ubuntu example: "sudo apt install opam")
+
    Install libyojson-ocaml-dev (we need ydump, Ubuntu: "sudo apt install libyojson-ocaml-dev")
 
 2) Install dependencies:
+   ```
    opam install atdgen core cppo dune ppx_compare ppx_deriving qtest z3
-
+   ```
 3) 
+   ```
    export COMPILER="ocaml-variants.4.09.1+flambda"
    export SWITCH=$COMPILER
    opam init
    opam switch create $SWITCH $COMPILER  
    eval `opam config env`
    opam update
-
+   ```
 4) Install bi-abductor etc.:
+   ```
    git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
    cd bi-work   ### continue in this directory
    opam install --deps-only bi .
    ./build.sh
    dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
+   ```
 
 5) Simple test:
+   ```
    ./scripts/json_dumper  tests/easy-01-ok.c | ./scripts/generator
    ./scripts/biabductor   tests/easy-01-ok.c
-
+   ```
  
 
 ### List of dependencies
