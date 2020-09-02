@@ -108,8 +108,8 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 				root=(CVar cvar_last)} in
 			("Record acc, " ^ dbg, ef_new)
 
-		(* from: C1 -()-> <var>
-		   to: C2 -()-> C & C2 = C1 + off *)
+		(* from: C1 -(1)-> <var>
+		   to: C2 -(1)-> C & C2 = C1 + off *)
 		| Offset off ->
 			let (obj,cvars_obj) = find_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			assert (ef.cnt_cvars = cvars_obj); (* TODO object on stack unsupported *)
@@ -119,7 +119,7 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let elm = Exp.BinOp ( Peq, CVar cvar_elm, BinOp ( Pplus, obj, const_off)) in
 			let pi_add = [ elm;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, obj))) ] in
-			let sig_add = [ Hpointsto (CVar cvar_elm, const_off, CVar cvar_last) ] in
+			let sig_add = [ Hpointsto (CVar cvar_elm, Exp.one, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
 				{f={sigma = sig_add; pi = ef.f.pi @ pi_add};
 				cnt_cvars=cvar_last;
