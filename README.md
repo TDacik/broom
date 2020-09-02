@@ -4,7 +4,8 @@ fancy introduction...
 
 
 ### List of dependencies
-     - opam             >= 2.0.0
+     - opam             >= 2.0.0,  (Ubuntu: "sudo apt install opam")
+     next install by "opam install  atdgen core cppo dune ppx_compare ppx_deriving qtest z3"
      - atdgen
      - core
      - cppo
