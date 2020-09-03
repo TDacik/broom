@@ -16,7 +16,7 @@ Incomplete introduction...
    ```
    opam install atdgen core cppo dune ppx_compare ppx_deriving qtest z3
    ```
-3) Do some setup (TODO: explain why)
+3) Do some setup (TODO: explain why, order it before point 2?)
    ```
    export COMPILER="ocaml-variants.4.09.1+flambda"
    export SWITCH=$COMPILER
