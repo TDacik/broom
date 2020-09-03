@@ -119,7 +119,9 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let elm = Exp.BinOp ( Peq, CVar cvar_elm, BinOp ( Pplus, obj, const_off)) in
 			let pi_add = [ elm;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, obj))) ] in
-			let sig_add = [ Hpointsto (CVar cvar_elm, Exp.one, CVar cvar_last) ] in
+			let ptr_size = CL.Util.get_type_size ac.acc_typ in
+			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
+			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
 				{f={sigma = sig_add; pi = ef.f.pi @ pi_add};
 				cnt_cvars=cvar_last;
