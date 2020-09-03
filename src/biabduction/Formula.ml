@@ -123,6 +123,20 @@ let rec to_string ?lvars:(lvars=[]) e =
   | Void -> "Void"
   | Undef -> "Undef"
 
+let get_list_vars uids =
+  let constr v =
+    Var v
+  in
+  List.map constr uids
+
+let get_list_uids vars =
+  let unpack v =
+    match v with
+    | Var a -> Some a
+    | _ -> None
+  in
+  List.filter_map unpack vars
+
 end (*$>*)
 
 (************************************************************

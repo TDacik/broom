@@ -202,6 +202,7 @@ let contract_application solver state c pvars =
 (* Applay each contract on each state *)
 let rec apply_contracts_on_states solver fuid states contracts =
   let pvars = CL.Util.get_pvars fuid in
+  let pvars_exp = Exp.get_list_vars pvars in
   match states with
   | [] -> []
   | s::tl ->
@@ -212,7 +213,7 @@ let rec apply_contracts_on_states solver fuid states contracts =
           let res = contract_application solver s c pvars in
           match res with
           | CAppFail -> solve_contract tl (* FIXME error handling *)
-          | CAppOk s -> let simple_s = State.simplify s in
+          | CAppOk s -> let simple_s = State.substate pvars_exp s in
             State.print simple_s;
             simple_s::(solve_contract tl)
     in
@@ -285,18 +286,7 @@ let rec add_gvars_moves gvars c =
    tmp_vars - local program variables *)
 (* FIXME may be more variables in lvars than are in simplified state *)
 let get_fnc_contract anchors gvars tmp_vars states =
-  let constr v =
-    Exp.Var v
-  in
-  let unpack v =
-    match v with
-    | Exp.Var a -> Some a
-    | _ -> None
-  in
-  let get_uids l =
-	  List.filter_map unpack l
-  in
-  let fixed = (Exp.ret)::(List.map constr (anchors @ gvars)) in
+  let fixed = (Exp.ret)::(Exp.get_list_vars (anchors @ gvars)) in
   let rec fnc_contract ss =
     match ss with
     | [] -> []
@@ -308,7 +298,7 @@ let get_fnc_contract anchors gvars tmp_vars states =
         (* State.print subs; *)
         let remove_vars = tmp_vars @ subs.lvars in
           (* (find_vars subs.miss) @ (find_vars subs.act) in *)
-        let rems = State.remove_equiv_vars (get_uids fixed) remove_vars subs in
+        let rems = State.remove_equiv_vars (Exp.get_list_uids fixed) remove_vars subs in
         State.print rems;
         let removed_vars = tmp_vars @ rems.lvars in
         let c = (state2contract rems removed_vars 0) in

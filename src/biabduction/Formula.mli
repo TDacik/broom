@@ -64,6 +64,12 @@ module Exp : sig
   val unop_to_string : unop -> string
   val binop_to_string : binop -> string
   val to_string : ?lvars:variable list -> t -> string
+
+  (** [get_list_vars uids] gets list of Var expressions from list of uids *)
+  val get_list_vars: variable list -> t list
+
+  (** [get_list_uids vars] gets list of uids from list of Var expressions *)
+  val get_list_uids: t list -> variable list
 end
 
 
