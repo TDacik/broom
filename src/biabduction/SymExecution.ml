@@ -202,7 +202,6 @@ let contract_application solver state c pvars =
 (* Applay each contract on each state *)
 let rec apply_contracts_on_states solver fuid states contracts =
   let pvars = CL.Util.get_pvars fuid in
-  let pvars_exp = Exp.get_list_vars pvars in
   match states with
   | [] -> []
   | s::tl ->
@@ -213,9 +212,15 @@ let rec apply_contracts_on_states solver fuid states contracts =
           let res = contract_application solver s c pvars in
           match res with
           | CAppFail -> solve_contract tl (* FIXME error handling *)
-          | CAppOk s -> let simple_s = State.substate pvars_exp s in
-            State.print simple_s;
-            simple_s::(solve_contract tl)
+          | CAppOk s ->
+            try
+              let simple_s = State.simplify2 pvars s in
+              State.print simple_s;
+              simple_s::(solve_contract tl)
+            with State.RemovedSpatialPartFromMiss -> (
+              prerr_endline "!!! error: impossible precondition";
+              solve_contract tl
+            )
     in
     (solve_contract contracts) @ (apply_contracts_on_states solver fuid tl contracts)
 
@@ -284,24 +289,17 @@ let rec add_gvars_moves gvars c =
 (* anchors - existential vars representing arguments of function
    gvars - global variables used in function
    tmp_vars - local program variables *)
-(* FIXME may be more variables in lvars than are in simplified state *)
 let get_fnc_contract anchors gvars tmp_vars states =
-  let fixed = (Exp.ret)::(Exp.get_list_vars (anchors @ gvars)) in
+  let fixed = 0::(anchors @ gvars) in
   let rec fnc_contract ss =
     match ss with
     | [] -> []
     | s::tl -> (* State.print s; *)
-      (* let c = (state2contract s (tmp_vars @ s.lvars) 0) in
-      (Contract.subcontract fixed c) :: (fnc_contract tl) *)
       try
-        let subs = State.substate fixed s in
-        (* State.print subs; *)
-        let remove_vars = tmp_vars @ subs.lvars in
-          (* (find_vars subs.miss) @ (find_vars subs.act) in *)
-        let rems = State.remove_equiv_vars (Exp.get_list_uids fixed) remove_vars subs in
-        State.print rems;
-        let removed_vars = tmp_vars @ rems.lvars in
-        let c = (state2contract rems removed_vars 0) in
+        let subs = State.simplify2 fixed s in
+        State.print subs;
+        let removed_vars = tmp_vars @ subs.lvars in
+        let c = (state2contract subs removed_vars 0) in
         let new_c = add_gvars_moves gvars c in
         Contract.print new_c;
         new_c :: (fnc_contract tl)
@@ -367,10 +365,14 @@ and exec_insn tbl bb_tbl states insn fuid =
   | _ -> let c = Contract.get_contract insn in new_states_for_insn c
 
 and exec_insns tbl bb_tbl states insns fuid =
-  match insns with
-  | [] -> states
-  | insn::tl -> let s = exec_insn tbl bb_tbl states insn fuid in
-    exec_insns tbl bb_tbl s tl fuid
+  if (states = [])
+  then states
+  else (
+    match insns with
+    | [] -> states
+    | insn::tl -> let s = exec_insn tbl bb_tbl states insn fuid in
+      exec_insns tbl bb_tbl s tl fuid
+  )
 
 let get_zeroinitializer typ_code =
   match typ_code with
