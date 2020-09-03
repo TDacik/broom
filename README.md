@@ -2,50 +2,9 @@ Incomplete introduction...
 
 ## Building from sources
 
-1) Install opam (minimal version 2.0.0) and libyojson-ocaml-dev (we need ydump)
-
-   ```
-   sudo apt install opam                     ### for Ubuntu 20.04
-   sudo apt install libyojson-ocaml-dev
-   ```
-   ```
-   brew install opam                         ### for MacOS
-   ```
-
-2) Install dependencies by opam:
-   ```
-   opam install atdgen core cppo dune ppx_compare ppx_deriving qtest z3
-   ```
-3) Do some setup (TODO: explain why, order it before point 2?)
-   ```
-   export COMPILER="ocaml-variants.4.09.1+flambda"
-   export SWITCH=$COMPILER
-   opam init
-   opam switch create $SWITCH $COMPILER  
-   eval `opam config env`
-   opam update
-   ```
-4) Install bi-abductor etc.:
-   ```
-   git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
-   cd bi-work       ### continue in this directory
-   opam install --deps-only bi .
-   ./build.sh
-   dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
-   ```
-
-5) Simple test:
-   ```
-   ./scripts/json_dumper  tests/easy-01-ok.c | ./scripts/generator
-   ./scripts/biabductor   tests/easy-01-ok.c
-   ```
- 
-
- 
-
 ### List of dependencies
-     - opam             >= 2.0.0,  (Ubuntu: "sudo apt install opam")
-     next install by "opam install  atdgen core cppo dune ppx_compare ppx_deriving qtest z3"
+     - opam            >=  2.0.0
+     - ocaml           >= 4.08.0
      - atdgen
      - core
      - cppo
@@ -58,6 +17,7 @@ For JSON dumper see [code-listener/README](https://github.com/versokova/predator
 
 ### Install dependencies
 ```
+sudo apt install opam                                    # for Ubuntu 20.04
 brew install opam                                        # for MacOS
 ```
 ```
@@ -73,6 +33,8 @@ opam install --deps-only bi .
 
 ### Build
 ```
+git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
+cd bi-work           # continue in this directory
 ./build.sh           # for custom installation of gcc, set $GCC_HOST
 dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
 ```
