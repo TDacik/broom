@@ -1,10 +1,10 @@
-fancy introduction...
+Incomplete introduction...
 
 ## Building from sources
 
-
 ### List of dependencies
-     - opam             >= 2.0.0
+     - opam            >=  2.0.0
+     - ocaml           >= 4.08.0
      - atdgen
      - core
      - cppo
@@ -16,22 +16,31 @@ fancy introduction...
 For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 
 ### Install dependencies
-```
-brew install opam                                        # for MacOS
-```
-```
-$COMPILER="ocaml-variants.4.09.1+flambda"
-$SWITCH=$COMPILER
 
-opam init
-opam switch create $SWITCH $COMPILER
-eval `opam config env`
-opam update
-opam install --deps-only bi .
-```
+1. Install opam:
+  ```
+  sudo apt install opam                                  # for Ubuntu 20.04
+  brew install opam                                      # for MacOS
+  ```
+2. Opam setup:
+  ```
+  $COMPILER="ocaml-variants.4.09.1+flambda"
+  $SWITCH=$COMPILER
+  
+  opam init
+  opam switch create $SWITCH $COMPILER
+  eval `opam config env`
+  opam update
+  ```
+3. Install dependencies by opam:
+  ```
+  opam install --deps-only bi .
+  ```
 
 ### Build
 ```
+git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
+cd bi-work           # continue in this directory
 ./build.sh           # for custom installation of gcc, set $GCC_HOST
 dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
 ```

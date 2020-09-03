@@ -119,7 +119,9 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let elm = Exp.BinOp ( Peq, CVar cvar_elm, BinOp ( Pplus, obj, const_off)) in
 			let pi_add = [ elm;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, obj))) ] in
-			let sig_add = [ Hpointsto (CVar cvar_elm, Exp.one, CVar cvar_last) ] in
+			let ptr_size = CL.Util.get_type_size ac.acc_typ in
+			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
+			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
 				{f={sigma = sig_add; pi = ef.f.pi @ pi_add};
 				cnt_cvars=cvar_last;
@@ -233,42 +235,61 @@ let contract_for_binop code dst src1 src2 =
 	let lhs = ef_src2.f in
 	let (new_dst, pvarmap) = rewrite_dst {f=ef_src2.f; cnt_cvars=ef_src2.cnt_cvars; root=ef_dst.root} in
 	let bin_exp = ( match code with
-		| CL_BINOP_EQ -> Exp.BinOp ( Peq, ef_src1.root, ef_src2.root)
-		| CL_BINOP_NE -> BinOp ( Pneq, ef_src1.root, ef_src2.root)
-		| CL_BINOP_LT -> BinOp ( Pless, ef_src1.root, ef_src2.root)
-		| CL_BINOP_GT -> BinOp ( Pless, ef_src2.root, ef_src1.root)
-		| CL_BINOP_LE -> BinOp ( Plesseq, ef_src1.root, ef_src2.root)
-		| CL_BINOP_GE -> BinOp ( Plesseq, ef_src2.root, ef_src1.root)
-		| CL_BINOP_TRUTH_AND -> BinOp ( Pand, ef_src1.root, ef_src2.root)
-		| CL_BINOP_TRUTH_OR -> BinOp ( Por, ef_src1.root, ef_src2.root)
-		| CL_BINOP_TRUTH_XOR -> BinOp ( Pxor, ef_src1.root, ef_src2.root)
+		| CL_BINOP_EQ -> [Exp.BinOp ( Peq, ef_src1.root, ef_src2.root);
+			BinOp ( Pneq, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_NE -> [BinOp ( Pneq, ef_src1.root, ef_src2.root);
+			BinOp ( Peq, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_LT -> [BinOp ( Pless, ef_src1.root, ef_src2.root);
+			BinOp ( Plesseq, ef_src2.root, ef_src1.root)]
+		| CL_BINOP_GT -> [BinOp ( Pless, ef_src2.root, ef_src1.root);
+			BinOp ( Plesseq, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_LE -> [BinOp ( Plesseq, ef_src1.root, ef_src2.root);
+			BinOp ( Pless, ef_src2.root, ef_src1.root)]
+		| CL_BINOP_GE -> [BinOp ( Plesseq, ef_src2.root, ef_src1.root);
+			BinOp ( Pless, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_TRUTH_AND -> [BinOp ( Pand, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_TRUTH_OR -> [BinOp ( Por, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_TRUTH_XOR -> [BinOp ( Pxor, ef_src1.root, ef_src2.root)]
 		| CL_BINOP_PLUS | CL_BINOP_POINTER_PLUS ->
-			BinOp ( Pplus, ef_src1.root, ef_src2.root)
-		| CL_BINOP_MINUS -> BinOp ( Pminus, ef_src1.root, ef_src2.root)
-		| CL_BINOP_MULT -> BinOp ( Pmult, ef_src1.root, ef_src2.root)
+			[BinOp ( Pplus, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_MINUS -> [BinOp ( Pminus, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_MULT -> [BinOp ( Pmult, ef_src1.root, ef_src2.root)]
 		| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV ->
-			BinOp ( Pdiv, ef_src1.root, ef_src2.root)
-		| CL_BINOP_TRUNC_MOD -> BinOp ( Pmod, ef_src1.root, ef_src2.root)
-		| CL_BINOP_BIT_AND -> BinOp ( BVand, ef_src1.root, ef_src2.root)
-		| CL_BINOP_BIT_IOR -> BinOp ( BVor, ef_src1.root, ef_src2.root)
-		| CL_BINOP_BIT_XOR -> BinOp ( BVxor, ef_src1.root, ef_src2.root)
-		| CL_BINOP_LSHIFT -> BinOp ( BVlshift, ef_src1.root, ef_src2.root)
-		| CL_BINOP_RSHIFT -> BinOp ( BVrshift, ef_src1.root, ef_src2.root)
-		| CL_BINOP_LROTATE -> BinOp ( BVlrotate, ef_src1.root, ef_src2.root)
-		| CL_BINOP_RROTATE -> BinOp ( BVrrotate, ef_src1.root, ef_src2.root)
-		| _ -> Undef (* TODO: should be Def or Everything *)
+			[BinOp ( Pdiv, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_TRUNC_MOD -> [BinOp ( Pmod, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_BIT_AND -> [BinOp ( BVand, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_BIT_IOR -> [BinOp ( BVor, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_BIT_XOR -> [BinOp ( BVxor, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_LSHIFT -> [BinOp ( BVlshift, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_RSHIFT -> [BinOp ( BVrshift, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_LROTATE -> [BinOp ( BVlrotate, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_RROTATE -> [BinOp ( BVrrotate, ef_src1.root, ef_src2.root)]
+		| _ -> [Undef] (* TODO: should be Def or Everything *)
 	) in
-	let assign = Exp.BinOp ( Peq, new_dst.root, bin_exp ) in
-	let pi_add = ( match code with
-		| CL_BINOP_POINTER_PLUS -> [ assign; Exp.BinOp ( Plesseq, new_dst.root,
-			 BinOp ( Pplus,
-				 UnOp (Base, new_dst.root),
-				 UnOp (Len, new_dst.root))
-			 ) ]
-		| _ -> [assign]
-	) in
-	let rhs = {pi = pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap}
+	let assign = Exp.BinOp ( Peq, new_dst.root, (List.hd bin_exp) ) in
+	match bin_exp with
+	| [_] ->
+		let pi_add = ( match code with
+			| CL_BINOP_POINTER_PLUS -> [ assign; Exp.BinOp ( Plesseq,
+				 new_dst.root,
+				 BinOp ( Pplus,
+					 UnOp (Base, new_dst.root),
+					 UnOp (Len, new_dst.root))
+				 ) ]
+			| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV | CL_BINOP_TRUNC_MOD ->
+				[ assign; Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
+			| _ -> [assign]
+		) in
+		let rhs = {pi = pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
+		[{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap}]
+	| e1::e2::[] ->
+		let lhs1 = {pi = e1::lhs.pi; sigma = lhs.sigma} in
+		let rhs1 = {pi = assign::e1::new_dst.f.pi; sigma = new_dst.f.sigma} in
+		let lhs2 = {pi = e2::lhs.pi; sigma = lhs.sigma} in
+		let rhs2 = {pi = assign::e2::new_dst.f.pi; sigma = new_dst.f.sigma} in
+		[{lhs=lhs1; rhs=rhs1; cvars=new_dst.cnt_cvars; pvarmap=pvarmap};
+		 {lhs=lhs2; rhs=rhs2; cvars=new_dst.cnt_cvars; pvarmap=pvarmap}]
+	| _ -> assert false
 
 (****** CONTRACTS FOR UNARY OPERATION ******)
 
@@ -395,7 +416,7 @@ let get_contract insn =
 	| InsnCOND (op,_,_) -> contract_for_cond op
 	(* | InsnCLOBBER var -> [] *)
 	| InsnABORT -> (contract_fail)::[]
-	| InsnBINOP (code, dst, src1, src2) -> (contract_for_binop code dst src1 src2)::[]
+	| InsnBINOP (code, dst, src1, src2) -> contract_for_binop code dst src1 src2
 	| InsnCALL ops -> ( match ops with
 		| dst::called::args -> if (CL.Util.is_extern called)
 			then contract_for_builtin dst called args
