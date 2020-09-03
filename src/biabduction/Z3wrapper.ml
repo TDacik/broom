@@ -186,6 +186,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     (* Create constrains for two space predicates *)
     (*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
     (* fit_len: x<=y<x+len(x) \/ y<=x<y+len(y) => base(x) = base(y) *)
+    (*  fix_len: x!=y /\ [base(x)= base(y) => x+len(x)=y+len(y)] *)
     let no_overlap x size_x y size_y=
       Boolean.mk_or ctx
       [(BitVector.mk_sle ctx (BitVector.mk_add ctx x (expr_to_solver ctx func size_x) ) y);
@@ -207,13 +208,20 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
       ])
       (base_eq x y)
     in
+    let fix_len x y = Boolean.mk_implies ctx (base_eq x y) 
+		(Boolean.mk_eq ctx
+			(BitVector.mk_add ctx x (Expr.mk_app ctx func.len [x]))
+			(BitVector.mk_add ctx y (Expr.mk_app ctx func.len [y]))
+		) 
+    in
     let two_sp_preds_c al sp_rule = 
       match sp_rule with
       | Hpointsto (aa, size_aa, _) ->(* create a nonequality al != x, where x is the allocated node in sp_rule *)
         Boolean.mk_and ctx
         [(Boolean.mk_not ctx (Boolean.mk_eq ctx al (alloc aa)));
         (dist_fields al size (alloc aa) size_aa);
-        (fit_len al (alloc aa))]
+        (fit_len al (alloc aa));
+	(fix_len al (alloc aa))]
       | Slseg (aa,bb,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
         Boolean.mk_or ctx
         [ Boolean.mk_not ctx (base_eq al (alloc aa));
