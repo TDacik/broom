@@ -265,6 +265,8 @@ let contract_for_binop code dst src1 src2 =
 				 UnOp (Base, new_dst.root),
 				 UnOp (Len, new_dst.root))
 			 ) ]
+		| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV | CL_BINOP_TRUNC_MOD ->
+			[ assign; Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
 		| _ -> [assign]
 	) in
 	let rhs = {pi = pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
