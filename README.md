@@ -16,20 +16,26 @@ Incomplete introduction...
 For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 
 ### Install dependencies
-```
-sudo apt install opam                                    # for Ubuntu 20.04
-brew install opam                                        # for MacOS
-```
-```
-$COMPILER="ocaml-variants.4.09.1+flambda"
-$SWITCH=$COMPILER
 
-opam init
-opam switch create $SWITCH $COMPILER
-eval `opam config env`
-opam update
-opam install --deps-only bi .
-```
+1. Install opam:
+  ```
+  sudo apt install opam                                  # for Ubuntu 20.04
+  brew install opam                                      # for MacOS
+  ```
+2. Opam setup:
+  ```
+  $COMPILER="ocaml-variants.4.09.1+flambda"
+  $SWITCH=$COMPILER
+  
+  opam init
+  opam switch create $SWITCH $COMPILER
+  eval `opam config env`
+  opam update
+  ```
+3. Install dependencies by opam:
+  ```
+  opam install --deps-only bi .
+  ```
 
 ### Build
 ```
