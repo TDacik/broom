@@ -247,15 +247,20 @@ let disjoint_union {pi = pi1; sigma = sigma1} {pi = pi2; sigma = sigma2} =
 
 (*** FIND ALL VARIABLES IN FORMULA ***)
 
-let rec find_var_pointsto obj sigma cvars =
+(* returns: ptr new_sigma new_cvars *)
+let rec find_and_remove_var_pointsto obj sigma cvars =
   match sigma with
   | [] -> let cvar_last = cvars + 1 in
-    (Exp.CVar cvar_last), cvar_last
-  | Hpointsto (a,_,obj)::rest ->
-    (match a with
-     | Var _ | CVar _ -> (a, cvars)
-     | _ -> find_var_pointsto obj rest cvars )
-  | _::rest -> find_var_pointsto obj rest cvars
+    (Exp.CVar cvar_last), [], cvar_last
+  | Hpointsto (ptr,size,obj)::rest -> (
+    match ptr with
+    | Var _ | CVar _ -> (ptr, rest, cvars)
+    | _ ->
+      let (ptr0,sig0,cvars0) = find_and_remove_var_pointsto obj rest cvars in
+      ptr0, Hpointsto (ptr,size,obj)::sig0, cvars0 )
+  | exp::rest ->
+    let (ptr0,sig0,cvars0) = find_and_remove_var_pointsto obj rest cvars in
+    ptr0, exp::sig0, cvars0
 
 (* exexcept contract variables *)
 let rec find_vars_expr expr =

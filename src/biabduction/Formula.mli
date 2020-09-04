@@ -110,8 +110,11 @@ val disjoint_union : t -> t -> t
 
 (** {3 Find all variables in formula} *)
 
-(** [find_var_pointsto obj sigma cvars] returns variable pointed to object [obj] otherwise fresh cvar *)
-val find_var_pointsto : Exp.t -> sigma -> int -> (Exp.t * int)
+(** [find_and_remove_var_pointsto obj sigma cvars] returns variable pointed to
+    object [obj] and new sigma without points-to otherwise fresh cvar and sigma
+*)
+val find_and_remove_var_pointsto : Exp.t -> sigma -> int ->
+                                   (Exp.t * sigma * int)
 
 (** [find_vars_expr expr] *)
 val find_vars_expr : Exp.t -> Exp.variable list
