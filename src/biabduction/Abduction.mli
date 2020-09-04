@@ -22,6 +22,8 @@ exception ShouldBeRefactoredToMakeExhaustive of unit
 (** Raise in case of ... *)
 exception IllegalArgumentException of string
 
+exception NoApplicableRule
+
 (** [biabduction solver form1 form2] is main biabduction function
     The result is:  "missing, frame, added_lvars"
     First test SAT of form1 and form2.

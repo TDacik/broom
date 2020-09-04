@@ -286,29 +286,59 @@ let rec add_gvars_moves gvars c =
 	(add_gvars_moves tl new_c)
 
 (* TODO errors handling *)
+let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
+  print_endline ">>> final error contract";
+  let fixed = (CL.Util.get_anchors_uid fuid) @ CL.Util.stor.global_vars in
+  let get_err_contract s =
+    let (removed_sigma,new_miss) = Formula.simplify2 fixed s.miss in
+    if (removed_sigma) then
+      prerr_endline "!!! error: impossible precondition";
+    let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
+    let s_err =
+      {miss = new_miss;
+        act = {pi = [Exp.Const (Bool false)]; sigma = []};
+        lvars = []} in
+    let c_err = state2contract s_err removed_vars 0 in
+    Contract.print c_err;
+    c_err
+  in
+  let c_errs = List.map get_err_contract states in
+  SpecTable.add fnc_tbl fuid c_errs
+
 (* anchors - existential vars representing arguments of function
-   gvars - global variables used in function
+   used_gvars - global variables used in function
    tmp_vars - local program variables *)
-let get_fnc_contract anchors gvars tmp_vars states =
-  let fixed = 0::(anchors @ gvars) in
-  let rec fnc_contract ss =
-    match ss with
-    | [] -> []
-    | s::tl -> (* State.print s; *)
+let set_fnc_contract fnc_tbl states fuid =
+  print_endline ">>> final contract";
+  let anchors = CL.Util.get_anchors_uid fuid in
+  let gvars = CL.Util.stor.global_vars in
+  let fvars = CL.Util.get_fnc_vars fuid in
+  let used_gvars = CL.Util.list_inter fvars gvars in
+  let tmp_vars = CL.Util.list_diff fvars gvars in
+  print_string "PVARS:";
+  CL.Util.print_list Exp.variable_to_string fvars; print_newline ();
+  print_string "ANCHORS:";
+  CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
+  print_string "GVARS:";
+  CL.Util.print_list Exp.variable_to_string used_gvars; print_newline ();
+
+  let fixed = 0::(anchors @ used_gvars) in
+  let get_contract s =
       try
         let subs = State.simplify2 fixed s in
         State.print subs;
         let removed_vars = tmp_vars @ subs.lvars in
         let c = (state2contract subs removed_vars 0) in
-        let new_c = add_gvars_moves gvars c in
+        let new_c = add_gvars_moves used_gvars c in
         Contract.print new_c;
-        new_c :: (fnc_contract tl)
+        Some new_c
       with State.RemovedSpatialPartFromMiss -> (
-        prerr_endline "!!! error: impossible precondition";
-        fnc_contract tl
+        set_fnc_error_contract fnc_tbl [s] CL.Fnc.InsnNOP fuid;
+        None
       )
   in
-  fnc_contract states
+  let fnc_c = List.filter_map get_contract states in
+  SpecTable.add fnc_tbl fuid fnc_c
 
 
 (*** EXECUTION ***)
@@ -326,9 +356,14 @@ let rec exec_block tbl bb_tbl states (uid, bb) fuid =
 
 and exec_insn tbl bb_tbl states insn fuid =
   let new_states_for_insn c =
-    if (c = [])
-      then states (* no need applaying empty contracts *)
-      else apply_contracts_on_states solver fuid states c
+    if (c = []) then
+      states (* no need applaying empty contracts *)
+    else (
+      let new_states = apply_contracts_on_states solver fuid states c in
+        if (new_states = []) then (
+          (* error appears, continue with empty states *)
+          set_fnc_error_contract tbl states insn.CL.Fnc.code fuid;[])
+        else new_states )
   in
   let abstract_if_end_loop bb_uid ss =
     if (CL.Util.is_loop_closing_block bb_uid insn)
@@ -431,22 +466,6 @@ let exec_fnc fnc_tbl f =
       then init_state_main fnc_tbl bb_tbl f.args fuid
       else (State.init f.args)::[] in
     let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) fuid in
-    print_endline ">>> final contract";
-    let anchors = List.mapi (fun idx _ -> (-(idx+1))) f.args in
-    let gvars = CL.Util.stor.global_vars in
-    let used_gvars = CL.Util.list_inter f.vars gvars in
-    let temporary_vars = CL.Util.list_diff f.vars gvars in
-    print_string "PVARS:";
-    CL.Util.print_list Exp.variable_to_string f.vars; print_newline ();
-    print_string "ANCHORS:";
-    CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
-    print_string "GVARS:";
-    CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
-    (* print_string "FIXED:";
-    CL.Util.print_list Exp.variable_to_string fixed_vars; print_string "\n"; *)
-    (* print_string "TEMPORARY:";
-    CL.Util.print_list Exp.variable_to_string temporary_vars; print_string "\n"; *)
-    let fnc_c = get_fnc_contract anchors used_gvars temporary_vars states in
+    set_fnc_contract fnc_tbl states fuid;
     StateTable.reset bb_tbl;
-    SpecTable.add fnc_tbl fuid fnc_c;
   )

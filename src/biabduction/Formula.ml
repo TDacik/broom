@@ -547,6 +547,13 @@ let remove_useless_conjuncts form evars =
   let new_pi=get_referenced_conjuncts form.pi ref_vars in
   {sigma=form.sigma; pi=new_pi}
 
+(* fixed_vars - variables can't be removed
+   form - expect satisfiable formula only *)
+let simplify2 fixed_vars form =
+  let fixed_vars_exp = Exp.get_list_vars fixed_vars in
+  let (removed_sigma,all_vars,subf) = subformula fixed_vars_exp form in
+  let evars = CL.Util.list_diff (Exp.get_list_uids all_vars) fixed_vars in
+  (removed_sigma,remove_equiv_vars fixed_vars evars subf)
 
 (* now we have everything for global simplify function,
    evars is a list of Ex. q. variables, which can be renamed/removed/etc...

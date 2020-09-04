@@ -165,10 +165,16 @@ val remove_equiv_vars : Exp.variable list -> Exp.variable list -> t -> t
       1a) contains vars only from [evars] only
       1b) it is of the form exp1 != exp2 and evars are not togather with
           referenced ars in exp1/2
-          i.e. r1 != e1 (r1 referenced, e1 existential) => not needed
+          i.e. r1 != e1 (r1 referenced, e1 existential) => not needed FIXME!
       2) there is no transitive reference from spatial part or program variables
     [form] expect satisfiable formula only *)
 val remove_useless_conjuncts : t -> Exp.variable list -> t
+
+(** [simplify2 fixed_vars form] is global simplify function, returns true, if
+    something was removed from sigma and simplified formula
+    [fixed_vars] - variables can't be removed
+    [form] - expect satisfiable formula only *)
+val simplify2 : Exp.variable list -> t -> bool * t
 
 (** [simplify form evars] is global simplify function, [evars] is a list of Ex.
     q. variables, which can be renamed/removed/etc...

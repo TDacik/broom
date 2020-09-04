@@ -13,6 +13,7 @@ type variable = Formula.Exp.variable
 exception TempExceptionBeforeApiCleanup of string
 exception ShouldBeRefactoredToMakeExhaustive of unit
 exception IllegalArgumentException of string
+exception NoApplicableRule
 
 (** result of the rule application
     form1 * form2 * M * added_local_vars
@@ -762,7 +763,7 @@ let rec biabduction solver form1 form2 pvars =
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
   | Fail ->
-    prerr_endline "No applicable rule"; BFail
+    raise NoApplicableRule
 
 
 (****************************************************)
