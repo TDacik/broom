@@ -4,7 +4,7 @@ module Contract = Biabd.Contract
 let custom_fnc insn =
 	CL.Printer.print_insn insn;
 	let lc = Contract.get_contract insn in
-	CL.Util.print_list (fun x -> "\n"^(Contract.to_string x)) lc; print_newline ()
+	CL.Util.print_list_endline Contract.to_string lc
 
 let rec print_storage fncs =
 	match fncs with
