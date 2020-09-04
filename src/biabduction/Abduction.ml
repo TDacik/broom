@@ -726,7 +726,7 @@ let rec biabduction solver form1 form2 pvars =
   | SatFail ->
     prerr_endline "SAT fail"; BFail
   | Finish (missing,frame) ->
-    print_string "Finish true, "; flush stdout; Bok ( missing,frame, [])
+    print_endline "Finish true"; Bok ( missing,frame, [])
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
