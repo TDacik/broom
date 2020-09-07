@@ -455,9 +455,8 @@ let init_state_main tbl bb_tbl args fuid =
 
 let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
-    print_string ">>> executing function ";
-    CL.Printer.print_fnc_declaration f;
-    print_endline ":";
+    let fnc_decl_str = CL.Printer.fnc_declaration_to_string f in
+    print_endline (">>> executing function "^fnc_decl_str^":");
     let bb_tbl = StateTable.create in (* for states on basic block entry *)
     let fuid = CL.Util.get_fnc_uid f in
     let fname = CL.Printer.get_fnc_name f in

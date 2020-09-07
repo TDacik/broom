@@ -9,8 +9,8 @@ let custom_fnc insn =
 let rec print_storage fncs =
 	match fncs with
 	| [] -> ()
-	| (_, f)::tl -> CL.Printer.print_fnc_declaration f;
-		print_endline ":";
+	| (_, f)::tl ->
+		print_endline ((CL.Printer.fnc_declaration_to_string f)^":");
 		CL.Printer.print_cfg custom_fnc f.cfg;
 		print_storage tl
 

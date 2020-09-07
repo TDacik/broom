@@ -12,16 +12,22 @@ val var_to_string: Loc.cl_uid -> string
 (** [operand_to_string op] gets CL operand as string *)
 val operand_to_string: Operand.t -> string
 
+val get_fnc_name: Fnc.t -> string
+
+val fnc_declaration_to_string: Fnc.t -> string
+
+(** [insn_to_string ?indent insn] gets CL instruction as string; if indend is
+    true, instructions are indented by 2 tabs *)
+val insn_to_string: ?indent:bool -> Fnc.insn -> string
+
+(** {3 Printing on stdard output} *)
+
 (** [print_insn insn] prints CL instruction *)
 val print_insn: Fnc.insn -> unit
 
 (** [print_block apply_on_insn bb] prints basic block of function and applies
 	'apply_on_insn' on each instruction *)
 val print_block: (Fnc.insn -> unit) -> Loc.cl_uid * Fnc.block -> unit
-
-val get_fnc_name: Fnc.t -> string
-
-val print_fnc_declaration : Fnc.t -> unit
 
 val print_cfg : (Fnc.insn -> unit) -> (Loc.cl_uid * Fnc.block) list -> unit
 

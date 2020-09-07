@@ -19,10 +19,11 @@ let add tbl uid contracts =
 
 let find_opt tbl x = Hashtbl.find_opt tbl x
 
+(** printing on standard output *)
+
 let print_spec uid contracts =
-	print_string ">>> spec of function ";
-	CL.Printer.print_fnc_declaration (CL.Util.get_fnc uid);
-	print_endline ":";
+	let fnc_decl = CL.Printer.fnc_declaration_to_string (CL.Util.get_fnc uid) in
+	print_endline (">>> spec of function " ^ fnc_decl ^ ":");
 	CL.Util.print_list_endline Contract.to_string contracts
 
 let print tbl =

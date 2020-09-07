@@ -65,7 +65,8 @@ let rec print_list ?delim:(delim=", ") to_string args =
 		print_list ~delim:delim to_string tl
 
 let print_list_endline to_string args =
-	print_list ~delim:"\n" to_string args; print_newline ()
+	if (args=[]) then ()
+	else (print_list ~delim:"\n" to_string args; print_newline ())
 
 let is_loop_closing_block bb_uid insn =
 	List.mem bb_uid insn.Fnc.loop_closing_targets

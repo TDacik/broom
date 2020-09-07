@@ -26,7 +26,7 @@ let type_to_string _ (* uid *) = ""
 
 let var_to_string uid =
 	let v = Util.get_var uid in
-	let uid_str = Printf.sprintf "%i" uid in
+	let uid_str = string_of_int uid in
 	let scope = (match v.code with
 		| VAR_GL -> "S"
 		| VAR_LC | VAR_FNC_ARG -> "F"
@@ -70,10 +70,10 @@ and back_accessors accs =
 		| Item _ (* num *) ->
 			let (names, off, rest_tl) = item_accessors accs in
 			let rest = back_accessors rest_tl in
-			let off_str = Printf.sprintf "%i" off in
+			let off_str = string_of_int off in
 			"[+" ^ off_str ^ "]" ^ names ^ rest
 		| Offset off -> let rest = back_accessors tl
-			and id_str = Printf.sprintf "%i" off
+			and id_str = string_of_int off
 			and sign = (if off >= 0 then "+" else "") in
 			".<" ^ sign ^ id_str ^ ">" ^ rest
 		| Ref -> Util.error ILOC "invalid reference accessor"; ""
@@ -129,15 +129,13 @@ and constant_to_string data accs =
 
 let get_fnc_name f = operand_to_string f.Fnc.def
 
-let print_fnc_declaration f =
-	if Util.is_fnc_static f then print_string "static ";
-	let str = get_fnc_name f in
-		Printf.printf "%s(" str;
-		Util.print_list var_to_string f.args;
-		print_string ")"
+let fnc_declaration_to_string f =
+	let str_static = (if Util.is_fnc_static f then "static " else "") in
+	let str_args = Util.list_to_string var_to_string f.args in
+	str_static ^ (get_fnc_name f) ^ "(" ^ str_args ^ ")"
 
-(* Print unary CL instruction *)
-let print_unary_insn code dst src =
+(* Get unary CL instruction as string *)
+let unary_insn_to_string code dst src =
 	let unop = ( match code with
 		| CL_UNOP_TRUTH_NOT -> "!"
 		| CL_UNOP_BIT_NOT -> "~"
@@ -150,10 +148,10 @@ let print_unary_insn code dst src =
 		| _ -> "") in
 	let str_dst = operand_to_string dst in
 	let str_src = operand_to_string src in
-		Printf.printf "\t\t%s := %s%s%s\n%!" str_dst unop str_src e
+	str_dst^" := "^unop^str_src^e
 
-(* Print binary CL instruction *)
-let print_binary_insn code dst src1 src2 =
+(* Get binary CL instruction as string *)
+let binary_insn_to_string code dst src1 src2 =
 	let binop = ( match code with
 		| CL_BINOP_EQ -> "=="
 		| CL_BINOP_NE -> "!="
@@ -183,44 +181,59 @@ let print_binary_insn code dst src1 src2 =
 	let str_dst = operand_to_string dst in
 	let str_src1 = operand_to_string src1 in
 	let str_src2 = operand_to_string src2 in
-		Printf.printf "\t\t%s := (%s %s %s)\n%!" str_dst str_src1 binop str_src2
+	str_dst^" := ("^str_src1^" "^binop^" "^str_src2^")"
 
-(* Print call instruction; ops = dst, called, ?args+ *)
-let print_call_insn ops =
+(* Get call instruction; ops = dst, called, ?args+ as string *)
+let call_insn_to_string ops =
 	match ops with
 	| hd::snd::args ->
 		let str_called = operand_to_string snd in
-		if not (Util.is_void hd)
-			then let str_dst = operand_to_string hd in
-				Printf.printf "\t\t%s := " str_dst
-			else Printf.printf "\t\t";
-		Printf.printf "%s(" str_called;
-		Util.print_list operand_to_string args;
-		Printf.printf ")\n%!"
-	| _ -> Util.error ILOC "wrong call instruction"
+		let str_dst = (if not (Util.is_void hd)
+			then operand_to_string hd ^ " := "
+			else "") in
+		let str_args = Util.list_to_string operand_to_string args in
+		str_dst^str_called^"("^str_args^")"
+	| _ -> Util.error ILOC "wrong call instruction"; ""
+
+let cond_insn_to_string ?indent:(indent=false) cond tg_then tg_else =
+	let (beg,goto,els) = (if (indent)
+		then "\t\t","\n\t\t\t","\n\t\t"
+		else ""," "," ") in
+	beg^"if ("^(operand_to_string cond)^")"^
+	goto^"goto L"^(string_of_int tg_then)^
+	els^"else"^
+	goto^"goto L"^(string_of_int tg_else)
+
+let insn_to_string ?indent:(indent=false) insn =
+	let ind = (if (indent) then "\t\t" else "") in
+	match insn.code with
+	| InsnNOP -> ind ^ "nop"
+	| InsnJMP uid -> ind ^ "goto L" ^ (string_of_int uid)
+	| InsnCOND (cond, tg_then, tg_else) ->
+		cond_insn_to_string ~indent:indent cond tg_then tg_else
+	| InsnRET ret -> let op = (if not (Util.is_void ret)
+			then " " ^ operand_to_string ret
+			else "") in
+		ind ^ "return" ^ op
+	| InsnCLOBBER var ->
+		ind ^ "clobber " ^ (operand_to_string var)
+	| InsnABORT -> ind ^ "abort"
+	| InsnUNOP (code, dst, src) ->
+		ind ^ (unary_insn_to_string code dst src)
+	| InsnBINOP (code, dst, src1, src2) ->
+		ind ^ (binary_insn_to_string code dst src1 src2)
+	| InsnCALL ops -> ind ^ (call_insn_to_string ops)
+	| InsnSWITCH _ -> Util.error ILOC "unsupported switch instruction"; ""
+	| InsnLABEL _ -> "" (* unused *)
 
 (* Print CL instruction *)
 let print_insn insn =
-	match insn.code with
-	| InsnNOP -> Printf.printf "\t\tnop\n%!"
-	| InsnJMP uid -> Printf.printf "\t\tgoto L%i\n%!" uid
-	| InsnCOND (cond, tg_then, tg_else) -> let op = operand_to_string cond in
-		Printf.printf "\t\tif (%s)\n\t\t\tgoto L%i\n\t\telse\n\t\t\tgoto L%i\n%!"  op tg_then tg_else
-	| InsnRET ret -> if not (Util.is_void ret)
-		then let op = operand_to_string ret in
-			Printf.printf "\t\treturn %s\n%!" op
-		else Printf.printf "\t\treturn\n%!"
-	| InsnCLOBBER var -> let op = operand_to_string var in
-		Printf.printf "\t\tclobber %s\n%!" op
-	| InsnABORT -> Printf.printf "\t\tabort\n%!"
-	| InsnUNOP (code, dst, src) -> print_unary_insn code dst src
-	| InsnBINOP (code, dst, src1, src2) -> print_binary_insn code dst src1 src2
-	| InsnCALL ops -> print_call_insn ops
-	| InsnSWITCH _ -> Util.error ILOC "unsupported switch instruction"
-	| InsnLABEL _ -> empty_output (* unused *)
+	let str_insn = insn_to_string ~indent:true insn in
+	if (str_insn = "") then ()
+	else print_endline str_insn
 
 let print_block apply_on (uid, bb) =
-	Printf.printf "\tL%i:\n%!" uid;
+	print_endline ("\tL" ^ (string_of_int uid) ^ ":");
 	List.iter apply_on bb.insns
 
 let rec print_cfg apply_on_insn cfg =
@@ -230,9 +243,5 @@ let rec print_cfg apply_on_insn cfg =
 
 (* Print function *)
 let print_fnc ?apply_on_insn:(apply = print_insn) (_, f) =
-	if Util.is_fnc_static f then Printf.printf "static ";
-	let str = get_fnc_name f in
-		Printf.printf "%s(" str;
-		Util.print_list var_to_string f.args;
-		Printf.printf "):\n%!";
+	print_endline ((fnc_declaration_to_string f)^":");
 	print_cfg apply f.cfg
