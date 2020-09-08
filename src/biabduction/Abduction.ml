@@ -412,10 +412,10 @@ let try_learn_slseg solver form1 form2 level _=
 
 let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
-  let lhs,lhs_size,lhs_dest =
+  let lhs,lhs_size =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,s ,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s),b
-    | Slseg (_) -> ff,ff,Exp.zero
+    | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+    | Slseg (_) -> ff,ff
   in
   let rhs,rhs_size =
     match (List.nth form2.sigma i2) with
@@ -425,9 +425,9 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
   if ((lhs=ff)||(rhs=ff))
   then false
   else
-  let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq, lhs_dest, Exp.zero));
+  (*let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq, lhs_dest, Exp.zero));
     (Boolean.mk_and ctx (formula_to_solver ctx form1))
-    ] in
+    ] in*)
   match level with
   | 1 ->
     let query=[
@@ -439,8 +439,8 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
         ] );
       (Boolean.mk_and ctx (formula_to_solver ctx form1))
     ] in
-    (Solver.check solv query)=UNSATISFIABLE &&
-    ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+    (Solver.check solv query)=UNSATISFIABLE
+    (*&& ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
   | 2 ->
     let query=[
       Boolean.mk_not ctx (
@@ -452,8 +452,8 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
-    (Solver.check solv query)=UNSATISFIABLE &&
-    ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+    (Solver.check solv query)=UNSATISFIABLE 
+    (* &&((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) *)(* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
       (BitVector.mk_sle ctx lhs rhs);
@@ -462,8 +462,8 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
-    (Solver.check solv query)=SATISFIABLE &&
-      ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+    (Solver.check solv query)=SATISFIABLE 
+      (*&& ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
@@ -473,18 +473,18 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
     | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
     | Slseg (_) -> ff,ff
   in
-  let rhs,rhs_size,rhs_dest =
+  let rhs,rhs_size =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,s ,b) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s), b
-    | Slseg (_) -> ff,ff, Exp.zero
+    | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+    | Slseg (_) -> ff,ff
   in
   if ((lhs=ff)||(rhs=ff))
   then false
   else
   (* we should check that the destination is NULL or UNDEF *)
-  let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq, rhs_dest, Exp.zero));
+  (*let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq, rhs_dest, Exp.zero));
     (Boolean.mk_and ctx (formula_to_solver ctx form2))
-    ] in
+    ] in*)
   match level with
   | 1 ->
     let query=[
@@ -496,8 +496,8 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
         ] );
       (Boolean.mk_and ctx (formula_to_solver ctx form1))
     ] in
-    (Solver.check solv query)=UNSATISFIABLE &&
-    ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+    (Solver.check solv query)=UNSATISFIABLE 
+    (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
   | 2 ->
     let query=[
       Boolean.mk_not ctx (
@@ -509,8 +509,8 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
-    (Solver.check solv query)=UNSATISFIABLE &&
-    ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+    (Solver.check solv query)=UNSATISFIABLE 
+    (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
       (BitVector.mk_sge ctx lhs rhs);
@@ -519,8 +519,8 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
       (Boolean.mk_and ctx (formula_to_solver ctx form1));
       (Boolean.mk_and ctx (formula_to_solver ctx form2))
     ] in
-    (Solver.check solv query)=SATISFIABLE &&
-      ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) (* here we may thing about better Undef recognition *)
+    (Solver.check solv query)=SATISFIABLE 
+    (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) *) (* here we may thing about better Undef recognition *)
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 
