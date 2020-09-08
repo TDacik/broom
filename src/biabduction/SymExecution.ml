@@ -350,7 +350,7 @@ let rec exec_block tbl bb_tbl states (uid, bb) fuid =
   then states
   else (
     Printf.printf ">>> executing block L%i:\n%!" uid;
-    let new_states = StateTable.entailment_check bb_tbl uid states in
+    let new_states = StateTable.add bb_tbl uid states in
     exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns fuid
   )
 

@@ -9,8 +9,7 @@ type t = (cl_uid, State.t list) Hashtbl.t
 
 let create = let (bb_tbl : t) = Hashtbl.create 1 in bb_tbl
 
-(* entailment check form1 <= form2 *)
-(* FIXME which evars for Abduction.entailment ? *)
+(* entailment check miss1 <= miss2 and act1 <= act2 *)
 let rec entailment_states old_states states =
 	let solver = Z3wrapper.config_solver () in
 	match states with
@@ -20,9 +19,10 @@ let rec entailment_states old_states states =
 			match old_states with
 			| [] -> [s2] (* add new state *)
 			| s1::tl1 ->
-				if (Abduction.entailment solver s1.State.miss s2.State.miss s2.lvars)
+				let evars = CL.Util.list_join_unique s1.State.lvars s2.State.lvars in
+				if (Abduction.entailment solver s2.miss s1.miss evars)
 				then
-					if (Abduction.entailment solver s1.miss s2.act s2.lvars)
+					if (Abduction.entailment solver s2.miss s1.act evars)
 					then (
 						prerr_endline ">>> entailment_check: discard state";
 						[]) (* not add new state, covered by old state *)
@@ -31,7 +31,8 @@ let rec entailment_states old_states states =
 		in
 		(entailment_one old_states) @ (entailment_states old_states tl2)
 
-let entailment_check tbl uid states =
+(* return added states *)
+let add tbl uid states =
 	let found = Hashtbl.find_opt tbl uid in
 	match found with
 	| None -> Hashtbl.add tbl uid states; states (* first entry *)
