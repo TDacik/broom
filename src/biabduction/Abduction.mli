@@ -36,7 +36,7 @@ val biabduction : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
     -> abduction_res
 
 
-(** [entailment solver form1 form2 evars] checks entailment using
+(** [entailment solver form1 form2 evars] checks entailment form1 |= form2 using
     match1 rules
 *)
 val entailment : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
