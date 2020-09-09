@@ -132,40 +132,6 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
 		else check_block_bases ctx solv z3_names form v1 v2 rest
 
-(* use entailment form the Abduction module to check entailment between lambdas 
-  results: 0: no entailment, 1: lambda1 |= lambda2, 2: lambda2 |= lambda1 
-*)
-let check_lambda_entailment solver lambda1 lambda2 =
-	if not ((List.length lambda1.param) = (List.length lambda2.param)) then 0
-	else
-	let variables= (find_vars lambda1.form) @ (find_vars lambda2.form) in
-	let rec fresh_var_id intlist id=
-		match intlist with 
-		| [] -> id
-		| first::rest -> if (first>=id) then fresh_var_id rest (first+1) else fresh_var_id rest id 
-	in
-	let rec get_unique_lambda_params params id =
-		match params with
-		| [] -> []
-		| _::rest -> id::(get_unique_lambda_params rest (id+1))
-	in
-	let new_params=get_unique_lambda_params lambda1.param (fresh_var_id variables 0) in
-	let rec rename_params form oldparams newparams =
-		match oldparams,newparams with
-		| [],[] -> form
-		| p1::rest1,p2::rest2 -> rename_params (substitute_vars p2 p1 form) rest1 rest2
-		| _ -> raise (ErrorInAbstraction "This should not happen") (*{sigma=[];pi=[]}*)
-	in
-	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
-	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
-	match (Abduction.entailment solver lambda1_new lambda2_new variables), 
-		(Abduction.entailment solver lambda2_new lambda1_new variables)
-	with
-	| true,_ -> 1
-	| false,true -> 2
-	| _ -> 0
-
-
 
 (*************************************************************************************************************)
 (* Main part of the "BLOCK * BLOCK -> SLSEG" abstraction = functions:
@@ -239,7 +205,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
 			] in
 		(* check entailment between l1 and l2 *)
-		let entailment_res=check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
+		let entailment_res=Abduction.check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
@@ -581,7 +547,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		| MatchFail -> AbstractionFail 
 		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
 			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1 pvars) with
-			| CheckOK checked_matchres -> (fold_pointsto form i1 i2 checked_matchres)
+			| CheckOK checked_matchres ->  
+				(fold_pointsto form i1 i2 checked_matchres) 
 			| CheckFail -> AbstractionFail
 		)
 	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
@@ -600,7 +567,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			else (List.nth ll index) :: remove_i1_i2 ll (index+1) 
 		in
 			
-		(match (check_lambda_entailment {ctx; solv; z3_names} l1 l2) with
+		(match (Abduction.check_lambda_entailment {ctx; solv; z3_names} l1 l2) with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail
@@ -660,9 +627,7 @@ let rec lseg_abstaction solver form pvars =
 	in
 	let n = List.length form.sigma in
 	(* assert (n>1); *)
-	if (n<2) then form else 
-		(let res=f (n-1) (n-2) in
-		Formula.print_with_lambda res; res)
+	if (n<2) then form else f (n-1) (n-2) 
 
 
 (***** Experiments *****)
