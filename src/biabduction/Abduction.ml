@@ -199,7 +199,7 @@ let apply_match i pred_type form1 form2 pvars =
         let rhs={sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
         ApplyOK (lhs, rhs, [])
 
-      else ApplyFail
+      else (print_endline "Match of SLSEG: FIXME\n"; ApplyFail)
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 
@@ -812,11 +812,14 @@ let rec entailment_ll solver form1 form2 evars=
   | 0 -> false
   | 1 -> true
   | -1 ->
-     (match (try_match solver form1 form2 1 []) with
-     | Apply (f1,f2,_,_) ->
-  print_string "Match, "; flush stdout;
-  (entailment_ll solver f1 f2 evars)
-     | Fail -> false)
+     (match (try_match solver form1 form2 1 []),(try_match solver form1 form2 2 []) with
+     | Apply (f1,f2,_,_),_ ->
+  		print_string "Match, "; flush stdout;
+  		(entailment_ll solver f1 f2 evars)
+     | Fail,Apply (f1,f2,_,_) ->
+  		print_string "Match2, "; flush stdout;
+  		(entailment_ll solver f1 f2 evars)
+     | Fail,Fail -> false)
   | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 let entailment solver form1 form2 evars=
@@ -824,9 +827,9 @@ let entailment solver form1 form2 evars=
   let form1_s=Formula.simplify form1 evars in
   let form2_s=Formula.simplify form2 evars in
   print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
-  Formula.print form1;
+  Formula.print_with_lambda form1;
   print_string "FORM2: ";
-  Formula.print form2;
+  Formula.print_with_lambda form2;
   let rec print_evars xx=
   	match xx with
 	| [] -> print_string "]\n"

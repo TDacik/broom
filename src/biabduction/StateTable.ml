@@ -19,10 +19,10 @@ let rec entailment_states old_states states =
 			match old_states with
 			| [] -> [s2] (* add new state *)
 			| s1::tl1 ->
-				let evars = CL.Util.list_join_unique s1.State.lvars s2.State.lvars in
-				if (Abduction.entailment solver s1.miss s2.miss evars)
+				let evars = CL.Util.list_join_unique s2.State.lvars s1.State.lvars in
+				if (Abduction.entailment solver s2.miss s1.miss evars)
 				then
-					if (Abduction.entailment solver s1.act s2.act evars)
+					if (Abduction.entailment solver s2.act s1.act evars)
 					then (
 						prerr_endline ">>> entailment_check: discard state";
 						[]) (* not add new state, covered by old state *)
