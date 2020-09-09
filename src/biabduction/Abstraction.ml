@@ -642,17 +642,20 @@ let rec lseg_abstaction solver form pvars =
 	let rec f i j =
 		(* Printf.printf "%d,%d\n" i j; *)
 		let result = try_abstraction_to_lseg solver form i j pvars in
-		let result_rev = try_abstraction_to_lseg solver form j i pvars in
-		match result,result_rev with
-		| AbstractionApply new_form,_ ->
+		match result with
+		| AbstractionApply new_form ->
 			lseg_abstaction solver new_form pvars
-		| AbstractionFail,AbstractionApply new_form ->
-			lseg_abstaction solver new_form pvars
-		| AbstractionFail,AbstractionFail -> (
-			match i,j with
-			| 1,_ -> form (* nothing change *)
-			| _,0 -> f (i-1) (i-2)
-			| _,_ -> f i (j-1)
+		| AbstractionFail -> (
+			let result_rev = try_abstraction_to_lseg solver form j i pvars in
+			match result_rev with
+			| AbstractionApply new_form ->
+				lseg_abstaction solver new_form pvars
+			| AbstractionFail -> (
+				match i,j with
+				| 1,_ -> form (* nothing change *)
+				| _,0 -> f (i-1) (i-2)
+				| _,_ -> f i (j-1)
+			)
 		)
 	in
 	let n = List.length form.sigma in
