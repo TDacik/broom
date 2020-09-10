@@ -30,8 +30,8 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
 	then  (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
 	else
 	let a2 = match (List.nth form.sigma index) with
-		| Hpointsto (a,_,_) -> (expr_to_solver ctx z3_names a)
-		| Slseg (a,_,_) -> (expr_to_solver ctx z3_names a)
+		| Hpointsto (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a)
+		| Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a)
 	in
 	(* form -> base(a1) = base(a2) *)
 	let query=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
@@ -52,11 +52,11 @@ let check_eq_dist_from_base ctx solv z3_names form i1 i2 =
 	let ff = Boolean.mk_false ctx in
 	let a1,l1 = match (List.nth form.sigma i1) with
 		| Slseg _ -> ff,ff
-		| Hpointsto (a,l,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l)
+		| Hpointsto (a,l,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l)
 	in
 	let a2,l2 = match (List.nth form.sigma i2) with
 		| Slseg _ -> ff,ff
-		| Hpointsto (a,l,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l)
+		| Hpointsto (a,l,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l)
 	in
 	if ((a1=ff) || (a2=ff)) then false
 	else
@@ -113,8 +113,8 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 	match block_bases with
 	| [] -> false
 	| (b1,b2)::rest ->
-		let var1=expr_to_solver ctx z3_names (Exp.Var v1) in
-		let var2=expr_to_solver ctx z3_names (Exp.Var v2) in
+		let var1=expr_to_solver_only_exp ctx z3_names (Exp.Var v1) in
+		let var2=expr_to_solver_only_exp ctx z3_names (Exp.Var v2) in
 		(* form -> base(base1) = base(v1) /\ base(base2) = base(v2) *)
 		let query_blocks=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
 			(Boolean.mk_not ctx (Boolean.mk_and ctx [
@@ -154,13 +154,13 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 	let global_bases base g=Boolean.mk_not ctx
 		(Boolean.mk_eq ctx
 			(Expr.mk_app ctx z3_names.base [base]) 
-			(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
+			(Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names (Exp.Var g))])
 		)
 	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
 	| Hpointsto (a,l,_), Hpointsto (aa,ll,_) ->
-		let a1,l1 = (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l) in
-		let a2,l2 = (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll) in
+		let a1,l1 = (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l) in
+		let a2,l2 = (expr_to_solver_only_exp ctx z3_names aa),(expr_to_solver_only_exp ctx z3_names ll) in
 		(* form -> base(a1) != base(a2) /\ l1 = l2 *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
 			Boolean.mk_or ctx [
@@ -198,11 +198,11 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
-		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 1 [] in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] in
 		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
-				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
+				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
 		(* check entailment between l1 and l2 *)
 		let entailment_res=Abduction.check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
@@ -214,8 +214,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		let query3=if gvars=[] then []
 			else
 			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
-				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver ctx z3_names a1)) gvars);
-				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver ctx z3_names a2)) gvars);] 
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a1)) gvars);
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a2)) gvars);] 
 		in
 		if ((Solver.check solv query3)=UNSATISFIABLE) then CheckFail
 		else
@@ -226,7 +226,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda))]
 		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names form x1 x2 
-				((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases)) 
+				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2 )::block_bases)) 
 			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
 			else CheckFail
 		
@@ -250,11 +250,11 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		in
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
-		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver ctx z3_names (Exp.Var var)) 0 1 [] in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] in
 		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
-				Boolean.mk_eq ctx (expr_to_solver ctx z3_names b1) (expr_to_solver ctx z3_names b2)
+				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
 		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
 		| _,_,[],[] -> 
@@ -280,7 +280,8 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 				| CheckFail -> CheckFail
 				| CheckOK res_rec ->
 					(match (check_matched_pointsto ctx solv z3_names form rest 
-						((expr_to_solver ctx z3_names a1,expr_to_solver ctx z3_names a2 )::block_bases) incl_ref_blocks gvars) with
+						((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2 )::block_bases) 
+						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: (res @ res_rec))
 					)
@@ -393,13 +394,15 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 		else
 		match (List.nth unfolded_form.sigma index) with
 		| Hpointsto (aa,ll,bb) ->
-			let a2,l2,_= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb)  in
+			let a2,l2,_= (expr_to_solver_only_exp ctx z3_names aa),
+					(expr_to_solver_only_exp ctx z3_names ll),
+					(expr_to_solver_only_exp ctx z3_names bb)  in
 			(* First do a base check --- i.e. query1 + query2 *)
 			(* flag=0: form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
 			(* flag=1: form -> base(a1) != base(a2) /\ l1 = l2 /\ base(endlist) = base(a1) *)
 			let endlist = (* get the expression at the end of the unfolded list *)
 				match (List.nth unfolded_form.sigma  i_unfolded_slseg) with
-				| Slseg (_,b,_) -> (expr_to_solver ctx z3_names b)
+				| Slseg (_,b,_) -> (expr_to_solver_only_exp ctx z3_names b)
 				| _ -> raise (ErrorInAbstraction "Incompatible unfolding")
 			in
 			let e1,e2=if flag=0 then b1,a2 else endlist,a1 in
@@ -427,12 +430,14 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 	else
 	match (List.nth unfolded_form.sigma new_i1) with
 	| Hpointsto (a,l,b) -> (
-		let a1,l1,b1= (expr_to_solver ctx z3_names a), (expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
+		let a1,l1,b1= (expr_to_solver_only_exp ctx z3_names a), 
+				(expr_to_solver_only_exp ctx z3_names l),
+				(expr_to_solver_only_exp ctx z3_names b) in
 		let new_i2=find_new_i2 a1 l1 b1 ((List.length form.sigma)-1) in (* try to find i2 in the unfolded part of the formula *)
 		if (new_i2=(-1)) then AbstractionFail
 		else
 		let a2= match (List.nth unfolded_form.sigma new_i2) with
-			| Hpointsto (aa,_,_) -> (expr_to_solver ctx z3_names aa) 
+			| Hpointsto (aa,_,_) -> (expr_to_solver_only_exp ctx z3_names aa) 
 			| _ -> raise (ErrorInAbstraction "This should not happen")
 		in
 		let a1_block=get_eq_base ctx solv z3_names unfolded_form a1 0 0 [new_i1;new_i2] in
@@ -509,7 +514,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 	let global_bases middle g=Boolean.mk_not ctx
 			(Boolean.mk_eq ctx
 				(Expr.mk_app ctx z3_names.base [middle]) 
-				(Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names (Exp.Var g))])
+				(Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names (Exp.Var g))])
 			)
 	in
 	let query_pvars middle=if pvars=[] then []
@@ -519,8 +524,12 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
 	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> (
-		let a1,l1,b1= (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names l),(expr_to_solver ctx z3_names b) in
-		let a2,l2,_= (expr_to_solver ctx z3_names aa),(expr_to_solver ctx z3_names ll),(expr_to_solver ctx z3_names bb) in
+		let a1,l1,b1= (expr_to_solver_only_exp ctx z3_names a),
+				(expr_to_solver_only_exp ctx z3_names l),
+				(expr_to_solver_only_exp ctx z3_names b) in
+		let a2,l2,_= (expr_to_solver_only_exp ctx z3_names aa),
+				(expr_to_solver_only_exp ctx z3_names ll),
+				(expr_to_solver_only_exp ctx z3_names bb) in
 		(* First do a base check --- i.e. query1 + query2 *)
 		(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
@@ -552,8 +561,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			| CheckFail -> AbstractionFail
 		)
 	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
-		let b1= (expr_to_solver ctx z3_names b) in
-		let a2= (expr_to_solver ctx z3_names aa) in
+		let b1= (expr_to_solver_only_exp ctx z3_names b) in
+		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> b1 = a2 *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx b1 a2))
@@ -574,8 +583,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		)
 	)
 	| Hpointsto (_,_,b), Slseg (aa,_,_) -> (
-		let b1= (expr_to_solver ctx z3_names b) in
-		let a2= (expr_to_solver ctx z3_names aa) in
+		let b1= (expr_to_solver_only_exp ctx z3_names b) in
+		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> base(b1) = base(a2) *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
@@ -588,8 +597,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 
 	)
 	|  Slseg (_,b,_),Hpointsto (aa,_,_) -> (
-		let b1= (expr_to_solver ctx z3_names b) in
-		let a2= (expr_to_solver ctx z3_names aa) in
+		let b1= (expr_to_solver_only_exp ctx z3_names b) in
+		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> base(b1) = base(a2) *)
 		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))

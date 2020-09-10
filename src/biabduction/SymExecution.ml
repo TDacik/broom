@@ -14,7 +14,7 @@ type contract_app_res =
    * only the program variables may appear in both contract and state, they are used as anchors
 *)
 let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
-	let query= (Boolean.mk_not ctx (expr_to_solver ctx z3_names expr)) :: form_z3 in
+	let query= (Boolean.mk_not ctx (expr_to_solver_only_exp ctx z3_names expr)) :: form_z3 in
 	(Solver.check solv query)=SATISFIABLE
 
 let apply_contract solver state c pvars =
@@ -132,8 +132,8 @@ let remove_freed_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
   let check_eq_base_ll a base =
     let query=Boolean.mk_not ctx
       (Boolean.mk_eq ctx
-        (expr_to_solver ctx z3_names base)
-        (Expr.mk_app ctx z3_names.base [(expr_to_solver ctx z3_names a)])
+        (expr_to_solver_only_exp ctx z3_names base)
+        (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names a)])
       )
       :: form_z3
     in

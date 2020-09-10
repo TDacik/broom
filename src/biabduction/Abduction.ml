@@ -41,11 +41,11 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
     then -1
   else
   let (a, _, _) = to_hpointsto_unsafe (List.nth form2.sigma i2) in (* SIZE missing *) (* RHS can be Hpointsto only *)
-  let rhs = expr_to_solver ctx z3_names a in
+  let rhs = expr_to_solver_only_exp ctx z3_names a in (* Existential quantification of undef is probably not needed. *)
   match (List.nth form1.sigma z) with
     | Slseg (_,_,_) -> (find_z ctx solv z3_names form1 (z+1) form2 i2)
     | Hpointsto (a,_, _) ->
-    let lhs= (expr_to_solver ctx z3_names a) in (* SIZE missing *)
+    let lhs= (expr_to_solver_only_exp ctx z3_names a) in (* Existential quantification is probably not needed. *)(* SIZE missing *)
     let query1= [ Boolean.mk_not ctx (
       Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));
       (Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs));
@@ -64,17 +64,21 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
   match (List.nth form2.sigma i2) with
   | Slseg _ -> -1 (* Slseg is skipped, only Hpointsto is allowed in this function *)
   | Hpointsto (a,_,_) ->
-    let rhs = (expr_to_solver ctx z3_names a) in
+    let rhs = (expr_to_solver_only_exp ctx z3_names a) in (* It is safe to leave undef without ex. quantification *)
     (* create list of equalities between form2.sigma[i2] and all items in form1.sigma *)
     let rec list_eq pointsto_list =
       match pointsto_list with
       | [] -> []
       | first::rest ->
         (match first with
-        | Hpointsto (a,_, _) -> (Boolean.mk_eq ctx rhs (expr_to_solver ctx z3_names a))
-        | Slseg (a,_,_) -> (Boolean.mk_eq ctx
-              (Expr.mk_app ctx z3_names.base [rhs])
-              (Expr.mk_app ctx z3_names.base [expr_to_solver ctx z3_names a]))
+        | Hpointsto (a,_, _) -> 
+      		let lhs=(expr_to_solver_only_exp ctx z3_names a) in
+		(Boolean.mk_eq ctx rhs lhs)
+        | Slseg (a,_,_) -> 
+      		let lhs=(expr_to_solver_only_exp ctx z3_names a) in
+		(Boolean.mk_eq ctx
+              	(Expr.mk_app ctx z3_names.base [rhs])
+              	(Expr.mk_app ctx z3_names.base [lhs]))
         ) :: list_eq rest
     in
     let query = match (list_eq form1.sigma) with
@@ -135,17 +139,21 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
   match (List.nth form2.sigma i2) with
   | Hpointsto (_,_,_) ->  false (* This funmction cover slseg learn only *)
   | Slseg (a,_,_) ->
-    let rhs = (expr_to_solver ctx z3_names a) in
+    let rhs = (expr_to_solver_only_exp ctx z3_names a) in (* no negation -> no need to add existential quantification of undef *)
     (* create diffbase(rhs) and diffls(rhs) *)
     let rec list_eq sigma =
       match sigma with
       | [] -> []
       | first::rest ->
         (match first with
-        | Hpointsto (a,_, _) -> (Boolean.mk_eq ctx
-              (Expr.mk_app ctx z3_names.base [rhs])
-              (Expr.mk_app ctx z3_names.base [expr_to_solver ctx z3_names a]))
-        | Slseg (a,_,_) -> (Boolean.mk_eq ctx rhs (expr_to_solver ctx z3_names a))
+        | Hpointsto (a,_, _) -> 
+        	let lhs=expr_to_solver_only_exp ctx z3_names a in
+		(Boolean.mk_eq ctx
+        	      (Expr.mk_app ctx z3_names.base [rhs])
+	              (Expr.mk_app ctx z3_names.base [lhs]))
+        | Slseg (a,_,_) -> 
+        	let lhs=expr_to_solver_only_exp ctx z3_names a in
+		(Boolean.mk_eq ctx rhs (lhs))
         ) :: list_eq rest
     in
     match level with
@@ -198,12 +206,12 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
   let ff = Boolean.mk_false ctx in
   let lhs,lhs_size =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
     | Slseg (_) -> ff,ff
   in
   let rhs,rhs_size =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
     | Slseg (_) -> ff,ff
   in
   if ((lhs=ff)||(rhs=ff))
@@ -254,12 +262,12 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
   let ff = Boolean.mk_false ctx in
   let lhs,lhs_size =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
     | Slseg (_) -> ff,ff
   in
   let rhs,rhs_size =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver ctx z3_names a),(expr_to_solver ctx z3_names s)
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
     | Slseg (_) -> ff,ff
   in
   if ((lhs=ff)||(rhs=ff))
@@ -349,7 +357,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver ctx z3_names
+              (expr_to_solver_only_exp ctx z3_names
                   (BinOp(Pneq, tmp_size_first, Exp.zero)))
             ]
         in
@@ -365,7 +373,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
           else (Exp.BinOp(Pminus,s1,Exp.BinOp(Pplus,s2,size_first))) in
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver ctx z3_names
+              (expr_to_solver_only_exp ctx z3_names
                   (BinOp(Pneq,tmp_size_last,Exp.zero)))
             ]
         in
@@ -374,7 +382,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
       in
       let ptr_last=(Exp.BinOp(Pplus,x2,s2)) in
       let split_dest=
-        let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y1, Exp.zero));
+        let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y1, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form1))
         ] in
         if (Solver.check solv query_null)=UNSATISFIABLE then Exp.zero else Exp.Undef
@@ -417,7 +425,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         let tmp_size_first=(Exp.BinOp (Pminus,x1,x2)) in
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver ctx z3_names
+              (expr_to_solver_only_exp ctx z3_names
                   (BinOp(Pneq,tmp_size_first,Exp.zero)))
             ]
         in
@@ -433,7 +441,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
           else (Exp.BinOp(Pminus,s2,Exp.BinOp(Pplus,s1,size_first))) in
         let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
               (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver ctx z3_names
+              (expr_to_solver_only_exp ctx z3_names
                   (BinOp(Pneq,tmp_size_last,Exp.zero)))
             ]
         in
@@ -443,7 +451,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
       in
       let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
       let split_dest=
-        let query_null=[ expr_to_solver ctx z3_names (BinOp (Pneq,y2, Exp.zero));
+        let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y2, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form2))
         ] in
         if (Solver.check solv query_null)=UNSATISFIABLE
@@ -492,6 +500,15 @@ type entailment_slseg_remove =
 let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
   if (List.length form1.sigma)>0 then -1
   else
+  (
+    let rec print_evars xx=
+  	match xx with
+	| [] -> print_string "]\n"
+	| a::b -> print_string ((string_of_int a)^", "); (print_evars b)
+  	in
+  	print_string "EVARS: [ "; print_evars evars;  flush stdout;
+
+  flush stdout;
   (* First all Slseg(x,y,_) are replaced by x=y --- i.e. empty list *)
   let rec remove_slseg_form2 f2 =
     match f2.sigma with
@@ -509,18 +526,14 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
        (\ex. evars form1) -> (\ex. evars form2)
       In the implementation, we are checking UNSAT of [ form1 /\ not (\ex. evars form2) ]
     *)
-
     let get_z3_cons a=Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (BitVector.mk_sort ctx bw_width) in
     let evars_z3=List.map get_z3_cons evars in
-    let f2=Boolean.mk_and ctx (formula_to_solver ctx {pi=x; sigma=[]}) in
-    let f2_q=match evars_z3 with
-      | [] -> f2
-      | ev -> Quantifier.expr_of_quantifier
-        (Quantifier.mk_exists_const ctx ev f2 (Some 1) [] []
-        (Some (Symbol.mk_string ctx "Q1")) (Some (Symbol.mk_string ctx "skid1"))) in
+    let f2=Boolean.mk_and ctx (formula_to_solver_with_quantified_undefs ctx {pi=x; sigma=[]}) in
+    let f2_q=create_ex_quantifier ctx evars_z3 f2 in
     let query = (Boolean.mk_not ctx f2_q) :: (formula_to_solver ctx form1) in
     if (Solver.check solv query)=UNSATISFIABLE then 1
     else 0
+    )
 
 (******************************************************************************)
 (**** MATCH rules ****)
@@ -531,22 +544,22 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
   let ff = Boolean.mk_false ctx in
   let lhs_ll,flag_l =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a),0
-    | Slseg (a,_,_) -> (expr_to_solver ctx z3_names a),1
+    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),0
+    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),1
   in
   let lhs_size =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (_, s ,_) -> (expr_to_solver ctx z3_names s)
+    | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s)
     | Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
   in
   let rhs_ll,flag_r =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver ctx z3_names a),0
-    | Slseg (a,_,_) -> (expr_to_solver ctx z3_names a),1
+    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),0
+    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),1
   in
   let rhs_size =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (_, s ,_) -> (expr_to_solver ctx z3_names s)
+    | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s)
     | Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
   in
   (* Note that if one site contains list segment and the other one points-to then we compare bases
@@ -688,12 +701,11 @@ let rec apply_match solver i pred_type form1 form2 pvars =
       let _,y2,ls2 = to_slseg_unsafe (List.nth form2.sigma i2) in
       (*if (ls1=ls2) then *) (* Use this line to break the mutual recursion. *)
       if (check_lambda_entailment solver ls1 ls2)=1 then
-	(print_endline "LambdaOK";
         let lhs=(remove i1 form1) in
         let rhs_tmp=(remove i2 form2) in
         let rhs={sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
         ApplyOK (lhs, rhs, [])
-	)
+	
       else  ApplyFail
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
@@ -803,21 +815,21 @@ and entailment solver form1 form2 evars=
   let form1_s=Formula.simplify form1 evars in
   let form2_s=Formula.simplify form2 evars in
   print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
-  Formula.print_with_lambda form1;
+  Formula.print_with_lambda form1_s;
   print_string "FORM2: ";
-  Formula.print_with_lambda form2;
+  Formula.print_with_lambda form2_s;
   let rec print_evars xx=
   	match xx with
 	| [] -> print_string "]\n"
 	| a::b -> print_string ((string_of_int a)^", "); (print_evars b)
   in
-  print_string "EVARS: [ "; print_evars evars;
+  print_string "EVARS: [ "; print_evars evars;  flush stdout;
   let conflicts1=find_vars form1_s in
   let form2_rename,evars2=match (rename_ex_variables form2_s evars conflicts1) with
     | f -> f
   in
   let conflicts2=find_vars form2_rename in
-  let form1_rename,evars1=match (rename_ex_variables form1_s evars conflicts2) with
+  let form1_rename,evars1=match (rename_ex_variables form1_s evars2 conflicts2) with
     | f -> f
   in
   let query=(formula_to_solver solver.ctx form1_rename) @ (formula_to_solver solver.ctx form2_rename) in
