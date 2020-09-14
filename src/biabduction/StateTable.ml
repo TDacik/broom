@@ -2,14 +2,14 @@ type cl_uid = CL.Loc.cl_uid
 
 (*
   key is a unique uid of basic block
-  value is list of states (miss, act1), (miss, act2)...
+  value is list of states (miss, curr1), (miss, curr2)...
 *)
 
 type t = (cl_uid, State.t list) Hashtbl.t
 
 let create = let (bb_tbl : t) = Hashtbl.create 1 in bb_tbl
 
-(* entailment check miss1 <= miss2 and act1 <= act2 *)
+(* entailment check miss1 <= miss2 and curr1 <= curr2 *)
 let rec entailment_states old_states states =
 	let solver = Z3wrapper.config_solver () in
 	match states with
@@ -22,7 +22,7 @@ let rec entailment_states old_states states =
 				let evars = CL.Util.list_join_unique s2.State.lvars s1.State.lvars in
 				if (Abduction.entailment solver s2.miss s1.miss evars)
 				then
-					if (Abduction.entailment solver s2.act s1.act evars)
+					if (Abduction.entailment solver s2.curr s1.curr evars)
 					then (
 						prerr_endline ">>> entailment_check: discard state";
 						[]) (* not add new state, covered by old state *)

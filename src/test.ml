@@ -100,7 +100,7 @@ let form_ren = remove_equiv_vars gvars evars form_eq in
 print_endline ("form_ren: " ^ (to_string form_ren));
 
 
-let state = {State.miss = form_eq; act = form_eq2; lvars = evars} in
+let state = {State.miss = form_eq; curr = form_eq2; lvars = evars} in
 print_endline ("state: " ^ (State.to_string state));
 let state_ren = State.remove_equiv_vars gvars evars state in
 (* let state_ren = State.simplify state in *)

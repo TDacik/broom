@@ -4,19 +4,19 @@ type variable = Formula.Exp.variable
 
 type t = { 
     miss: Formula.t;
-    act: Formula.t;
+    curr: Formula.t;
     lvars: variable list;
 }
 
 (** Raise in case of ... *)
 exception RemovedSpatialPartFromMiss
 
-let empty = {miss = Formula.empty; act = Formula.empty; lvars = []}
+let empty = {miss = Formula.empty; curr = Formula.empty; lvars = []}
 
 let to_string state =
   "EXISTS: " ^ Formula.lvariables_to_string state.lvars
   ^ "\nMISS: " ^ Formula.to_string ~lvars:state.lvars state.miss
-  ^ "\nACTUAL: " ^ Formula.to_string ~lvars:state.lvars state.act
+  ^ "\nCURR: " ^ Formula.to_string ~lvars:state.lvars state.curr
   
 let print state =
   print_endline (to_string state)
@@ -28,7 +28,7 @@ let init args =
   in
   let pi = List.mapi get_anchor args in
   let f = {Formula.sigma = []; pi = pi} in
-  {miss = f; act = f; lvars = []}
+  {miss = f; curr = f; lvars = []}
 
 (* check if main is called with int argc and char **argv *)
 (* TODO warnings handling *)
@@ -54,7 +54,7 @@ let check_main_args_type args =
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
         (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
-   ACTUAL: arg1=argc & arg2=argv *)
+   CURR: arg1=argc & arg2=argv *)
 let init_main args fuid =
   let num_args = List.length args in
   match num_args with
@@ -76,18 +76,18 @@ let init_main args fuid =
       let new_f =
         {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
         sigma = sig_add :: anchor_state.miss.sigma} in
-      let s = {miss = new_f; act = new_f; lvars = [new_var]} in
+      let s = {miss = new_f; curr = new_f; lvars = [new_var]} in
       print s; s)
   | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
     init args (* handling as with an ordinary function *)
 
-(* [substate fixed_vars state] contains in miss and act only clauses with
+(* [substate fixed_vars state] contains in miss and curr only clauses with
    variables from [fixed_vars] and related variables
    [state] - expect satisfiable state only
    [fixed_vars] - list of Exp, but expect CVar and Var only
 
    miss_vars = fixed_vars + related
-   act_vars = fixed_vars + related from miss + related from act *)
+   curr_vars = fixed_vars + related from miss + related from curr *)
 (* TODO errors/warnings handling *)
 let substate fixed_vars state =
   let get_lvar var =
@@ -101,21 +101,21 @@ let substate fixed_vars state =
   if (miss_removed_sigma)
   then raise RemovedSpatialPartFromMiss;
   (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
-  let (act_removed_sigma,act_vars,new_act) =
-    Formula.subformula miss_vars state.act in
-  if (act_removed_sigma)
+  let (curr_removed_sigma,curr_vars,new_curr) =
+    Formula.subformula miss_vars state.curr in
+  if (curr_removed_sigma)
   then (if (Unix.isatty Unix.stderr) (* TODO more general *)
     then prerr_endline "\027[1;31m!!! MEMORY LEAK\027[0m"
     else prerr_endline "!!! MEMORY LEAK");
-    (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) act_vars ^ "AFTER ACT\n"); *)
-  let all_vars = List.filter_map get_lvar (act_vars) in
+    (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) curr_vars ^ "AFTER curr\n"); *)
+  let all_vars = List.filter_map get_lvar (curr_vars) in
   {miss = new_miss;
-   act = new_act;
+   curr = new_curr;
    lvars = all_vars}
 
 let remove_equiv_vars gvars evars s =
   let rec rename_eqviv_vars evars state = 
-    let equiv=Formula.get_varmap state.act.pi in
+    let equiv=Formula.get_varmap state.curr.pi in
     match evars with
     | [] -> state
     | a :: rest ->
@@ -126,14 +126,14 @@ let remove_equiv_vars gvars evars s =
       in
       let eq_vars_ex = List.filter (notmem gvars) eq_vars in 
       let todo_evars =  List.filter (notmem eq_vars) rest in 
-      let act1 = Formula.substitute a eq_vars_ex state.act in
+      let curr1 = Formula.substitute a eq_vars_ex state.curr in
       let miss1 = Formula.substitute a eq_vars_ex state.miss in
       let lvars1 = List.filter (notmem eq_vars_ex) state.lvars in
-      rename_eqviv_vars todo_evars {miss=miss1; act=act1; lvars=lvars1}
+      rename_eqviv_vars todo_evars {miss=miss1; curr=curr1; lvars=lvars1}
   in
   let s_rename = rename_eqviv_vars evars s in
   {miss= {pi = Formula.remove_redundant_eq s_rename.miss.pi; sigma = s_rename.miss.sigma};
-  act= {pi = Formula.remove_redundant_eq s_rename.act.pi; sigma = s_rename.act.sigma};
+  curr= {pi = Formula.remove_redundant_eq s_rename.curr.pi; sigma = s_rename.curr.sigma};
   lvars=s_rename.lvars}
 
 (* fixed_vars - variables can't be removed
@@ -143,7 +143,7 @@ let simplify2 fixed_vars state =
   let fixed_vars_exp = FExp.get_list_vars fixed_vars in
   let rems = remove_equiv_vars fixed_vars state.lvars state in
   let subs = substate fixed_vars_exp rems in
-  (* (find_vars rems.miss) @ (find_vars rems.act) in *)
+  (* (find_vars rems.miss) @ (find_vars rems.curr) in *)
   subs
 
 (* state - expect satisfiable state only *)
@@ -153,14 +153,14 @@ let simplify state =
     (List.exists eq lst )
   in
   let nomem lst x = not (mem lst x) in
-  let vars = CL.Util.list_join_unique (Formula.find_vars state.act) (Formula.find_vars state.miss) in
+  let vars = CL.Util.list_join_unique (Formula.find_vars state.curr) (Formula.find_vars state.miss) in
   let used_lvars = List.filter (mem vars) state.lvars in
   let gvars = List.filter (nomem state.lvars) vars in
-  let state0 = {miss=state.miss; act=state.act; lvars=used_lvars} in
+  let state0 = {miss=state.miss; curr=state.curr; lvars=used_lvars} in
   let state1 = remove_equiv_vars gvars used_lvars state0 in
   let miss_new = Formula.remove_useless_conjuncts state1.miss state1.lvars in
-  (* logical variables used in miss_new can not be removed from act_new by means of remove_useless_conjuncts in order to preserve anchors 
-     --- if miss_new contains l1 -- (8)-- >_ and act_new freed(l1) then freed(l1) can not be removed *)
+  (* logical variables used in miss_new can not be removed from curr_new by means of remove_useless_conjuncts in order to preserve anchors 
+     --- if miss_new contains l1 -- (8)-- >_ and curr_new freed(l1) then freed(l1) can not be removed *)
   let lvars_unused_in_miss = List.filter (nomem (Formula.find_vars state.miss)) state1.lvars in
-  let act_new= Formula.remove_useless_conjuncts state1.act lvars_unused_in_miss in
-  {miss=miss_new; act=act_new; lvars=state1.lvars }
+  let curr_new= Formula.remove_useless_conjuncts state1.curr lvars_unused_in_miss in
+  {miss=miss_new; curr=curr_new; lvars=state1.lvars }

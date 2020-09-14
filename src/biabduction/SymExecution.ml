@@ -18,23 +18,23 @@ let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
 	(Solver.check solv query)=SATISFIABLE
 
 let apply_contract solver state c pvars =
-  match (Abduction.biabduction solver state.act c.Contract.lhs pvars) with
+  match (Abduction.biabduction solver state.curr c.Contract.lhs pvars) with
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
     (* prune useless constrains in miss.pi *)
-    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.act)) miss.pi in
+    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.curr)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
-    let actual= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
+    let current= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
     (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
        The post_contract_application function takes care about it. *)
-    CAppOk {miss=missing; act=actual; lvars=(state.lvars @ l_vars)  }
+    CAppOk {miss=missing; curr=current; lvars=(state.lvars @ l_vars)  }
 
 
 
 (* to avoid conflicts, we rename the contract variables, which appear in state 
    pvars - a list of program variables (global vars + vars used in function) *)
 let rec rename_contract_vars_ll state c seed pvars =
-  let svars= (find_vars state.act) @ (find_vars state.miss) in
+  let svars= (find_vars state.curr) @ (find_vars state.miss) in
   let rec seq_list i =
 	if (i=0) 
 	then []
@@ -79,7 +79,7 @@ exception State_lhs_contains_forbidden_vars
   * rename all occurences of b by a
 *)
 let rec post_contract_application_vars state pvarmap seed pvars=
- let conflicts = pvars @ (find_vars state.miss) @ (find_vars state.act) in
+ let conflicts = pvars @ (find_vars state.miss) @ (find_vars state.curr) in
   let mem l x =
     let eq y= (x=y) in
     List.exists eq l
@@ -93,15 +93,15 @@ let rec post_contract_application_vars state pvarmap seed pvars=
   | [] -> state
   | (a,b)::rest ->
       let new_var=get_fresh_var seed conflicts in
-      let tmp_act=substitute_vars new_var a state.act in
-      let new_act=substitute_vars a b tmp_act in
+      let tmp_curr=substitute_vars new_var a state.curr in
+      let new_curr=substitute_vars a b tmp_curr in
       let tmp_miss=substitute_vars new_var a state.miss in
       let new_miss=substitute_vars a b tmp_miss in
       let new_lvars=
         let eq y= not (b=y) in
         List.filter eq state.lvars
       in
-      let new_state={ act=new_act;
+      let new_state={ curr=new_curr;
           miss= new_miss;
           lvars=new_lvars @ [new_var];
         } in
@@ -168,17 +168,17 @@ let remove_freed_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
 *)
 let post_contract_application state solver pvarmap pvars =
   let step1=post_contract_application_vars state pvarmap 1 pvars in
-  let vars= CL.Util.list_join_unique (find_vars step1.act) (find_vars step1.miss) in
+  let vars= CL.Util.list_join_unique (find_vars step1.curr) (find_vars step1.miss) in
   let notmem l x =
       let eq y= (x=y) in
       not (List.exists eq l)
   in
   let new_lvars=List.filter (notmem pvars) vars in
-  let final_contract={miss=step1.miss; act=(remove_freed_parts solver step1.act); lvars=new_lvars} in
+  let final_contract={miss=step1.miss; curr=(remove_freed_parts solver step1.curr); lvars=new_lvars} in
    (* check that both parts of the resulting state are satisfiable *)
-  let sat_query_actual=formula_to_solver solver.ctx final_contract.act in
+  let sat_query_currual=formula_to_solver solver.ctx final_contract.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_contract.miss in
-  if ((Solver.check solver.solv sat_query_actual)=SATISFIABLE) &&
+  if ((Solver.check solver.solv sat_query_currual)=SATISFIABLE) &&
      ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
   then  CAppOk final_contract
   else (prerr_endline "SAT Fail"; CAppFail)
@@ -234,8 +234,8 @@ let try_abstraction_on_states solver fuid states =
     | [] -> []
     | s::tl ->
       let new_miss = Abstraction.lseg_abstaction solver s.miss pvars in
-      let new_act = Abstraction.lseg_abstaction solver s.act pvars in
-      let abstract_state = {miss = new_miss; act = new_act; lvars=s.lvars} in
+      let new_curr = Abstraction.lseg_abstaction solver s.curr pvars in
+      let abstract_state = {miss = new_miss; curr = new_curr; lvars=s.lvars} in
       (* TODO: update lvars *)
       abstract_state :: (try_abstraction tl)
   in
@@ -268,11 +268,11 @@ let find_fnc_contract tbl dst args fuid =
 
 let rec state2contract s cvar =
   match s.lvars with
-  | [] -> {Contract.lhs = s.miss; rhs = s.act; cvars = cvar; pvarmap = []}
+  | [] -> {Contract.lhs = s.miss; rhs = s.curr; cvars = cvar; pvarmap = []}
   | var::tl -> let new_cvar = cvar + 1 in
       let new_s = {
         miss = substitute_vars_cvars (CVar new_cvar) (Var var) s.miss;
-        act = substitute_vars_cvars (CVar new_cvar) (Var var) s.act;
+        curr = substitute_vars_cvars (CVar new_cvar) (Var var) s.curr;
         lvars = tl} in
       state2contract new_s new_cvar
 
@@ -297,7 +297,7 @@ let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
     let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
     let s_err =
       {miss = new_miss;
-        act = {pi = [Exp.Const (Bool false)]; sigma = []};
+        curr = {pi = [Exp.Const (Bool false)]; sigma = []};
         lvars = removed_vars} in
     let c_err = state2contract s_err 0 in
     Contract.print c_err;
@@ -327,7 +327,7 @@ let set_fnc_contract fnc_tbl states fuid =
   let get_contract s =
       try
         let removed_vars = tmp_vars @ s.lvars in
-        let tmp_s = {miss = s.miss; act = s.act; lvars = removed_vars} in
+        let tmp_s = {miss = s.miss; curr = s.curr; lvars = removed_vars} in
         let subs = State.simplify2 fixed tmp_s in
         State.print subs;
         let c = state2contract subs 0 in
@@ -424,7 +424,7 @@ let get_zeroinitializer typ_code =
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
         (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
-   ACTUAL: arg1=argc & arg2=argv
+   CURR: arg1=argc & arg2=argv
 
    execute initials of all global variables, if they are initialized
    fuid belons to function 'main' *)
@@ -444,7 +444,7 @@ let init_state_main tbl bb_tbl args fuid =
             let assign = Exp.BinOp (Peq, Var uid, exp) in
             let new_s = {
               miss = s.miss;
-              act = {pi=assign::s.act.pi; sigma=s.act.sigma};
+              curr = {pi=assign::s.curr.pi; sigma=s.curr.sigma};
               lvars = s.lvars} in
             exec_init_global_var [new_s] tl )
         | _ -> assert false
