@@ -16,6 +16,7 @@ struct sll_node *g(struct sll_node *x) {
         return x;
 }
 
+/* 
 int main() {
         struct sll_node *n1 = (struct sll_node *)malloc(sizeof(struct sll_node));
         struct sll_node *n2 = (struct sll_node *)malloc(sizeof(struct sll_node));
@@ -38,3 +39,4 @@ int main() {
 
         return 0;
 }
+*/
