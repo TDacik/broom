@@ -141,10 +141,10 @@ let remove_equiv_vars gvars evars s =
 (* FIXME may be more variables in lvars than are in state *)
 let simplify2 fixed_vars state =
   let fixed_vars_exp = FExp.get_list_vars fixed_vars in
-  let subs = substate fixed_vars_exp state in
-  let rems = remove_equiv_vars fixed_vars subs.lvars subs in
+  let rems = remove_equiv_vars fixed_vars state.lvars state in
+  let subs = substate fixed_vars_exp rems in
   (* (find_vars rems.miss) @ (find_vars rems.act) in *)
-  rems
+  subs
 
 (* state - expect satisfiable state only *)
 let simplify state =

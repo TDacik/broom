@@ -218,6 +218,7 @@ let rec apply_contracts_on_states solver fuid states contracts =
               State.print simple_s;
               simple_s::(solve_contract tl)
             with State.RemovedSpatialPartFromMiss -> (
+              State.print s;
               prerr_endline "!!! error: impossible precondition";
               solve_contract tl
             )
