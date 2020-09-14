@@ -266,15 +266,15 @@ let find_fnc_contract tbl dst args fuid =
   set existential connected with them as fresh contract variables
 *)
 
-let rec state2contract s vars cvar =
-  match vars with
+let rec state2contract s cvar =
+  match s.lvars with
   | [] -> {Contract.lhs = s.miss; rhs = s.act; cvars = cvar; pvarmap = []}
   | var::tl -> let new_cvar = cvar + 1 in
       let new_s = {
         miss = substitute_vars_cvars (CVar new_cvar) (Var var) s.miss;
         act = substitute_vars_cvars (CVar new_cvar) (Var var) s.act;
-        lvars = []} in
-      state2contract new_s tl new_cvar
+        lvars = tl} in
+      state2contract new_s new_cvar
 
 (* substitue gvars used in function of contract c and add corresponding
    pvarmoves *)
@@ -298,8 +298,8 @@ let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
     let s_err =
       {miss = new_miss;
         act = {pi = [Exp.Const (Bool false)]; sigma = []};
-        lvars = []} in
-    let c_err = state2contract s_err removed_vars 0 in
+        lvars = removed_vars} in
+    let c_err = state2contract s_err 0 in
     Contract.print c_err;
     c_err
   in
@@ -326,10 +326,11 @@ let set_fnc_contract fnc_tbl states fuid =
   let fixed = 0::(anchors @ used_gvars) in
   let get_contract s =
       try
-        let subs = State.simplify2 fixed s in
+        let removed_vars = tmp_vars @ s.lvars in
+        let tmp_s = {miss = s.miss; act = s.act; lvars = removed_vars} in
+        let subs = State.simplify2 fixed tmp_s in
         State.print subs;
-        let removed_vars = tmp_vars @ subs.lvars in
-        let c = (state2contract subs removed_vars 0) in
+        let c = state2contract subs 0 in
         let new_c = add_gvars_moves used_gvars c in
         Contract.print new_c;
         Some new_c
