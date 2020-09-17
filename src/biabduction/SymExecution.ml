@@ -249,12 +249,12 @@ let find_fnc_contract tbl dst args fuid =
   let patterns = SpecTable.find_opt tbl fuid in
   match patterns with
   | None -> assert false (* wrong order; recursive function not supported *)
-  | Some p -> let num_args = List.length (CL.Util.get_fnc_args fuid) in
+  | Some p ->
     let rec rename_fnc_contract c =
       match c with
       | [] -> []
       | pattern::tl ->
-        let c_rename = Contract.contract_for_called_fnc dst args num_args pattern in
+        let c_rename = Contract.contract_for_called_fnc dst args fuid pattern in
         let c_rest = rename_fnc_contract tl in
         c_rename::c_rest
     in
@@ -306,7 +306,8 @@ let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
   let c_errs = List.map get_err_contract states in
   SpecTable.add fnc_tbl fuid c_errs
 
-(* anchors - existential vars representing arguments of function
+(* anchors - existential vars representing arguments of function and original
+   value of used_gvars
    used_gvars - global variables used in function
    tmp_vars - local program variables *)
 let set_fnc_contract fnc_tbl states fuid =
@@ -429,7 +430,7 @@ let get_zeroinitializer typ_code =
    execute initials of all global variables, if they are initialized
    fuid belons to function 'main' *)
 (* FIXME no need tbl and bb_tbl arguments *)
-let init_state_main tbl bb_tbl args fuid =
+let init_state_main tbl bb_tbl fuid =
   let rec exec_init_global_var states vars =
     match vars with
     | [] -> states
@@ -451,7 +452,7 @@ let init_state_main tbl bb_tbl args fuid =
       else (* explicit initialization *)
         exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl
   in
-  let init_state = State.init_main args fuid in
+  let init_state = State.init_main fuid in
   print_endline ">>> initializing global variables";
   (exec_init_global_var (init_state::[]) CL.Util.stor.global_vars)
 
@@ -464,8 +465,8 @@ let exec_fnc fnc_tbl f =
     let fname = CL.Printer.get_fnc_name f in
     let init_states =
       if fname = "main"
-      then init_state_main fnc_tbl bb_tbl f.args fuid
-      else (State.init f.args)::[] in
+      then init_state_main fnc_tbl bb_tbl fuid
+      else (State.init fuid)::[] in
     let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) fuid in
     set_fnc_contract fnc_tbl states fuid;
     StateTable.reset bb_tbl;

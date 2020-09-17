@@ -4,7 +4,7 @@ module Exp = struct (*$< Exp *)
         Var of variable (** lvars - existential local variables in the scope of
                                     a function
                                   - spetial cases: var 0 - return, var uid<0
-                                    arguments
+                                    anchors
                             pvars - program variables, unique in the scope of
                                     a file *)
       | CVar of int
@@ -59,13 +59,14 @@ let zero = Const (Int 0L)
 let null = Const (Ptr 0) (* TODO: need Ptr ? *)
 let ret = Var 0
 
-let variable_to_string ?lvars:(lvars=[]) v =
+let rec variable_to_string ?lvars:(lvars=[]) v =
   let var = if (lvars <> [] && List.mem v lvars)
     then None
     else CL.Util.get_var_opt v in
   match var with
   | None when v=0 -> "%ret" (* special var for return value *)
-  | None when v<0 -> "%arg"^string_of_int (-v) (* special vars for arguments *)
+  | None when v<0 ->
+    (variable_to_string ~lvars:lvars (-v))^"_anch" (* special vars *)
   | None -> "%l" ^ string_of_int v
   | Some _ -> CL.Printer.var_to_string v
 

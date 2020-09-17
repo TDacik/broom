@@ -381,34 +381,37 @@ let contract_for_builtin dst called args =
 (****** CONTRACTS CALLED FUNCTIONS ******)
 
 (* roots - aguments of called function in reverse order
-   vars - parameters of called function *)
-let rec substitute_arguments roots num f =
-	match roots,num with
-	| [],0 -> f
-	| root::rtl,num when num>0 ->
-		let subf = substitute_vars_cvars root (Var (-num)) f in
-		substitute_arguments rtl (num-1) subf
+   anchors - parameters of called function and used global variables *)
+let rec substitute_anchors roots anchors f =
+	match roots,anchors with
+	| [],[] -> f
+	| root::rtl,anch::atl ->
+		let subf = substitute_vars_cvars root (Var (-anch)) f in
+		substitute_anchors rtl atl subf
 	| _,_ -> assert false (* TODO: variable number of arguments unsupported *)
 
 (* rename dst and args in given contract c;
    dst and args (TODO) could be rewritten in rhs *)
 (* TODO: first 3 lines should be as argumets and called from outside *)
-let contract_for_called_fnc dst args num_args c =
+let contract_for_called_fnc dst args fuid c =
 	let ef_init = {f = Formula.empty; cnt_cvars = c.cvars; root = Undef} in
 	let ef_dst = operand_to_exformula dst ef_init in
 	let (roots,ef_args) = args_to_exformula args ef_dst in
 	let roots_rev = List.rev roots in
-	let new_lhs = substitute_arguments roots_rev num_args c.lhs in
+	let orig_args = CL.Util.get_fnc_args fuid in
+	let used_gvars = CL.Util.get_used_gvars_for_fnc fuid in
+	let gvars_exp = Exp.get_list_vars used_gvars in
+	let new_lhs = substitute_anchors (roots_rev @ gvars_exp) (orig_args @ used_gvars) c.lhs in
 
 	let (new_dst, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=ef_args.cnt_cvars; root=ef_dst.root} in
 	let dst_rhs = substitute_vars_cvars new_dst.root (Exp.ret) c.rhs in
-	let new_rhs = substitute_arguments roots_rev num_args dst_rhs in
+	let new_rhs = substitute_anchors (roots_rev @ gvars_exp) (orig_args @ used_gvars) dst_rhs in
 	{
 		lhs = {sigma = new_lhs.sigma @ ef_args.f.sigma;
 			pi = new_lhs.pi @ ef_args.f.pi};
 		rhs = new_rhs;
 		cvars = new_dst.cnt_cvars;
-		pvarmap = pvarmap
+		pvarmap = c.pvarmap @ pvarmap
 	}
 
 

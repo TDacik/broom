@@ -22,11 +22,11 @@ let print state =
   print_endline (to_string state)
 
 (* create anchors (vars with negative uid) for arguments of function *)
-let init args =
-  let get_anchor idx elm =
-    FExp.BinOp ( Peq, Var (-(idx+1)), Var elm)
+let init fuid =
+  let get_anchor elm =
+    FExp.BinOp ( Peq, Var (-elm), Var elm)
   in
-  let pi = List.mapi get_anchor args in
+  let pi = List.map get_anchor (CL.Util.get_anchors fuid) in
   let f = {Formula.sigma = []; pi = pi} in
   {miss = f; curr = f; lvars = []}
 
@@ -55,12 +55,13 @@ let check_main_args_type args =
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
         (base(arg2)=arg2) & (0<=l1) & (l1=arg1*32)
    CURR: arg1=argc & arg2=argv *)
-let init_main args fuid =
+let init_main fuid =
+  let args = CL.Util.get_fnc_args fuid in
   let num_args = List.length args in
   match num_args with
   | 0 -> empty
   | 2 -> (
-    let anchor_state = init args in
+    let anchor_state = init fuid in
     if not (check_main_args_type args) then
       anchor_state
     else
@@ -79,7 +80,7 @@ let init_main args fuid =
       let s = {miss = new_f; curr = new_f; lvars = [new_var]} in
       print s; s)
   | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
-    init args (* handling as with an ordinary function *)
+    init fuid (* handling as with an ordinary function *)
 
 (* [substate fixed_vars state] contains in miss and curr only clauses with
    variables from [fixed_vars] and related variables

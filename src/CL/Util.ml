@@ -105,8 +105,16 @@ let get_fnc_args uid =
 	let f = get_fnc uid in
 	f.args
 
+let get_used_gvars_for_fnc uid =
+	let fvars = get_fnc_vars uid in
+	list_inter fvars stor.global_vars
+
+let get_anchors uid =
+	let f = get_fnc uid in
+	f.args @ (get_used_gvars_for_fnc uid)
+
 let get_anchors_uid uid =
-	List.mapi (fun idx _ -> (-(idx+1))) (get_fnc_args uid)
+	List.map (fun elm -> (-elm)) (get_anchors uid)
 
 let get_pvars uid =
 	0::(get_anchors_uid uid) @

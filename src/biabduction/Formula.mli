@@ -3,7 +3,7 @@ module Exp : sig
         Var of variable (** lvars - existential local variables in the scope of
                                     a function
                                   - spetial cases: var 0 - return, var uid<0
-                                    arguments
+                                    anchors
                             pvars - program variables, unique in the scope of
                                     a file *)
       | CVar of int
