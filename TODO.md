@@ -38,7 +38,7 @@
   - [x] `malloc`
   - [ ] `calloc`
   - [ ] `realloc`
-  - [x] `free`
+  - [x] `free` - not implemented: value of pointer after free is not guaranteed (=undef)
   - [ ] `alloca` / `__builtin_alloca` / `__builtin_alloca_with_align`
   - [ ] `memchr`
   - [ ] `memcmp`
