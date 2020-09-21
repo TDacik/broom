@@ -10,3 +10,16 @@ int f(void) {
 }  
 
 
+
+/*
+Here is a second
+x=malloc(8);
+y=x+4;
+free(x);
+if ((x-y)==4) { ... }
+else{ ... }
+z=malloc(8);
+if (y==z) { ... }
+else { ... }
+*/
+
