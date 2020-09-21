@@ -66,7 +66,7 @@ let rec variable_to_string ?lvars:(lvars=[]) v =
   match var with
   | None when v=0 -> "%ret" (* special var for return value *)
   | None when v<0 ->
-    (variable_to_string ~lvars:lvars (-v))^"_anch" (* special vars *)
+    (variable_to_string (-v))^"_anch" (* special var from program var *)
   | None -> "%l" ^ string_of_int v
   | Some _ -> CL.Printer.var_to_string v
 
