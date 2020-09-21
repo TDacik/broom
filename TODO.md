@@ -24,7 +24,7 @@
       int j;
     } a;         // c1 -(8)-> a & (base(c1)=c1)
     a.i=3;       // c1 -(4)-> c2 & (c2=3) & (base(c1)=c1)
-                 // c3 -(4)-> Undef & (base(c3)=base(c1))
+                 // c3 -(4)-> Undef & (c3=c1+4) & (base(c3)=base(c1))
     ```
    instruction and fnctions: `clobber`, `__builtin_stack_restore`, `__builtin_stack_save` 
 
