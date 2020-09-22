@@ -1,12 +1,13 @@
 ## TODO
 
-- [x] calling functions with arguments
+- [x] calling functions with arguments;
+  bug: [tomas-test-01.c](tests/tomas-test-01.c#L14)
 
 - [x] global variables
 
 - [ ] accessors
   - [x] reference
-  - [x] dereference
+  - [x] dereference; bug: [easy-08-ok.c](tests/easy-08-ok.c#L13)
   - [ ] array dereference
   - [x] record accessor
   - [x] offset
@@ -28,9 +29,13 @@
     ```
    instruction and fnctions: `clobber`, `__builtin_stack_restore`, `__builtin_stack_save` 
 
+   bug: [easy-12-err.c](tests/easy-12-err.c#L9), [tomas-test-01.c](tests/tomas-test-01.c#L14)
+
 - [x] sls abstraction
 
 - [ ] dls abstraction in logic
+
+- [x] entailment; bug: [sll2.c](tests/sll2.c), [unreach.c](tests/unreach.c)
 
 - [ ] better error detection
 
@@ -38,7 +43,7 @@
   - [x] `malloc`
   - [ ] `calloc`
   - [ ] `realloc`
-  - [x] `free` - not implemented: value of pointer after free is not guaranteed (=undef)
+  - [x] `free` - not implemented: value of pointer after free is not guaranteed (=undef) [tomas-test-02.c](tests/tomas-test-02.c)
   - [ ] `alloca` / `__builtin_alloca` / `__builtin_alloca_with_align`
   - [ ] `memchr`
   - [ ] `memcmp`
