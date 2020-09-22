@@ -245,7 +245,7 @@ let try_abstraction_on_states solver fuid states =
 
 (* FIND CONTRACT FOR CALLING FUNCTION *)
 
-let find_fnc_contract tbl dst args fuid =
+let find_fnc_contract tbl dst args fuid curr_fuid =
   let patterns = SpecTable.find_opt tbl fuid in
   match patterns with
   | None -> assert false (* wrong order; recursive function not supported *)
@@ -254,7 +254,7 @@ let find_fnc_contract tbl dst args fuid =
       match c with
       | [] -> []
       | pattern::tl ->
-        let c_rename = Contract.contract_for_called_fnc dst args fuid pattern in
+        let c_rename = Contract.contract_for_called_fnc dst args curr_fuid fuid pattern in
         let c_rest = rename_fnc_contract tl in
         c_rename::c_rest
     in
@@ -396,7 +396,7 @@ and exec_insn tbl bb_tbl states insn fuid =
       let c = ( if (CL.Util.is_extern called)
         then Contract.get_contract insn
         else find_fnc_contract tbl dst args
-                               (CL.Util.get_fnc_uid_from_op called) ) in
+                               (CL.Util.get_fnc_uid_from_op called) fuid) in
       new_states_for_insn c
     | _ -> assert false )
   | InsnCLOBBER _ -> states (* TODO: stack allocation *)

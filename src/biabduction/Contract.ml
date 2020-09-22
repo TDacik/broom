@@ -393,15 +393,27 @@ let rec substitute_anchors roots anchors f =
 (* rename dst and args in given contract c;
    dst and args (TODO) could be rewritten in rhs *)
 (* TODO: first 3 lines should be as argumets and called from outside *)
-let contract_for_called_fnc dst args fuid c =
+let contract_for_called_fnc dst args _(* curr_fuid *) fuid c =
 	let ef_init = {f = Formula.empty; cnt_cvars = c.cvars; root = Undef} in
 	let ef_dst = operand_to_exformula dst ef_init in
 	let (roots,ef_args) = args_to_exformula args ef_dst in
 	let roots_rev = List.rev roots in
+	
+(* args - roots na fresh_lvars  CL.Util.list_max_positive (CL.Util.get_fnc_vars curr_fuid)*)
+	
 	let orig_args = CL.Util.get_fnc_args fuid in
 	let used_gvars = CL.Util.get_used_gvars_for_fnc fuid in
 	let gvars_exp = Exp.get_list_vars used_gvars in
 	let new_lhs = substitute_anchors (roots_rev @ gvars_exp) (orig_args @ used_gvars) c.lhs in
+
+(* lhs - cvars na fresh_lvars *)
+	
+	(* Abduction.biabduction solver args lhs vsetky_lvars
+
+missing/frame - lvars na cvars
+
+	nova LHS (missing + frame)
+	nova RHS (missig + RHS) *)
 
 	let (new_dst, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=ef_args.cnt_cvars; root=ef_dst.root} in
 	let dst_rhs = substitute_vars_cvars new_dst.root (Exp.ret) c.rhs in

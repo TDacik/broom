@@ -35,6 +35,6 @@ val subcontract : Exp.t list -> t -> t
 (** [contract_for_called_fnc dst args fuid c] renames dst and args in given
     contract c for function fuid; renaming from RET(c0) and anchors(uid<0) *)
 val contract_for_called_fnc : CL.Operand.t -> CL.Operand.t list ->
-                              CL.Loc.cl_uid -> t -> t
+                              CL.Loc.cl_uid -> CL.Loc.cl_uid -> t -> t
 
 val get_contract : CL.Fnc.insn -> t list

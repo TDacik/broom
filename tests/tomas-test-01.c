@@ -2,18 +2,19 @@
 #include <stdio.h>
 
 struct sll_node {
-        int data;
+	int data;
 	struct sll_node *next;
 };
 
 void f(struct sll_node **x) {
-        (*x) = (*x)->next; 
+	(*x) = (*x)->next; 
 }
 
 struct sll_node *g(struct sll_node *x) {
-        f(&x);
-        f(&x);
-        return x;
+	g(x->next);
+	f(&x);
+	f(&x);
+	return x;
 }
 
 /* 
