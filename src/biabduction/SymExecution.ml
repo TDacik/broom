@@ -253,7 +253,7 @@ let find_fnc_contract tbl dst args fuid =
     let rec rename_fnc_contract c =
       match c with
       | [] -> []
-      | pattern::tl ->
+      | (pattern,_)::tl ->
         let c_rename = Contract.contract_for_called_fnc dst args fuid pattern in
         let c_rest = rename_fnc_contract tl in
         c_rename::c_rest
@@ -297,11 +297,11 @@ let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
     let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
     let s_err =
       {miss = new_miss;
-        curr = {pi = [Exp.Const (Bool false)]; sigma = []};
+        curr = Formula.empty(* {pi = [Exp.Const (Bool false)]; sigma = []} *);
         lvars = removed_vars} in
     let c_err = state2contract s_err 0 in
     Contract.print c_err;
-    c_err
+    (c_err,SpecTable.Error)
   in
   let c_errs = List.map get_err_contract states in
   SpecTable.add fnc_tbl fuid c_errs
@@ -310,7 +310,7 @@ let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
    value of used_gvars
    used_gvars - global variables used in function
    tmp_vars - local program variables *)
-let set_fnc_contract fnc_tbl states fuid =
+let set_fnc_contract ?status:(status=SpecTable.OK) fnc_tbl states fuid code =
   print_endline ">>> final contract";
   let anchors = CL.Util.get_anchors_uid fuid in
   let gvars = CL.Util.stor.global_vars in
@@ -325,7 +325,7 @@ let set_fnc_contract fnc_tbl states fuid =
   CL.Util.print_list Exp.variable_to_string used_gvars; print_newline ();
 
   let fixed = 0::(anchors @ used_gvars) in
-  let get_contract s =
+  let get_spec s =
       try
         let removed_vars = tmp_vars @ s.lvars in
         let tmp_s = {miss = s.miss; curr = s.curr; lvars = removed_vars} in
@@ -334,13 +334,13 @@ let set_fnc_contract fnc_tbl states fuid =
         let c = state2contract subs 0 in
         let new_c = add_gvars_moves used_gvars c in
         Contract.print new_c;
-        Some new_c
+        Some (new_c,status)
       with State.RemovedSpatialPartFromMiss -> (
-        set_fnc_error_contract fnc_tbl [s] CL.Fnc.InsnNOP fuid;
+        set_fnc_error_contract fnc_tbl [s] code fuid;
         None
       )
   in
-  let fnc_c = List.filter_map get_contract states in
+  let fnc_c = List.filter_map get_spec states in
   SpecTable.add fnc_tbl fuid fnc_c
 
 
@@ -348,48 +348,55 @@ let set_fnc_contract fnc_tbl states fuid =
 
 let solver = config_solver ()
 
-let rec exec_block tbl bb_tbl states (uid, bb) fuid =
+let rec exec_block tbl bb_tbl states (uid, bb) =
   if (states = [])
   then states
   else (
     Printf.printf ">>> executing block L%i:\n%!" uid;
     let new_states = StateTable.add bb_tbl uid states in
-    exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns fuid
+    exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
   )
 
-and exec_insn tbl bb_tbl states insn fuid =
+and exec_insn tbl bb_tbl states insn =
   let new_states_for_insn c =
     if (c = []) then
       states (* no need applaying empty contracts *)
     else (
-      let new_states = apply_contracts_on_states solver fuid states c in
+      let new_states = apply_contracts_on_states solver bb_tbl.StateTable.fuid states c in
         if (new_states = []) then (
           (* error appears, continue with empty states *)
-          set_fnc_error_contract tbl states insn.CL.Fnc.code fuid;[])
+          set_fnc_error_contract tbl states insn.CL.Fnc.code bb_tbl.fuid;[])
         else new_states )
   in
   let abstract_if_end_loop bb_uid ss =
     if (CL.Util.is_loop_closing_block bb_uid insn)
-      then try_abstraction_on_states solver fuid ss
+      then try_abstraction_on_states solver bb_tbl.fuid ss
       else ss
   in
   CL.Printer.print_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
     let s_jmp = abstract_if_end_loop uid states in
-    exec_block tbl bb_tbl s_jmp bb fuid
+    exec_block tbl bb_tbl s_jmp bb
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
-    let s_then = apply_contracts_on_states solver fuid states
+    let s_then = apply_contracts_on_states solver bb_tbl.fuid states
                  [(List.hd c)] in
-    let s_else = apply_contracts_on_states solver fuid states
+    let s_else = apply_contracts_on_states solver bb_tbl.fuid states
                  [(List.nth c 1)] in
     let ss_then = abstract_if_end_loop uid_then s_then in
     let ss_else = abstract_if_end_loop uid_else s_else in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
-    (exec_block tbl bb_tbl ss_then bb_then fuid) @ (exec_block tbl bb_tbl ss_else bb_else fuid)
+    (exec_block tbl bb_tbl ss_then bb_then) @ (exec_block tbl bb_tbl ss_else bb_else)
   | InsnSWITCH _ -> assert false
+  | InsnRET _ ->
+    let c = Contract.get_contract insn in
+    let new_states = new_states_for_insn c in
+    set_fnc_contract tbl new_states bb_tbl.fuid insn.CL.Fnc.code; []
+  | InsnABORT ->
+    set_fnc_contract ~status:Aborted tbl states bb_tbl.fuid insn.CL.Fnc.code;
+    []
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
     | dst::called::args ->
@@ -402,14 +409,14 @@ and exec_insn tbl bb_tbl states insn fuid =
   | InsnCLOBBER _ -> states (* TODO: stack allocation *)
   | _ -> let c = Contract.get_contract insn in new_states_for_insn c
 
-and exec_insns tbl bb_tbl states insns fuid =
+and exec_insns tbl bb_tbl states insns =
   if (states = [])
   then states
   else (
     match insns with
     | [] -> states
-    | insn::tl -> let s = exec_insn tbl bb_tbl states insn fuid in
-      exec_insns tbl bb_tbl s tl fuid
+    | insn::tl -> let s = exec_insn tbl bb_tbl states insn in
+      exec_insns tbl bb_tbl s tl
   )
 
 let get_zeroinitializer typ_code =
@@ -430,7 +437,7 @@ let get_zeroinitializer typ_code =
    execute initials of all global variables, if they are initialized
    fuid belons to function 'main' *)
 (* FIXME no need tbl and bb_tbl arguments *)
-let init_state_main tbl bb_tbl fuid =
+let init_state_main tbl bb_tbl =
   let rec exec_init_global_var states vars =
     match vars with
     | [] -> states
@@ -450,9 +457,9 @@ let init_state_main tbl bb_tbl fuid =
             exec_init_global_var [new_s] tl )
         | _ -> assert false
       else (* explicit initialization *)
-        exec_init_global_var (exec_insns tbl bb_tbl states gv.initials fuid) tl
+        exec_init_global_var (exec_insns tbl bb_tbl states gv.initials) tl
   in
-  let init_state = State.init_main fuid in
+  let init_state = State.init_main bb_tbl.fuid in
   print_endline ">>> initializing global variables";
   (exec_init_global_var (init_state::[]) CL.Util.stor.global_vars)
 
@@ -460,14 +467,14 @@ let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
     let fnc_decl_str = CL.Printer.fnc_declaration_to_string f in
     print_endline (">>> executing function "^fnc_decl_str^":");
-    let bb_tbl = StateTable.create in (* for states on basic block entry *)
     let fuid = CL.Util.get_fnc_uid f in
+    let bb_tbl = StateTable.create fuid in (* for states on basic block entry *)
     let fname = CL.Printer.get_fnc_name f in
     let init_states =
       if fname = "main"
-      then init_state_main fnc_tbl bb_tbl fuid
+      then init_state_main fnc_tbl bb_tbl
       else (State.init fuid)::[] in
-    let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) fuid in
-    set_fnc_contract fnc_tbl states fuid;
+    let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) in
+    assert (states = []);
     StateTable.reset bb_tbl;
   )

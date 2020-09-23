@@ -5,9 +5,15 @@ type cl_uid = CL.Loc.cl_uid
   value is list of states (miss, curr1), (miss, curr2)...
 *)
 
-type t = (cl_uid, State.t list) Hashtbl.t
 
-let create = let (bb_tbl : t) = Hashtbl.create 1 in bb_tbl
+type st_tbl = (cl_uid, State.t list) Hashtbl.t
+
+type t = {
+    fuid: cl_uid; (** for which function *)
+    tbl: st_tbl
+}
+
+let create fuid = let (bb_tbl : st_tbl) = Hashtbl.create 1 in {fuid=fuid; tbl=bb_tbl}
 
 (* entailment check miss1 <= miss2 and curr1 <= curr2 *)
 let rec entailment_states old_states states =
@@ -32,12 +38,12 @@ let rec entailment_states old_states states =
 		(entailment_one old_states) @ (entailment_states old_states tl2)
 
 (* return added states *)
-let add tbl uid states =
-	let found = Hashtbl.find_opt tbl uid in
+let add st uid states =
+	let found = Hashtbl.find_opt st.tbl uid in
 	match found with
-	| None -> Hashtbl.add tbl uid states; states (* first entry *)
+	| None -> Hashtbl.add st.tbl uid states; states (* first entry *)
 	| Some old_states -> prerr_endline ">>> entailment_check: next";
 		let new_states = entailment_states old_states states in
-		Hashtbl.replace tbl uid (old_states @ new_states); new_states
+		Hashtbl.replace st.tbl uid (old_states @ new_states); new_states
 
-let reset = Hashtbl.reset
+let reset st = Hashtbl.reset st.tbl
