@@ -230,6 +230,11 @@ let contract_fail =
 	pvarmap = [];
 	s = Aborted}
 
+(* TODO: atexit *)
+let contract_for_exit op =
+	let ef_op = operand_to_exformula op empty_exformula in
+	{lhs = ef_op.f; rhs = Formula.empty; cvars = ef_op.cnt_cvars; pvarmap = []; s=Aborted}
+
 (* 1st contract is for then branch, 2nd for else branch *)
 let contract_for_cond op =
 	let ef_op = operand_to_exformula op empty_exformula in
@@ -387,6 +392,7 @@ let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
 	| "abort", [] -> (contract_fail)::[]
+	| "exit", op::[] -> (contract_for_exit op)::[]
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
 	| "free", src::[] -> contract_for_free src
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
