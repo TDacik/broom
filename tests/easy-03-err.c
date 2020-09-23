@@ -2,9 +2,13 @@
 
 /* error: dereferencing 0-object */
 
-int main() {
+int s() {
 	int *p = malloc(0);
 	int ret = *p; // invalid deref
 	free(p);
 	return ret;
+}
+
+int main() {
+	return s(); // note about error from s()
 }

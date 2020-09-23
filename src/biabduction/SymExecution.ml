@@ -67,6 +67,7 @@ let rec rename_contract_vars_ll state c seed pvars =
            rhs=substitute_vars_cvars (Var new_var) (CVar n) c.rhs;
            cvars=(n-1);
            pvarmap=substitute_varmap new_var n c.pvarmap;
+           s=c.s;
          } in
          (rename_contract_vars_ll state new_c (new_var+1) pvars)
 
@@ -199,31 +200,162 @@ let contract_application solver state c pvars =
   | CAppFail -> CAppFail
   | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars)
 
-(* Applay each contract on each state *)
-let rec apply_contracts_on_states solver fuid states contracts =
-  let pvars = CL.Util.get_pvars fuid in
-  match states with
-  | [] -> []
-  | s::tl ->
-    let rec solve_contract contracts =
-      match contracts with
-      | [] -> []
-      | c::tl -> Contract.print c;
-          let res = contract_application solver s c pvars in
-          match res with
-          | CAppFail -> solve_contract tl (* FIXME error handling *)
-          | CAppOk s ->
-            try
-              let simple_s = State.simplify2 pvars s in
-              State.print simple_s;
-              simple_s::(solve_contract tl)
-            with State.RemovedSpatialPartFromMiss -> (
-              State.print s;
-              prerr_endline "!!! error: impossible precondition";
-              solve_contract tl
-            )
-    in
-    (solve_contract contracts) @ (apply_contracts_on_states solver fuid tl contracts)
+
+(* PREPARE STATE FOR CONTRACT
+  rename all variables expect parameters and global (fixed_vars) -
+  set existential connected with them as fresh contract variables
+*)
+
+let rec state2contract ?(status=Contract.OK) s cvar =
+  match s.lvars with
+  | [] -> {Contract.lhs = s.miss; rhs = s.curr; cvars = cvar; pvarmap = []; s = status}
+  | var::tl -> let new_cvar = cvar + 1 in
+      let new_s = {
+        miss = substitute_vars_cvars (CVar new_cvar) (Var var) s.miss;
+        curr = substitute_vars_cvars (CVar new_cvar) (Var var) s.curr;
+        lvars = tl} in
+      state2contract ~status:status new_s new_cvar
+
+(* substitue gvars used (new_rhs <> c.rhs) in function of contract c and add
+   corresponding pvarmoves *)
+let rec add_gvars_moves gvars c =
+  match gvars with
+  | [] -> c
+  | gvar::tl -> let new_cvar = c.Contract.cvars + 1 in
+    let new_rhs = substitute_vars_cvars (CVar new_cvar) (Var gvar) c.rhs in
+    let new_c = if (new_rhs = c.rhs) then c
+    else {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap; s = c.s} in
+	(add_gvars_moves tl new_c)
+
+(* TODO errors handling - more general *)
+let prerr_error str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
+    else prerr_endline ("!!! error: "^str)
+
+let prerr_note str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;35m!!! note: "^str^"\027[0m")
+    else prerr_endline ("!!! note: "^str)
+
+(* note: error from call of error() *)
+
+let set_fnc_error_contract ?(status=Contract.OK) fnc_tbl states fuid insn =
+  print_endline ">>> final error contract";
+  let fixed = (CL.Util.get_anchors_uid fuid) @ CL.Util.stor.global_vars in
+  let get_err_contract s =
+    let (removed_sigma,new_miss) = Formula.simplify2 fixed s.miss in
+    if (removed_sigma) then
+      prerr_error "impossible precondition";
+    let msg = "error from call of "^(CL.Printer.insn_to_string insn) in
+    if (status=Error) then (* already reported error *)
+      prerr_note msg
+    else
+      prerr_error msg;
+    let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
+    let s_err =
+      {miss = new_miss;
+      curr = Formula.empty(* {pi = [Exp.Const (Bool false)]; sigma = []} *);
+      lvars = removed_vars} in
+    let c_err = state2contract ~status:Error s_err 0 in
+    Contract.print c_err;
+    c_err
+  in
+  let c_errs = List.map get_err_contract states in
+  SpecTable.add fnc_tbl fuid c_errs
+
+(* anchors - existential vars representing arguments of function and original
+   value of gvars
+   gvars - global variables (may appear after calling function)
+   tmp_vars - local program variables *)
+let set_fnc_contract ?status:(status=Contract.OK) fnc_tbl states fuid insn =
+  print_endline ">>> final contract";
+  let anchors = CL.Util.get_anchors_uid fuid in
+  let gvars = CL.Util.stor.global_vars in
+  let fvars = CL.Util.get_fnc_vars fuid in
+  let tmp_vars = CL.Util.list_diff fvars gvars in
+  print_string "PVARS:";
+  CL.Util.print_list Exp.variable_to_string fvars; print_newline ();
+  print_string "ANCHORS:";
+  CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
+  print_string "GVARS:";
+  CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
+
+  let fixed = 0::(anchors @ gvars) in
+  let get_contract s =
+      try
+        let removed_vars = tmp_vars @ s.lvars in
+        let tmp_s = {miss = s.miss; curr = s.curr; lvars = removed_vars} in
+        let subs = State.simplify2 fixed tmp_s in
+        State.print subs;
+        let c = state2contract ~status:status subs 0 in
+        let new_c = add_gvars_moves gvars c in
+        Contract.print new_c;
+        Some new_c
+      with State.RemovedSpatialPartFromMiss -> (
+        set_fnc_error_contract fnc_tbl [s] fuid insn;
+        None
+      )
+  in
+  let fnc_c = List.filter_map get_contract states in
+  SpecTable.add fnc_tbl fuid fnc_c
+
+
+(* NEW STATES *)
+
+(* if contracts not empty, applay each contract on each state for instruction
+  [insn] *)
+let new_states_for_insn empty_is_err solver tbl fuid insn states c =
+  (* Applay each contract on each state *)
+  let empty_is_err_ref = ref empty_is_err in
+  let rec apply_contracts_on_states states contracts =
+    let pvars = CL.Util.get_pvars fuid in
+    match states with
+    | [] -> []
+    | s::tl ->
+
+      let rec solve_contract contracts =
+        match contracts with
+        | [] -> []
+        | c::tl -> Contract.print c;
+            let res = contract_application solver s c pvars in
+            match res with
+            | CAppFail -> solve_contract tl (* FIXME error handling *)
+            | CAppOk s ->
+              try
+                let simple_s = State.simplify2 pvars s in
+                State.print simple_s;
+                match c.s with
+                | OK -> simple_s::(solve_contract tl)
+                | Error ->
+                  set_fnc_error_contract ~status:c.s tbl [simple_s] fuid insn;
+                  empty_is_err_ref := false;
+                  solve_contract tl
+                | Aborted ->
+                  set_fnc_contract ~status:c.s tbl [simple_s] fuid insn;
+                  empty_is_err_ref := false;
+                  solve_contract tl
+
+              with State.RemovedSpatialPartFromMiss -> (
+                State.print s;
+                set_fnc_error_contract tbl [s] fuid insn;
+                solve_contract tl
+              )
+      in (* end of solve_contract *)
+
+      (solve_contract contracts) @ (apply_contracts_on_states tl contracts)
+  in
+
+  if (c = []) then
+    states (* no need applaying empty contracts *)
+  else (
+    let new_states = apply_contracts_on_states states c in
+    if (!empty_is_err_ref && new_states = []) then (
+      (* error appears, continue with empty states *)
+      set_fnc_error_contract tbl states fuid insn;[])
+    else new_states
+  )
+
 
 (* Try abstraction on each miss anad act of each state,
    for now only list abstraction *)
@@ -253,95 +385,12 @@ let find_fnc_contract tbl dst args fuid =
     let rec rename_fnc_contract c =
       match c with
       | [] -> []
-      | (pattern,_)::tl ->
+      | pattern::tl ->
         let c_rename = Contract.contract_for_called_fnc dst args fuid pattern in
         let c_rest = rename_fnc_contract tl in
         c_rename::c_rest
     in
     rename_fnc_contract p
-
-
-(* PREPARE STATE FOR CONTRACT
-  rename all variables expect parameters and global (fixed_vars) -
-  set existential connected with them as fresh contract variables
-*)
-
-let rec state2contract s cvar =
-  match s.lvars with
-  | [] -> {Contract.lhs = s.miss; rhs = s.curr; cvars = cvar; pvarmap = []}
-  | var::tl -> let new_cvar = cvar + 1 in
-      let new_s = {
-        miss = substitute_vars_cvars (CVar new_cvar) (Var var) s.miss;
-        curr = substitute_vars_cvars (CVar new_cvar) (Var var) s.curr;
-        lvars = tl} in
-      state2contract new_s new_cvar
-
-(* substitue gvars used in function of contract c and add corresponding
-   pvarmoves *)
-let rec add_gvars_moves gvars c =
-  match gvars with
-  | [] -> c
-  | gvar::tl -> let new_cvar = c.Contract.cvars + 1 in
-    let new_rhs = substitute_vars_cvars (CVar new_cvar) (Var gvar) c.rhs in
-    let new_c = {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap} in
-	(add_gvars_moves tl new_c)
-
-(* TODO errors handling *)
-let set_fnc_error_contract fnc_tbl states _(*code*) fuid =
-  print_endline ">>> final error contract";
-  let fixed = (CL.Util.get_anchors_uid fuid) @ CL.Util.stor.global_vars in
-  let get_err_contract s =
-    let (removed_sigma,new_miss) = Formula.simplify2 fixed s.miss in
-    if (removed_sigma) then
-      prerr_endline "!!! error: impossible precondition";
-    let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
-    let s_err =
-      {miss = new_miss;
-        curr = Formula.empty(* {pi = [Exp.Const (Bool false)]; sigma = []} *);
-        lvars = removed_vars} in
-    let c_err = state2contract s_err 0 in
-    Contract.print c_err;
-    (c_err,SpecTable.Error)
-  in
-  let c_errs = List.map get_err_contract states in
-  SpecTable.add fnc_tbl fuid c_errs
-
-(* anchors - existential vars representing arguments of function and original
-   value of used_gvars
-   used_gvars - global variables used in function
-   tmp_vars - local program variables *)
-let set_fnc_contract ?status:(status=SpecTable.OK) fnc_tbl states fuid code =
-  print_endline ">>> final contract";
-  let anchors = CL.Util.get_anchors_uid fuid in
-  let gvars = CL.Util.stor.global_vars in
-  let fvars = CL.Util.get_fnc_vars fuid in
-  let used_gvars = CL.Util.list_inter fvars gvars in
-  let tmp_vars = CL.Util.list_diff fvars gvars in
-  print_string "PVARS:";
-  CL.Util.print_list Exp.variable_to_string fvars; print_newline ();
-  print_string "ANCHORS:";
-  CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
-  print_string "GVARS:";
-  CL.Util.print_list Exp.variable_to_string used_gvars; print_newline ();
-
-  let fixed = 0::(anchors @ used_gvars) in
-  let get_spec s =
-      try
-        let removed_vars = tmp_vars @ s.lvars in
-        let tmp_s = {miss = s.miss; curr = s.curr; lvars = removed_vars} in
-        let subs = State.simplify2 fixed tmp_s in
-        State.print subs;
-        let c = state2contract subs 0 in
-        let new_c = add_gvars_moves used_gvars c in
-        Contract.print new_c;
-        Some (new_c,status)
-      with State.RemovedSpatialPartFromMiss -> (
-        set_fnc_error_contract fnc_tbl [s] code fuid;
-        None
-      )
-  in
-  let fnc_c = List.filter_map get_spec states in
-  SpecTable.add fnc_tbl fuid fnc_c
 
 
 (*** EXECUTION ***)
@@ -358,15 +407,8 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
   )
 
 and exec_insn tbl bb_tbl states insn =
-  let new_states_for_insn c =
-    if (c = []) then
-      states (* no need applaying empty contracts *)
-    else (
-      let new_states = apply_contracts_on_states solver bb_tbl.StateTable.fuid states c in
-        if (new_states = []) then (
-          (* error appears, continue with empty states *)
-          set_fnc_error_contract tbl states insn.CL.Fnc.code bb_tbl.fuid;[])
-        else new_states )
+  let get_new_states ?(empty_is_err=true) c =
+    new_states_for_insn empty_is_err solver tbl bb_tbl.StateTable.fuid insn states c
   in
   let abstract_if_end_loop bb_uid ss =
     if (CL.Util.is_loop_closing_block bb_uid insn)
@@ -380,10 +422,8 @@ and exec_insn tbl bb_tbl states insn =
     exec_block tbl bb_tbl s_jmp bb
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
-    let s_then = apply_contracts_on_states solver bb_tbl.fuid states
-                 [(List.hd c)] in
-    let s_else = apply_contracts_on_states solver bb_tbl.fuid states
-                 [(List.nth c 1)] in
+    let s_then = get_new_states ~empty_is_err:false [(List.hd c)] in
+    let s_else = get_new_states ~empty_is_err:false [(List.nth c 1)] in
     let ss_then = abstract_if_end_loop uid_then s_then in
     let ss_else = abstract_if_end_loop uid_else s_else in
     let bb_then = CL.Util.get_block uid_then in
@@ -392,10 +432,10 @@ and exec_insn tbl bb_tbl states insn =
   | InsnSWITCH _ -> assert false
   | InsnRET _ ->
     let c = Contract.get_contract insn in
-    let new_states = new_states_for_insn c in
-    set_fnc_contract tbl new_states bb_tbl.fuid insn.CL.Fnc.code; []
+    let new_states = get_new_states c in
+    set_fnc_contract tbl new_states bb_tbl.fuid insn; []
   | InsnABORT ->
-    set_fnc_contract ~status:Aborted tbl states bb_tbl.fuid insn.CL.Fnc.code;
+    set_fnc_contract ~status:Aborted tbl states bb_tbl.fuid insn;
     []
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
@@ -404,10 +444,10 @@ and exec_insn tbl bb_tbl states insn =
         then Contract.get_contract insn
         else find_fnc_contract tbl dst args
                                (CL.Util.get_fnc_uid_from_op called) ) in
-      new_states_for_insn c
+      get_new_states c
     | _ -> assert false )
   | InsnCLOBBER _ -> states (* TODO: stack allocation *)
-  | _ -> let c = Contract.get_contract insn in new_states_for_insn c
+  | _ -> let c = Contract.get_contract insn in get_new_states c
 
 and exec_insns tbl bb_tbl states insns =
   if (states = [])

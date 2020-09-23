@@ -4,6 +4,8 @@ open Formula
 type formula = Formula.t
 type variable = Exp.variable
 
+type status = OK | Error | Aborted (* | Unreached *)
+
 type t = {
     lhs: formula;
     rhs: formula;
@@ -14,6 +16,7 @@ type t = {
     (** the program variables may move to new positions.
         The pvarmap link program variables with contract variables representing
         the new positions; (old,new) *)
+    s: status;
 }
 
 val empty : t

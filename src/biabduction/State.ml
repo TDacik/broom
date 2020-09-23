@@ -106,7 +106,7 @@ let substate fixed_vars state =
     Formula.subformula miss_vars state.curr in
   if (curr_removed_sigma)
   then (if (Unix.isatty Unix.stderr) (* TODO more general *)
-    then prerr_endline "\027[1;31m!!! MEMORY LEAK\027[0m"
+    then prerr_endline "\027[1;35m!!! MEMORY LEAK\027[0m"
     else prerr_endline "!!! MEMORY LEAK");
     (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) curr_vars ^ "AFTER curr\n"); *)
   let all_vars = List.filter_map get_lvar (curr_vars) in

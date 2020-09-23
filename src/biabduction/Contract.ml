@@ -13,27 +13,37 @@ type extend_formula = {
 	root: Exp.t; (* only Var/CVar *)
 }
 
+type status = OK | Error | Aborted (* | Unreached *)
+
 type t = {
-    lhs: formula;
-    rhs: formula;
-    cvars: int;
-    pvarmap: (variable * variable) list;
+	lhs: formula;
+	rhs: formula;
+	cvars: int;
+	pvarmap: (variable * variable) list;
+	s: status;
 }
 
 let empty_exformula = {f = Formula.empty; cnt_cvars = 0; root = Undef}
 
-let empty = {lhs = Formula.empty; rhs = Formula.empty; cvars = 0; pvarmap = []}
+let empty = {lhs = Formula.empty; rhs = Formula.empty; cvars = 0; pvarmap = []; s=OK}
 
 let pvarmap_to_string pvarmap =
 	CL.Util.list_to_string (fun (x,y) ->
 		(Exp.variable_to_string x) ^ "->" ^ (Exp.cvariable_to_string y) )
 		pvarmap
 
+let status_to_string s =
+	match s with
+	| OK -> ""
+	| Error -> "[error]"
+	| Aborted -> "[aborted]"
+
 let to_string c =
-  "Count of Contract local VARS: " ^ string_of_int c.cvars ^ "\n"
-  ^ "LHS: " ^ Formula.to_string c.lhs ^ "\n"
-  ^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
-  ^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap
+	status_to_string c.s
+	^ "Count of Contract EVARS: " ^ string_of_int c.cvars ^ "\n"
+	^ "LHS: " ^ Formula.to_string c.lhs ^ "\n"
+	^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
+	^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap
 
 let print c = print_endline (to_string c)
 
@@ -182,11 +192,13 @@ let rec subcontract vars c =
 			{lhs = (Formula.diff c.lhs new_lhs);
 			 rhs = (Formula.diff c.rhs new_rhs);
 			 cvars = c.cvars;
-			 pvarmap = c.pvarmap} in
+			 pvarmap = c.pvarmap;
+			 s = c.s} in
 		{lhs = Formula.disjoint_union new_lhs tl_c.lhs;
 		 rhs = Formula.disjoint_union new_rhs tl_c.rhs;
 		 cvars = c.cvars;
-		 pvarmap = c.pvarmap}
+		 pvarmap = c.pvarmap;
+		 s = c.s}
 
 (* CREATING CONTRACTS *)
 
@@ -209,11 +221,14 @@ let contract_for_ret ret =
 		let lhs = ef_ret.f in
 		let assign = Exp.BinOp ( Peq, Exp.ret, ef_ret.root) in
 		let rhs = {pi = assign :: lhs.pi; sigma = lhs.sigma} in
-		[{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []}] )
+		[{lhs = lhs; rhs = rhs; cvars = ef_ret.cnt_cvars; pvarmap = []; s=OK}] )
 
 let contract_fail =
-	let rhs = {pi = (Const (Bool false))::[]; sigma = []} in
-	{lhs = Formula.empty; rhs = rhs; cvars = 0; pvarmap = []}
+	{lhs = Formula.empty;
+	rhs = Formula.empty;
+	cvars = 0;
+	pvarmap = [];
+	s = Aborted}
 
 (* 1st contract is for then branch, 2nd for else branch *)
 let contract_for_cond op =
@@ -222,8 +237,8 @@ let contract_for_cond op =
 	let assign_else = Exp.BinOp ( Peq, ef_op.root, Const (Bool false) ) in
 	let lhs_then = {pi = assign_then :: ef_op.f.pi; sigma = ef_op.f.sigma} in
 	let lhs_else = {pi = assign_else :: ef_op.f.pi; sigma = ef_op.f.sigma} in
-	let c1 = {lhs = lhs_then; rhs = lhs_then; cvars = ef_op.cnt_cvars; pvarmap = []} in
-	let c2 = {lhs = lhs_else; rhs = lhs_else; cvars = ef_op.cnt_cvars; pvarmap = []} in
+	let c1 = {lhs = lhs_then; rhs = lhs_then; cvars = ef_op.cnt_cvars; pvarmap = []; s = OK} in
+	let c2 = {lhs = lhs_else; rhs = lhs_else; cvars = ef_op.cnt_cvars; pvarmap = []; s = OK} in
 	c1::c2::[]
 
 (****** CONTRACTS FOR BINARY OPERATION ******)
@@ -283,14 +298,14 @@ let contract_for_binop code dst src1 src2 =
 			| _ -> [assign]
 		) in
 		let rhs = {pi = pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
-		[{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap}]
+		[{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}]
 	| e1::e2::[] ->
 		let lhs1 = {pi = e1::lhs.pi; sigma = lhs.sigma} in
 		let rhs1 = {pi = assign::e1::new_dst.f.pi; sigma = new_dst.f.sigma} in
 		let lhs2 = {pi = e2::lhs.pi; sigma = lhs.sigma} in
 		let rhs2 = {pi = assign::e2::new_dst.f.pi; sigma = new_dst.f.sigma} in
-		[{lhs=lhs1; rhs=rhs1; cvars=new_dst.cnt_cvars; pvarmap=pvarmap};
-		 {lhs=lhs2; rhs=rhs2; cvars=new_dst.cnt_cvars; pvarmap=pvarmap}]
+		[{lhs=lhs1; rhs=rhs1; cvars=new_dst.cnt_cvars; pvarmap=pvarmap; s=OK};
+		 {lhs=lhs2; rhs=rhs2; cvars=new_dst.cnt_cvars; pvarmap=pvarmap; s=OK}]
 	| _ -> assert false
 
 (****** CONTRACTS FOR UNARY OPERATION ******)
@@ -309,7 +324,7 @@ let contract_for_unop code dst src =
 	) in
 	let assign = Exp.BinOp ( Peq, new_dst.root, un_exp ) in
 	let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap}
+	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
 (****** CONTRACTS FOR BUILT-IN FUNCTIONS ******)
 
@@ -331,7 +346,7 @@ let contract_for_malloc dst size =
 	let rhs =
 		{pi = len :: base :: size :: new_dst.f.pi;
 		sigma = sig_add :: new_dst.f.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap}
+	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
 (* PRE: base(src)=src POS: freed(src)
    PRE: src=NULL      POS:
@@ -347,12 +362,14 @@ let contract_for_free src =
 	let c1 = {lhs = {pi = base :: lhs.pi; sigma = sig_add :: lhs.sigma};
 		      rhs = {pi = freed_pi :: lhs.pi; sigma = lhs.sigma};
 		      cvars = ef_src.cnt_cvars;
-		      pvarmap = []} in
+		      pvarmap = [];
+		      s = OK} in
 	let null_pi = Exp.BinOp ( Peq, ef_src.root, Exp.null) in
 	let c2 = {lhs = {pi = null_pi :: lhs.pi; sigma = lhs.sigma};
 		      rhs = Formula.empty;
 		      cvars = ef_src.cnt_cvars;
-		      pvarmap = []} in
+		      pvarmap = [];
+		      s = OK} in
 	c1::c2::[]
 
 let contract_nondet dst =
@@ -364,12 +381,12 @@ let contract_nondet dst =
 		let (new_dst, pvarmap) = rewrite_dst ef_dst in
 		let assign = Exp.BinOp ( Peq, new_dst.root, Undef) in
 		let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
-		{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap}::[]
+		{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}::[]
 
 let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
-	| "abort", [] -> (* (contract_fail):: *)[]
+	| "abort", [] -> (contract_fail)::[]
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
 	| "free", src::[] -> contract_for_free src
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
@@ -421,7 +438,8 @@ let contract_for_called_fnc dst args fuid c =
 			pi = new_lhs.pi @ ef_args.f.pi};
 		rhs = new_rhs;
 		cvars = new_dst.cnt_cvars;
-		pvarmap = c.pvarmap @ pvarmap
+		pvarmap = c.pvarmap @ pvarmap;
+		s = c.s
 	}
 
 
