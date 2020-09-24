@@ -281,7 +281,16 @@ let set_fnc_contract ?status:(status=Contract.OK) fnc_tbl states fuid insn =
   print_string "GVARS:";
   CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
 
-  let fixed = 0::(anchors @ gvars) in
+  let exit_leaks = true in (* FIXME: set in config file *)
+  let memcheck_gvars = (
+    if (exit_leaks) then
+      let fname = CL.Printer.get_fnc_name (CL.Util.get_fnc fuid) in
+      match status with
+      | OK when fname = "main" -> [] (* report memory leaks for static vars *)
+      | Aborted -> [] (* report memory leaks for static vars *)
+      | _ -> gvars
+    else gvars ) in
+  let fixed = 0::(anchors @ memcheck_gvars) in
   let get_contract s =
       try
         let removed_vars = tmp_vars @ s.lvars in
