@@ -13,7 +13,7 @@
   - [x] offset
   <br/>
 - [ ] stack allocation and static storage in logic;
-  instruction and functions: `clobber`, `__builtin_stack_restore`, `__builtin_stack_save`;
+  instruction and functions: `clobber`, `alloca` / `__builtin_alloca` / `__builtin_alloca_with_align` `__builtin_stack_restore`, `__builtin_stack_save`;
   bug: [easy-12-err.c](tests/easy-12-err.c#L9), [tomas-test-01.c](tests/tomas-test-01.c#L14)
     1. edit Formula/Z3, to accept `invalid(x)`, `stack(x,y)`, `static(x,y)`
     2. extend Z3 checks for `invalid` and `freed`
@@ -36,8 +36,8 @@
   - [x] `malloc`
   - [ ] `calloc`
   - [ ] `realloc`
+  - [ ] `aligned_alloc` (since C11)
   - [x] `free` - not implemented: value of pointer after free is not guaranteed (=undef) [tomas-test-02.c](tests/tomas-test-02.c)
-  - [ ] `alloca` / `__builtin_alloca` / `__builtin_alloca_with_align`
   - [ ] `memchr`
   - [ ] `memcmp`
   - [ ] `memcpy`
