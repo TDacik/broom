@@ -46,7 +46,8 @@
   - [x] `rand`
   - [x] `abort`
   - [ ] `assert` / `__assert_fail` / `__assert_rtn`
-  - [x] `exit`
+  - [x] `exit` - not implemented: calling `atexit` registred functions
+  - [x] `_Exit`
   - [ ] `atexit`
   <br/>
 - [ ] string type

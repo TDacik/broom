@@ -24,6 +24,11 @@ void glob_exit() {
 	exit(1); // memory leak
 }
 
+void glob_Exit() {
+	g = malloc(sizeof(int));
+	_Exit(1); // memory leak
+}
+
 int main() {
 	alloc_glob();
 	return 0; // memory leak
