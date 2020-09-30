@@ -18,14 +18,17 @@ module Exp = struct (*$< Exp *)
     and unop =
         Base
       | Len
-      | Freed
+      | Freed    (** for heap allocation *)
+      | Invalid  (** for stack allocation *)
       | BVnot    (** bitwise, in C: ~ *)
       | Pnot     (** logical, in C: ! *)
       | Puminus  (** in C: - *)
 
     (* aritmetic operation *)
     and binop =
-        Peq      (** equality *)
+        Stack    (** stack allocation Stack(ptr,obj): ptr-(_)->obj *)
+      | Static   (** static storage Static(ptr,obj): ptr-(_)->obj *)
+      | Peq      (** equality *)
       | Pneq     (** nonequality *)
       | Pless    (** less then *)
       | Plesseq  (** less or equal then *)
@@ -87,6 +90,7 @@ let unop_to_string o =
   | Base -> "base"
   | Len -> "len"
   | Freed -> "freed"
+  | Invalid -> "invalid"
   | BVnot -> "~"
   | Pnot -> "!"
   | Puminus -> "-"
@@ -112,6 +116,7 @@ let binop_to_string o =
   | BVrshift -> ">>"
   | BVlrotate -> "lrotate"
   | BVrrotate -> "rrotate"
+  | _ -> assert false
 
 let rec to_string ?lvars:(lvars=[]) e =
   match e with
@@ -119,8 +124,14 @@ let rec to_string ?lvars:(lvars=[]) e =
   | CVar a -> cvariable_to_string a
   | Const a -> const_to_string a
   | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string ~lvars:lvars a ^ ")"
-  | BinOp (op,a,b) -> "(" ^ to_string ~lvars:lvars a ^ binop_to_string op ^
-    to_string ~lvars:lvars b ^ ")"
+  | BinOp (op,a,b) -> (
+    match op with
+    | Stack ->
+      "stack(" ^ to_string ~lvars:lvars a ^", "^ to_string ~lvars:lvars b ^ ")"
+    | Static ->
+      "static(" ^ to_string ~lvars:lvars a ^", "^ to_string ~lvars:lvars b ^ ")"
+    | _ -> "(" ^ to_string ~lvars:lvars a ^ binop_to_string op ^
+    to_string ~lvars:lvars b ^ ")" )
   | Void -> "Void"
   | Undef -> "Undef"
 

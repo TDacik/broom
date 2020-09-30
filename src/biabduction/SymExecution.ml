@@ -455,7 +455,6 @@ and exec_insn tbl bb_tbl states insn =
                                (CL.Util.get_fnc_uid_from_op called) ) in
       get_new_states c
     | _ -> assert false )
-  | InsnCLOBBER _ -> states (* TODO: stack allocation *)
   | _ -> let c = Contract.get_contract insn in get_new_states c
 
 and exec_insns tbl bb_tbl states insns =

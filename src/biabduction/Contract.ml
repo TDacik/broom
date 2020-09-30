@@ -47,6 +47,17 @@ let to_string c =
 
 let print c = print_endline (to_string c)
 
+(* var is Exp.t but only Var/CVar *)
+let get_storage ptr var =
+	match var with
+	| Exp.Var uid -> (
+		let variable = CL.Util.get_var uid in
+		match variable.code with
+		| VAR_GL -> [ Exp.BinOp ( Static, ptr, var ) ]
+		| VAR_LC | VAR_FNC_ARG -> [ Exp.BinOp ( Stack, ptr, var ) ]
+		| _ -> [])
+	| _ -> []
+
 (* var is Exp.t but only Var/CVar, last C represents root
    returns tuple (debub_string, ef) where debug_string contains the order of
    applying accessors rules *)
@@ -60,13 +71,15 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-			let (sig_add, dbg_add) =
+			let (pi_add, sig_add, dbg_add) =
 				if ef.cnt_cvars = cvars_ptr then (* points-to exists *)
-					([], "Ref2, ")
-				else
-					([ Hpointsto (ptr, exp_ptr_size, var) ],"Ref1, ") in
+					([], [], "Ref2, ")
+				else (
+					let stor = get_storage ptr var in
+					(stor, [ Hpointsto (ptr, exp_ptr_size, var) ],"Ref1, ")
+				) in
 			let (dbg, ef_new) = var_to_exformula ptr tl
-				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi};
+				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
 				cnt_cvars=cvars_ptr;
 				root=ptr} in
 			(dbg_add ^ dbg, ef_new)
@@ -377,6 +390,60 @@ let contract_for_free src =
 		      s = OK} in
 	c1::c2::[]
 
+
+(*
+   if size<0 or unsuccesful alloc : undefined behavior
+   else         len(dst)=size & base(dst)=dst & stack(dst,undef) &
+                dst-(size)->undef
+   allowd create object of size 0
+*)
+let contract_for_alloca dst size =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_size = operand_to_exformula size {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let lhs = ef_size.f in
+	let (new_dst, pvarmap) = rewrite_dst {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
+	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), ef_size.root) in
+	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
+	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let stack = Exp.BinOp ( Stack, new_dst.root, Undef) in
+	let sig_add = Hpointsto (new_dst.root, ef_size.root, Undef) in
+	let rhs =
+		{pi = len :: base :: size :: stack :: new_dst.f.pi;
+		sigma = sig_add :: new_dst.f.sigma} in
+	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
+
+(* PRE: base(src)=src POS: freed(src)
+   PRE: src=NULL      POS:
+*)
+let contract_for_clobber var =
+	let var_uid = ( match var.data with
+		| OpVar uid -> uid
+		| _ -> assert false) in (* must by variable *)
+	let ef_var = operand_to_exformula var empty_exformula in
+	match ef_var.root with
+	| Var uid ->
+		assert (uid = var_uid);
+		let variable = CL.Util.get_var var_uid in
+		let size = CL.Util.get_type_size variable.typ in
+		let size_exp = Exp.Const (Int (Int64.of_int size)) in
+		let sig_add = Hpointsto (CVar ef_var.cnt_cvars, size_exp, ef_var.root) in
+		let stack = Exp.BinOp ( Stack, CVar ef_var.cnt_cvars, ef_var.root) in
+		let rhs_pi = Exp.UnOp (Invalid, ef_var.root) in
+		{lhs = {pi = stack :: ef_var.f.pi; sigma = sig_add :: ef_var.f.sigma};
+			rhs = {pi = [rhs_pi]; sigma = []};
+			cvars = ef_var.cnt_cvars;
+			pvarmap = [];
+			s = OK}
+	| CVar _ ->
+		let stack = Exp.BinOp ( Stack, ef_var.root, Var var_uid) in
+		let rhs_pi = Exp.UnOp (Invalid, Var var_uid) in
+		{lhs = {pi = stack :: ef_var.f.pi; sigma = ef_var.f.sigma};
+			rhs = {pi = [rhs_pi]; sigma = []};
+			cvars = ef_var.cnt_cvars;
+			pvarmap = [];
+			s = OK}
+	| _ -> assert false
+
 let contract_nondet dst =
 	match dst.data with
 	| OpVoid -> []
@@ -396,6 +463,8 @@ let contract_for_builtin dst called args =
 	| "_Exit", op::[] -> (contract_for_exit op)::[]
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
 	| "free", src::[] -> contract_for_free src
+	| "alloca", size::[] -> (contract_for_alloca dst size)::[]
+	| "__builtin_alloca", size::[] -> (contract_for_alloca dst size)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
 	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
@@ -462,7 +531,7 @@ let get_contract insn =
 			then contract_for_builtin dst called args
 			else []
 		| _ -> assert false )
+	| InsnCLOBBER var -> (contract_for_clobber var)::[]
 	| InsnUNOP (code, dst, src) -> (contract_for_unop code dst src)::[]
 	| InsnNOP | InsnJMP _ | InsnLABEL _ -> []
 	| InsnSWITCH _ -> assert false
-	| _ -> []

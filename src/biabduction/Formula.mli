@@ -17,14 +17,17 @@ module Exp : sig
     and unop =
         Base
       | Len
-      | Freed
+      | Freed    (** for heap allocation *)
+      | Invalid  (** for stack allocation *)
       | BVnot    (** bitwise, in C: ~ *)
       | Pnot     (** logical, in C: ! *)
       | Puminus  (** in C: - *)
 
     (* aritmetic operation *)
     and binop =
-        Peq      (** equality *)
+        Stack    (** stack allocation Stack(ptr,obj): ptr-(_)->obj *)
+      | Static   (** static storage Static(ptr,obj): ptr-(_)->obj *)
+      | Peq      (** equality *)
       | Pneq     (** nonequality *)
       | Pless    (** less then *)
       | Plesseq  (** less or equal then *)

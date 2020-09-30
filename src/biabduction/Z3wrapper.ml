@@ -124,6 +124,7 @@ let rec expr_to_solver ctx func expr =
       		(Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [exp1]));
       		(Boolean.mk_not ctx (Boolean.mk_eq ctx exp1 (BitVector.mk_numeral ctx "0" bw_width)))
 		]), exists1
+      | Invalid -> raise (NoZ3Translation "Unsupported invalid predicate in Z3")
       | BVnot -> let exp1,exists1=(expr_to_solver ctx func a) in
       		(BitVector.mk_not ctx exp1), exists1
       | Pnot -> let exp1,exists1=(expr_to_solver ctx func a) in
@@ -134,6 +135,7 @@ let rec expr_to_solver ctx func expr =
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
+      | Stack | Static -> raise (NoZ3Translation "Unsupported binary predicate in Z3")
       | Peq -> let exp1,exists1=(expr_to_solver ctx func a) in
       		let exp2,exists2=(expr_to_solver ctx func b) in
       		(boolexpr_to_solver ctx Boolean.mk_eq exp1 exp2), (exists1@exists2)
