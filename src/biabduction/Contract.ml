@@ -426,12 +426,15 @@ let contract_for_clobber var =
 		let variable = CL.Util.get_var var_uid in
 		let size = CL.Util.get_type_size variable.typ in
 		let size_exp = Exp.Const (Int (Int64.of_int size)) in
-		let sig_add = Hpointsto (CVar ef_var.cnt_cvars, size_exp, ef_var.root) in
-		let stack = Exp.BinOp ( Stack, CVar ef_var.cnt_cvars, ef_var.root) in
+		let cvar = (if (ef_var.cnt_cvars = 0)
+			then ef_var.cnt_cvars + 1
+			else ef_var.cnt_cvars ) in
+		let sig_add = Hpointsto (CVar cvar, size_exp, ef_var.root) in
+		let stack = Exp.BinOp ( Stack, CVar cvar, ef_var.root) in
 		let rhs_pi = Exp.UnOp (Invalid, ef_var.root) in
 		{lhs = {pi = stack :: ef_var.f.pi; sigma = sig_add :: ef_var.f.sigma};
 			rhs = {pi = [rhs_pi]; sigma = []};
-			cvars = ef_var.cnt_cvars;
+			cvars = cvar;
 			pvarmap = [];
 			s = OK}
 	| CVar _ ->
