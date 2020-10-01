@@ -7,11 +7,12 @@ open Formula
 (* width of the bitvector TODO: as a config parameter *)
 let bw_width=64
 
-(* The functions base, len, size, etc in SL are used as uninterpreted functions in z3 *)
+(* The functions base, len, size, onstack, etc in SL are used as uninterpreted functions in z3 *)
 type sl_function_names_z3 = {
   base : FuncDecl.func_decl;
   len : FuncDecl.func_decl;
   alloc : FuncDecl.func_decl;
+  onstack : FuncDecl.func_decl;
 }
 
 type solver = {
@@ -27,6 +28,8 @@ let get_sl_functions_z3 ctx =
     len=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "len")
       [(BitVector.mk_sort ctx bw_width)] (BitVector.mk_sort ctx bw_width);
     alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc")
+      [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
+    onstack=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "onstack")
       [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
   }
 
@@ -122,9 +125,16 @@ let rec expr_to_solver ctx func expr =
       | Freed -> let exp1,exists1=(expr_to_solver ctx func a) in
       		(Boolean.mk_and ctx [ 
       		(Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [exp1]));
+		(Boolean.mk_not ctx (Expr.mk_app ctx func.onstack [exp1]));
+		(Boolean.mk_eq ctx exp1 (Expr.mk_app ctx func.base [exp1]));
       		(Boolean.mk_not ctx (Boolean.mk_eq ctx exp1 (BitVector.mk_numeral ctx "0" bw_width)))
 		]), exists1
-      | Invalid -> raise (NoZ3Translation "Unsupported invalid predicate in Z3")
+
+      | Invalid -> let exp1,exists1=(expr_to_solver ctx func a) in
+      		(Boolean.mk_and ctx [ 
+      		(Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [exp1]));
+		(Expr.mk_app ctx func.onstack [exp1]);
+		]), exists1
       | BVnot -> let exp1,exists1=(expr_to_solver ctx func a) in
       		(BitVector.mk_not ctx exp1), exists1
       | Pnot -> let exp1,exists1=(expr_to_solver ctx func a) in
@@ -135,7 +145,11 @@ let rec expr_to_solver ctx func expr =
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
-      | Stack | Static -> raise (NoZ3Translation "Unsupported binary predicate in Z3")
+      | Stack | Static -> let exp1,exists1=(expr_to_solver ctx func a) in
+      		(Boolean.mk_and ctx [
+			(Expr.mk_app ctx func.onstack [exp1]);
+			(Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]);
+		]), exists1
       | Peq -> let exp1,exists1=(expr_to_solver ctx func a) in
       		let exp2,exists2=(expr_to_solver ctx func b) in
       		(boolexpr_to_solver ctx Boolean.mk_eq exp1 exp2), (exists1@exists2)
