@@ -112,7 +112,8 @@ let rec post_contract_application_vars state pvarmap seed pvars=
 
 exception Conflict_between_freed_and_slseg
 
-let remove_freed_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
+let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
+  (* freed are on heap *)
   let rec get_freed pure =
     match pure with
     | [] -> []
@@ -121,12 +122,21 @@ let remove_freed_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
       | Exp.UnOp (Freed,a) -> a:: (get_freed rest)
       | _ -> get_freed rest
   in
+  (* invalid are on stack *)
+  let rec get_invalid pure =
+    match pure with
+    | [] -> []
+    | first:: rest ->
+      match first with
+      | Exp.UnOp (Invalid,a) -> a:: (get_invalid rest)
+      | _ -> get_invalid rest
+  in
   let rec cut_freed pure =
     match pure with
     | [] -> []
     | first:: rest ->
       match first with
-      | Exp.UnOp (Freed,_) ->  cut_freed rest
+      | Exp.UnOp (Freed,_) | Exp.UnOp (Invalid,_) -> cut_freed rest
       | _ -> first :: (cut_freed rest)
   in
   let form_z3=formula_to_solver ctx {sigma=form.sigma; pi=cut_freed form.pi} in
@@ -140,26 +150,41 @@ let remove_freed_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
     in
     (Solver.check solv query)=UNSATISFIABLE
   in
+  let check_eq_invalid_ll a b =
+    let query=Boolean.mk_not ctx
+      (Boolean.mk_eq ctx
+        (expr_to_solver_only_exp ctx z3_names a)
+        (expr_to_solver_only_exp ctx z3_names b)
+      )
+      :: form_z3
+    in
+    (Solver.check solv query)=UNSATISFIABLE
+  in
   let rec check_eq_base a base_list =
     match base_list with
     | [] -> false
     | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
   in
-  let rec cut_spatial sp base_list=
+  let rec check_eq_invalid a invalid_list =
+    match invalid_list with
+    | [] -> false
+    | first::rest -> (check_eq_invalid_ll a first) || (check_eq_invalid a rest)
+  in
+  let rec cut_spatial sp base_list invalid_list=
     match sp with
     | [] -> []
     | Hpointsto (a,b,c) :: rest ->
-      if (check_eq_base a base_list)
-      then (cut_spatial rest base_list)
-      else Hpointsto (a,b,c) ::(cut_spatial rest base_list)
+      if (check_eq_base a base_list)|| (check_eq_invalid a invalid_list)
+      then (cut_spatial rest base_list invalid_list)
+      else Hpointsto (a,b,c) ::(cut_spatial rest base_list invalid_list)
     | Slseg (a,b,c) :: rest ->
-      if (check_eq_base a base_list)
+      if (check_eq_base a base_list) || (check_eq_invalid a invalid_list)
       then raise Conflict_between_freed_and_slseg
-      else Slseg (a,b,c) ::(cut_spatial rest base_list)
+      else Slseg (a,b,c) ::(cut_spatial rest base_list invalid_list)
 
   in
 
-  {sigma=(cut_spatial form.sigma (get_freed form.pi)) ; pi=form.pi}
+  {sigma=(cut_spatial form.sigma (get_freed form.pi) (get_invalid form.pi)) ; pi=form.pi}
 
 
 (* after contract application do the following thing
@@ -175,7 +200,7 @@ let post_contract_application state solver pvarmap pvars =
       not (List.exists eq l)
   in
   let new_lvars=List.filter (notmem pvars) vars in
-  let final_contract={miss=step1.miss; curr=(remove_freed_parts solver step1.curr); lvars=new_lvars} in
+  let final_contract={miss=step1.miss; curr=(remove_freed_and_invalid_parts solver step1.curr); lvars=new_lvars} in
    (* check that both parts of the resulting state are satisfiable *)
   let sat_query_currual=formula_to_solver solver.ctx final_contract.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_contract.miss in
