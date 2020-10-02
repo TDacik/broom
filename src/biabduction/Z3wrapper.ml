@@ -13,6 +13,7 @@ type sl_function_names_z3 = {
   len : FuncDecl.func_decl;
   alloc : FuncDecl.func_decl;
   onstack : FuncDecl.func_decl;
+  static : FuncDecl.func_decl;
 }
 
 type solver = {
@@ -30,6 +31,8 @@ let get_sl_functions_z3 ctx =
     alloc=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "alloc")
       [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
     onstack=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "onstack")
+      [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
+    static=FuncDecl.mk_func_decl ctx (Symbol.mk_string ctx "static")
       [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
   }
 
@@ -126,6 +129,7 @@ let rec expr_to_solver ctx func expr =
       		(Boolean.mk_and ctx [ 
       		(Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [exp1]));
 		(Boolean.mk_not ctx (Expr.mk_app ctx func.onstack [exp1]));
+		(Boolean.mk_not ctx (Expr.mk_app ctx func.static [exp1]));
 		(Boolean.mk_eq ctx exp1 (Expr.mk_app ctx func.base [exp1]));
       		(Boolean.mk_not ctx (Boolean.mk_eq ctx exp1 (BitVector.mk_numeral ctx "0" bw_width)))
 		]), exists1
@@ -145,10 +149,17 @@ let rec expr_to_solver ctx func expr =
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
-      | Stack | Static -> let exp1,exists1=(expr_to_solver ctx func a) in
+      | Stack  -> let exp1,exists1=(expr_to_solver ctx func a) in
       		(Boolean.mk_and ctx [
 			(Expr.mk_app ctx func.onstack [exp1]);
 			(Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]);
+			(Boolean.mk_not ctx (Expr.mk_app ctx func.static [(Expr.mk_app ctx func.base [exp1])]));
+		]), exists1
+      |  Static -> let exp1,exists1=(expr_to_solver ctx func a) in
+      		(Boolean.mk_and ctx [
+			(Expr.mk_app ctx func.static [exp1]);
+			(Expr.mk_app ctx func.static [(Expr.mk_app ctx func.base [exp1])]);
+			(Boolean.mk_not ctx (Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]));
 		]), exists1
       | Peq -> let exp1,exists1=(expr_to_solver ctx func a) in
       		let exp2,exists2=(expr_to_solver ctx func b) in
