@@ -112,31 +112,24 @@ let rec post_contract_application_vars state pvarmap seed pvars=
 
 exception Conflict_between_freed_and_slseg
 
+(* freed are on heap / invalid are on stack *)
 let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
-  (* freed are on heap *)
-  let rec get_freed pure =
-    match pure with
-    | [] -> []
-    | first:: rest ->
-      match first with
-      | Exp.UnOp (Freed,a) -> a:: (get_freed rest)
-      | _ -> get_freed rest
+  let get_bases pure =
+    let get_base exp =
+      match exp with
+      | Exp.UnOp (Freed,a) -> Some a
+      | Exp.UnOp (Invalid,a) -> Some a
+      | _ -> None
+    in
+    List.filter_map get_base pure
   in
-  (* invalid are on stack *)
-  let rec get_invalid pure =
-    match pure with
-    | [] -> []
-    | first:: rest ->
-      match first with
-      | Exp.UnOp (Invalid,a) -> a:: (get_invalid rest)
-      | _ -> get_invalid rest
-  in
+
   let rec cut_freed pure =
     match pure with
     | [] -> []
     | first:: rest ->
       match first with
-      | Exp.UnOp (Freed,_) | Exp.UnOp (Invalid,_) -> cut_freed rest
+      | Exp.UnOp (Freed,_) | Exp.UnOp (Invalid,_) ->  cut_freed rest
       | _ -> first :: (cut_freed rest)
   in
   let form_z3=formula_to_solver ctx {sigma=form.sigma; pi=cut_freed form.pi} in
@@ -150,41 +143,25 @@ let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form 
     in
     (Solver.check solv query)=UNSATISFIABLE
   in
-  let check_eq_invalid_ll a b =
-    let query=Boolean.mk_not ctx
-      (Boolean.mk_eq ctx
-        (expr_to_solver_only_exp ctx z3_names a)
-        (expr_to_solver_only_exp ctx z3_names b)
-      )
-      :: form_z3
-    in
-    (Solver.check solv query)=UNSATISFIABLE
-  in
   let rec check_eq_base a base_list =
     match base_list with
     | [] -> false
     | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
   in
-  let rec check_eq_invalid a invalid_list =
-    match invalid_list with
-    | [] -> false
-    | first::rest -> (check_eq_invalid_ll a first) || (check_eq_invalid a rest)
-  in
-  let rec cut_spatial sp base_list invalid_list=
+  let rec cut_spatial sp base_list =
     match sp with
     | [] -> []
     | Hpointsto (a,b,c) :: rest ->
-      if (check_eq_base a base_list)|| (check_eq_invalid a invalid_list)
-      then (cut_spatial rest base_list invalid_list)
-      else Hpointsto (a,b,c) ::(cut_spatial rest base_list invalid_list)
+      if (check_eq_base a base_list)
+      then (cut_spatial rest base_list)
+      else Hpointsto (a,b,c) ::(cut_spatial rest base_list)
     | Slseg (a,b,c) :: rest ->
-      if (check_eq_base a base_list) || (check_eq_invalid a invalid_list)
+      if (check_eq_base a base_list)
       then raise Conflict_between_freed_and_slseg
-      else Slseg (a,b,c) ::(cut_spatial rest base_list invalid_list)
-
+      else Slseg (a,b,c) ::(cut_spatial rest base_list)
   in
 
-  {sigma=(cut_spatial form.sigma (get_freed form.pi) (get_invalid form.pi)) ; pi=form.pi}
+  {sigma=(cut_spatial form.sigma (get_bases form.pi)) ; pi=form.pi}
 
 
 (* after contract application do the following thing

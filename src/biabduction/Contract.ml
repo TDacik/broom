@@ -75,8 +75,14 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 				if ef.cnt_cvars = cvars_ptr then (* points-to exists *)
 					([], [], "Ref2, ")
 				else (
-					let stor = get_storage ptr var in
-					(stor, [ Hpointsto (ptr, exp_ptr_size, var) ],"Ref1, ")
+					let pi_stor = (
+						let stor = get_storage ptr var in
+						if stor != [] then (
+							let len = Exp.BinOp ( Peq, (UnOp (Len, ptr)), exp_ptr_size) in
+							let base = Exp.BinOp ( Peq, (UnOp (Base, ptr)), ptr) in
+							len::base::stor)
+						else []) in
+					(pi_stor, [ Hpointsto (ptr, exp_ptr_size, var) ],"Ref1, ")
 				) in
 			let (dbg, ef_new) = var_to_exformula ptr tl
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
@@ -431,16 +437,18 @@ let contract_for_clobber var =
 			else ef_var.cnt_cvars ) in
 		let sig_add = Hpointsto (CVar cvar, size_exp, ef_var.root) in
 		let stack = Exp.BinOp ( Stack, CVar cvar, ef_var.root) in
-		let rhs_pi = Exp.UnOp (Invalid, ef_var.root) in
-		{lhs = {pi = stack :: ef_var.f.pi; sigma = sig_add :: ef_var.f.sigma};
+		let base = Exp.BinOp ( Peq, (UnOp (Base, CVar cvar)), CVar cvar) in
+		let rhs_pi = Exp.UnOp (Invalid, CVar cvar) in
+		{lhs = {pi = stack :: base :: ef_var.f.pi; sigma = sig_add :: ef_var.f.sigma};
 			rhs = {pi = [rhs_pi]; sigma = []};
 			cvars = cvar;
 			pvarmap = [];
 			s = OK}
 	| CVar _ ->
 		let stack = Exp.BinOp ( Stack, ef_var.root, Var var_uid) in
+		let base = Exp.BinOp ( Peq, (UnOp (Base, ef_var.root)), ef_var.root) in
 		let rhs_pi = Exp.UnOp (Invalid, Var var_uid) in
-		{lhs = {pi = stack :: ef_var.f.pi; sigma = ef_var.f.sigma};
+		{lhs = {pi = stack :: base :: ef_var.f.pi; sigma = ef_var.f.sigma};
 			rhs = {pi = [rhs_pi]; sigma = []};
 			cvars = ef_var.cnt_cvars;
 			pvarmap = [];
