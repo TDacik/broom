@@ -11,4 +11,9 @@ int main(void) {
 
 	ptrdiff_t pq = p - q;  // Valid. diff2 is -5
 
+	if (qp == 5 && pq == -5)
+		free(array);
+
+	return 0;
+
 }
