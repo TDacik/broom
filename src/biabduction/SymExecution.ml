@@ -114,54 +114,75 @@ exception Conflict_between_freed_and_slseg
 
 (* freed are on heap / invalid are on stack *)
 let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
-  let get_bases pure =
+  let get_freed pure =
     let get_base exp =
       match exp with
       | Exp.UnOp (Freed,a) -> Some a
+      | _ -> None
+    in
+    List.filter_map get_base pure 
+  in
+  let get_invalid pure =
+    let get_base exp =
+      match exp with
       | Exp.UnOp (Invalid,a) -> Some a
       | _ -> None
     in
     List.filter_map get_base pure
   in
-
-  let rec cut_freed pure =
+  let rec cut_freed_invalid pure =
     match pure with
     | [] -> []
     | first:: rest ->
       match first with
-      | Exp.UnOp (Freed,_) | Exp.UnOp (Invalid,_) ->  cut_freed rest
-      | _ -> first :: (cut_freed rest)
+      | Exp.UnOp (Freed,_) | Exp.UnOp (Invalid,_) ->  cut_freed_invalid rest
+      | _ -> first :: (cut_freed_invalid rest)
   in
-  let form_z3=formula_to_solver ctx {sigma=form.sigma; pi=cut_freed form.pi} in
-  let check_eq_base_ll a base =
+  let form_z3=formula_to_solver ctx {sigma=form.sigma; pi=cut_freed_invalid form.pi} in
+  let check_eq_base_ll a freed =
     let query=Boolean.mk_not ctx
       (Boolean.mk_eq ctx
-        (expr_to_solver_only_exp ctx z3_names base)
+        (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names freed)])
         (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names a)])
       )
       :: form_z3
     in
-    (Solver.check solv query)=UNSATISFIABLE
+    (Solver.check solv query)=UNSATISFIABLE 
   in
-  let rec check_eq_base a base_list =
-    match base_list with
+  let check_eq_ll a invalid =
+    let query=Boolean.mk_not ctx
+      (Boolean.mk_eq ctx
+        (expr_to_solver_only_exp ctx z3_names invalid)
+        (expr_to_solver_only_exp ctx z3_names a)
+      )
+      :: form_z3
+    in
+    (Solver.check solv query)=UNSATISFIABLE 
+  in
+  let rec check_eq_base a freed_list =
+    match freed_list with
     | [] -> false
     | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
   in
-  let rec cut_spatial sp base_list =
+  let rec check_eq a invalid_list =
+    match invalid_list with
+    | [] -> false
+    | first::rest -> (check_eq_ll a first) || (check_eq a rest)
+  in
+  let rec cut_spatial sp base_list invalid_list =
     match sp with
     | [] -> []
     | Hpointsto (a,b,c) :: rest ->
-      if (check_eq_base a base_list)
-      then (cut_spatial rest base_list)
-      else Hpointsto (a,b,c) ::(cut_spatial rest base_list)
+      if (check_eq_base a base_list) || (check_eq a invalid_list)
+      then (cut_spatial rest base_list invalid_list)
+      else Hpointsto (a,b,c) ::(cut_spatial rest base_list invalid_list)
     | Slseg (a,b,c) :: rest ->
-      if (check_eq_base a base_list)
+      if (check_eq_base a base_list)|| (check_eq a invalid_list)
       then raise Conflict_between_freed_and_slseg
-      else Slseg (a,b,c) ::(cut_spatial rest base_list)
+      else Slseg (a,b,c) ::(cut_spatial rest base_list invalid_list)
   in
 
-  {sigma=(cut_spatial form.sigma (get_bases form.pi)) ; pi=form.pi}
+  {sigma=(cut_spatial form.sigma (get_freed form.pi) (get_invalid form.pi)) ; pi=form.pi}
 
 
 (* after contract application do the following thing
@@ -177,13 +198,13 @@ let post_contract_application state solver pvarmap pvars =
       not (List.exists eq l)
   in
   let new_lvars=List.filter (notmem pvars) vars in
-  let final_contract={miss=step1.miss; curr=(remove_freed_and_invalid_parts solver step1.curr); lvars=new_lvars} in
+  let final_state={miss=step1.miss; curr=(remove_freed_and_invalid_parts solver step1.curr); lvars=new_lvars} in
    (* check that both parts of the resulting state are satisfiable *)
-  let sat_query_currual=formula_to_solver solver.ctx final_contract.curr in
-  let sat_query_missing=formula_to_solver solver.ctx final_contract.miss in
-  if ((Solver.check solver.solv sat_query_currual)=SATISFIABLE) &&
+  let sat_query_curr=formula_to_solver solver.ctx final_state.curr in
+  let sat_query_missing=formula_to_solver solver.ctx final_state.miss in
+  if ((Solver.check solver.solv sat_query_curr)=SATISFIABLE) &&
      ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
-  then  CAppOk final_contract
+  then  CAppOk final_state
   else (prerr_endline "SAT Fail"; CAppFail)
 
 (* Do

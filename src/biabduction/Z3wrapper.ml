@@ -116,7 +116,8 @@ let const_to_solver ctx c =
 
 let rec expr_to_solver ctx func expr =
   match expr with
-  | Exp.Var a -> (Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (BitVector.mk_sort ctx bw_width)), []
+  | Exp.Var a -> 
+  	(Expr.mk_const ctx (Symbol.mk_string ctx (string_of_int a)) (BitVector.mk_sort ctx bw_width)), []
   | Exp.CVar _ -> raise (NoZ3Translation "Contract variable shouldn't be in Z3")
   | Exp.Const a -> (const_to_solver ctx a), []
   | Exp.UnOp (op,a) ->
