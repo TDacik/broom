@@ -540,22 +540,22 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
 (* The level parameter gives the level of match, the only difference is in check_match function *)
 
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
-let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
+let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level onstack =
   let ff = Boolean.mk_false ctx in
-  let lhs_ll,flag_l =
+  let lhs_ll,lhs_dest,flag_l =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),0
-    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),1
+    | Hpointsto (a,_ ,b) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b),0
+    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff,1
   in
   let lhs_size =
     match (List.nth form1.sigma i1) with
     | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s)
     | Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
   in
-  let rhs_ll,flag_r =
+  let rhs_ll,rhs_dest,flag_r =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),0
-    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),1
+    | Hpointsto (a,_ ,b) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b),0
+    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff,1
   in
   let rhs_size =
     match (List.nth form2.sigma i2) with
@@ -572,6 +572,26 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
     then (Expr.mk_app ctx z3_names.base [rhs_ll])
     else rhs_ll
   in
+  (* if the parameter onstack is set to true, the Slseg can not be matched *)
+  if (onstack && ((flag_l+flag_r)>0)) || level>2 then false else
+  (* check that lhs and rhs are both on stack or both static *)
+  let query_onstack =
+    	let qq1=[Boolean.mk_not ctx (Expr.mk_app ctx z3_names.onstack [lhs] );
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+	in
+    	let qq2=[Boolean.mk_not ctx (Expr.mk_app ctx z3_names.onstack [rhs] );
+        	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+	in
+    	let qq3=[Boolean.mk_not ctx (Expr.mk_app ctx z3_names.static [lhs] );
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+	in
+    	let qq4=[Boolean.mk_not ctx (Expr.mk_app ctx z3_names.static [rhs] );
+        	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+	in
+ 	(not onstack) || 
+	(((Solver.check solv qq1)=UNSATISFIABLE)&&((Solver.check solv qq2)=UNSATISFIABLE)) ||
+	(((Solver.check solv qq3)=UNSATISFIABLE)&&((Solver.check solv qq4)=UNSATISFIABLE))
+  in	
   match level with
   | 1 ->
     let query_size =
@@ -584,11 +604,13 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
       ((Solver.check solv qq1)=UNSATISFIABLE)
     in
     let query1 =
-      [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);
-        (Boolean.mk_and ctx (formula_to_solver ctx form1))
-      ]
+    	if onstack
+	then [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+	else [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
     in
-    query_size
+    query_size && query_onstack
     && ((Solver.check solv query1)=UNSATISFIABLE)
   | 2 ->
     let query_size =
@@ -602,12 +624,15 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
       (Solver.check solv qq)=UNSATISFIABLE
     in
     let query =
-      [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);
-        (Boolean.mk_and ctx (formula_to_solver ctx form1));
-        (Boolean.mk_and ctx (formula_to_solver ctx form2))
-      ]
+    	if onstack
+	then  [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
+        	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+      	else [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
+        	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
     in
-    query_size
+    query_size && query_onstack
     && ((Solver.check solv query)=UNSATISFIABLE)
   | 3 ->
     let query_size =
@@ -650,11 +675,11 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
   | _ -> false
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *)
-let rec find_match_ll solver form1 i1 form2 level=
+let rec find_match_ll solver form1 i1 form2 level onstack =
   let (*rec*) try_with_rhs i2 =
     if (List.length form2.sigma) <= i2
     then -1
-    else (if (check_match solver form1 i1 form2 i2 level)
+    else (if (check_match solver form1 i1 form2 i2 level onstack)
       then i2
       else -1)
   in
@@ -662,11 +687,11 @@ let rec find_match_ll solver form1 i1 form2 level=
   then (-1,-1)
   else
     match (try_with_rhs 0) with
-    | -1 -> (find_match_ll solver form1 (i1+1) form2 level)
+    | -1 -> (find_match_ll solver form1 (i1+1) form2 level onstack)
     | x -> (i1,x)
 
-let find_match solver form1 form2 level =
-  find_match_ll solver form1 0 form2 level
+let find_match solver form1 form2 level onstack =
+  find_match_ll solver form1 0 form2 level onstack
 
 
 (* apply the match rule to i=(i1,i2)
@@ -715,9 +740,11 @@ let rec apply_match solver i pred_type form1 form2 pvars =
   form2 - the RHS formula with removed matched part
   M - the learned part
 2:  unfolded Slseg in form1/form2 and added equality x=y
+
+reverse_on_stack = when set to true, one tries to match l1 -->x /\ onstack(l1,x) with l2 --> x /\ onstack(l2,x).
 *)
-and try_match solver form1 form2 level pvars =
-  let m=find_match solver form1 form2 level in
+and try_match_ll solver form1 form2 level pvars reverse_on_stack =
+  let m=find_match solver form1 form2 level reverse_on_stack in
   match m with
   | (-1,-1) -> Fail
   | (i1,i2) ->
@@ -739,19 +766,28 @@ and try_match solver form1 form2 level pvars =
       let y_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, y1,y2))] else [] in
       (* size1 = size2 is added if Hpointsto is mathced with Hpointsto *)
       let size_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, size1,size2))] else [] in
-      match level with
-      | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
+      match level,reverse_on_stack with
+      | 1,false ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=[]},
           added_lvars)
-      | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
+      | _,true ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
+          f2,
+          {sigma=[]; pi=x_eq @ y_eq},
+          added_lvars)
+      | 3,false ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq},
           added_lvars)
-      | _ ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ size_eq @ f1.pi},
+      | _,_ ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ size_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq @ size_eq},
           added_lvars)
+
+and try_match solver form1 form2 level pvars = try_match_ll solver form1 form2 level pvars false
+
+(* l1 -->x /\ onstack(l1,x) with l2 --> x /\ onstack(l2,x). *)
+and try_match_onstack solver form1 form2 level pvars = try_match_ll solver form1 form2 level pvars true
 
 
 (****************************************************)
@@ -882,6 +918,8 @@ let rec biabduction solver form1 form2 pvars =
     (try_match,2,"Match2");
     (try_split,2,"Split2");
     (try_match,3,"Match3");
+    (try_match_onstack,1,"Match-Onstack-1");
+    (try_match_onstack,2,"Match-Onstack-2");
     (try_learn_pointsto,1,"Learn1-Pointsto");
     (try_learn_slseg,1,"Learn1-Slseg");
     (try_learn_pointsto,3,"Learn3-Pointsto");
