@@ -21,6 +21,12 @@ void argument_stack(struct node *s) {
 	s->j = &a;
 }
 
+void invalid_stack() {
+	{
+		struct node s = {3, NULL};
+	}
+}
+
 void free_stack() {
 	struct node s = {3, NULL};
 	void *q = &s;
