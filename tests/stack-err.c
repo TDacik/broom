@@ -18,7 +18,7 @@ int *return_stack() {
 
 void argument_stack(struct node *s) {
 	int a = 3;
-	s->j = &a;
+	s->j = &a; // error
 }
 
 void invalid_stack() {
