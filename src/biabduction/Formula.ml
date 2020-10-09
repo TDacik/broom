@@ -264,7 +264,7 @@ let rec find_and_remove_var_pointsto obj sigma cvars =
   match sigma with
   | [] -> let cvar_last = cvars + 1 in
     (Exp.CVar cvar_last), [], cvar_last
-  | Hpointsto (ptr,size,obj)::rest -> (
+  | Hpointsto (ptr,size,obj2)::rest when obj2=obj -> (
     match ptr with
     | Var _ | CVar _ -> (ptr, rest, cvars)
     | _ ->
