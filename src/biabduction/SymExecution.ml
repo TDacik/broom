@@ -118,17 +118,10 @@ let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form 
     let get_base exp =
       match exp with
       | Exp.UnOp (Freed,a) -> Some a
-      | _ -> None
-    in
-    List.filter_map get_base pure 
-  in
-  let get_invalid pure =
-    let get_base exp =
-      match exp with
       | Exp.UnOp (Invalid,a) -> Some a
       | _ -> None
     in
-    List.filter_map get_base pure
+    List.filter_map get_base pure 
   in
   let rec cut_freed_invalid pure =
     match pure with
@@ -149,40 +142,40 @@ let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form 
     in
     (Solver.check solv query)=UNSATISFIABLE 
   in
-  let check_eq_ll a invalid =
-    let query=Boolean.mk_not ctx
-      (Boolean.mk_eq ctx
-        (expr_to_solver_only_exp ctx z3_names invalid)
-        (expr_to_solver_only_exp ctx z3_names a)
-      )
-      :: form_z3
-    in
-    (Solver.check solv query)=UNSATISFIABLE 
-  in
   let rec check_eq_base a freed_list =
     match freed_list with
     | [] -> false
     | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
   in
-  let rec check_eq a invalid_list =
-    match invalid_list with
-    | [] -> false
-    | first::rest -> (check_eq_ll a first) || (check_eq a rest)
-  in
-  let rec cut_spatial sp base_list invalid_list =
+  let rec cut_spatial sp base_list  =
     match sp with
     | [] -> []
     | Hpointsto (a,b,c) :: rest ->
-      if (check_eq_base a base_list) || (check_eq a invalid_list)
-      then (cut_spatial rest base_list invalid_list)
-      else Hpointsto (a,b,c) ::(cut_spatial rest base_list invalid_list)
+      if (check_eq_base a base_list) 
+      then (cut_spatial rest base_list )
+      else Hpointsto (a,b,c) ::(cut_spatial rest base_list )
     | Slseg (a,b,c) :: rest ->
-      if (check_eq_base a base_list)|| (check_eq a invalid_list)
+      if (check_eq_base a base_list)
       then raise Conflict_between_freed_and_slseg
-      else Slseg (a,b,c) ::(cut_spatial rest base_list invalid_list)
+      else Slseg (a,b,c) ::(cut_spatial rest base_list )
+  in
+  (* cat all "Stack(x,_)" predicates, where base(x) is part of base_list *)
+  let rec cut_pure pure base_list  =
+    match pure with
+    | [] -> []
+    | Exp.BinOp (op,a,b) :: rest ->
+    	(match op with
+	| Stack ->
+      		if (check_eq_base a base_list) 
+      		then (cut_pure rest base_list)
+		else Exp.BinOp (op,a,b) ::(cut_pure rest base_list)
+	| _ -> Exp.BinOp (op,a,b) ::(cut_pure rest base_list)
+	)
+    | first ::rest -> first :: (cut_pure rest base_list)  
   in
 
-  {sigma=(cut_spatial form.sigma (get_freed form.pi) (get_invalid form.pi)) ; pi=form.pi}
+  let base_list= (get_freed form.pi) in
+  {sigma=(cut_spatial form.sigma base_list) ; pi=(cut_pure form.pi base_list)}
 
 
 (* after contract application do the following thing
