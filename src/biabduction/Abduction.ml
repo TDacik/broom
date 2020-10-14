@@ -551,7 +551,7 @@ let check_match_onstack {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i
     | _ -> ff,ff
   in
   let rhs_src,rhs_dest =
-    match (List.nth form1.pi i1) with
+    match (List.nth form2.pi i2) with
     | Exp.BinOp (op,a,b) ->
     	(match op with 
 	| Stack ->  (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
@@ -604,11 +604,42 @@ let rec find_match_onstack_ll solver form1 i1 form2 level  =
 let find_match_onstack solver form1 form2 level =
   find_match_onstack_ll solver form1 0 form2 level 
 
-let try_match_onstack solver form1 form2 level pvars  =
+let try_match_onstack solver form1 form2 level _  =
   let m=find_match_onstack solver form1 form2 level in
   match m with
-  | (-1,-1) -> print_string "Match onstack fail\n"; Fail
-  | (i1,i2) -> print_string ("Match onstack Apply"^(string_of_int i1)^" "^(string_of_int i2) ^"\n") ; Fail
+  | (-1,-1) -> Fail
+  | (i1,i2) -> print_string ("Match onstack Apply"^(string_of_int i1)^" "^(string_of_int i2) ^"\n") ;
+	let nequiv a b = not (a=b) in
+	let remove k form =
+	    { sigma=form.sigma;
+	      pi=List.filter (nequiv (List.nth form.pi k)) form.pi }
+	in
+	let f1,f2=(remove i1 form1), (remove i2 form2) in
+	let x1,y1 =
+	    match (List.nth form1.pi i1) with
+	    | Exp.BinOp (_,a,b) -> a,b
+	    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+	in
+	let x2,y2 =
+	    match (List.nth form2.pi i2) with
+	    | Exp.BinOp (_,a,b) -> a,b
+	    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+	in
+
+	let x_eq=[(Exp.BinOp ( Peq, x1,x2))] in
+        let y_eq=[(Exp.BinOp ( Peq, y1,y2))] in
+      	match level with
+	| 1 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ f1.pi},
+          f2,
+          {sigma=[]; pi=x_eq},
+          [])
+      	| 2 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
+          f2,
+          {sigma=[]; pi=x_eq @ y_eq },
+          [])
+      	| _ ->  raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+
+
   
 
 (******************************************************************************)
@@ -887,7 +918,7 @@ and entailment solver form1 form2 evars=
   (* get fresh names for the evars to avoid conflicts in the entailment query *)
   let form1_s=Formula.simplify form1 evars in
   let form2_s=Formula.simplify form2 evars in
-  print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
+  (*print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
   Formula.print_with_lambda form1_s;
   print_string "FORM2: ";
   Formula.print_with_lambda form2_s;
@@ -896,7 +927,7 @@ and entailment solver form1 form2 evars=
 	| [] -> print_string "]\n"
 	| a::b -> print_string ((string_of_int a)^", "); (print_evars b)
   in
-  print_string "EVARS: [ "; print_evars evars;  flush stdout;
+  print_string "EVARS: [ "; print_evars evars;  flush stdout;*)
   let conflicts1=find_vars form1_s in
   let form2_rename,evars2=match (rename_ex_variables form2_s evars conflicts1) with
     | f -> f
@@ -909,8 +940,7 @@ and entailment solver form1 form2 evars=
   let res=
   	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
   in
-  if res then print_string "ENT VALID\n" else print_string "ENT INVALID\n";
-  print_string "XXXXXXXXXXXXXXXXXXXXXX\n"; flush stdout;
+  if res then print_string "ENT VALID\n" else print_string "ENT INVALID\n"; flush stdout;
   res
 
 (****************************************************)
@@ -937,33 +967,6 @@ type abduction_res =
 | BFail
 
 let rec biabduction solver form1 form2 pvars =
-  (* First test SAT of form1 and form2.
-     Postponing SAT to the end of biabduction may lead to hidden conflicts.
-     The conflicts may be removed by application of a match rule.
-   *)
-  match (test_sat solver form1 form2) with
-  | SatFail ->
-    prerr_endline "SAT fail"; BFail
-  | Finish (missing,frame) ->
-    print_endline "Finish true"; Bok ( missing,frame, [])
-  | NoFinish ->
-  (* Here is a given list of possible rules and the order in which they are going to be applied *)
-  (* Match4 and Split4 is applied only in case that nothing else can be applied *)
-  let rules=[
-    (try_match,1,"Match1");
-    (try_split,1,"Split1");
-    (try_match,2,"Match2");
-    (try_split,2,"Split2");
-    (try_match,3,"Match3");
-    (try_match_onstack,1,"Match-Onstack-1");
-    (try_match_onstack,2,"Match-Onstack-2");
-    (try_learn_pointsto,1,"Learn1-Pointsto");
-    (try_learn_slseg,1,"Learn1-Slseg");
-    (try_learn_pointsto,3,"Learn3-Pointsto");
-    (try_learn_slseg,2,"Learn3-Slseg");
-    (try_match,4,"Match4");
-    (try_split,4,"Split4");
-  ] in
   (* try the rules till an applicable if founded *)
   let rec try_rules todo=
     match todo with
@@ -977,6 +980,41 @@ let rec biabduction solver form1 form2 pvars =
       )
     | [] -> Fail
   in
+  let rules_onstack=[
+    (try_match_onstack,1,"Match-Onstack-1");
+    (try_match_onstack,2,"Match-Onstack-2");
+  ] in
+  (* First test SAT of form1 and form2.
+     Postponing SAT to the end of biabduction may lead to hidden conflicts.
+     The conflicts may be removed by application of a match rule.
+     The Finish true is aplied only if Match-onstack can not be applied
+   *)
+  match (test_sat solver form1 form2),(try_rules rules_onstack) with
+  | SatFail, _ ->
+    prerr_endline "SAT fail (biabduction)"; BFail  
+  | Finish (missing,frame), Fail ->
+    print_endline "Finish true"; Bok ( missing,frame, [])
+  | _, Apply (f1,f2,missing,n_lvars) ->
+    (match biabduction solver f1 f2 pvars with
+    | BFail -> BFail
+    | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
+    )
+  | NoFinish, Fail ->
+  (* Here is a given list of possible rules and the order in which they are going to be applied *)
+  (* Match4 and Split4 is applied only in case that nothing else can be applied *)
+  let rules=[
+    (try_match,1,"Match1");
+    (try_split,1,"Split1");
+    (try_match,2,"Match2");
+    (try_split,2,"Split2");
+    (try_match,3,"Match3");
+    (try_learn_pointsto,1,"Learn1-Pointsto");
+    (try_learn_slseg,1,"Learn1-Slseg");
+    (try_learn_pointsto,3,"Learn3-Pointsto");
+    (try_learn_slseg,2,"Learn3-Slseg");
+    (try_match,4,"Match4");
+    (try_split,4,"Split4");
+  ] in
   match try_rules rules with
   | Apply (f1,f2,missing,n_lvars) ->
     (match biabduction solver f1 f2 pvars with
