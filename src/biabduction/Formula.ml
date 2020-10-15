@@ -420,14 +420,10 @@ let rec get_eq_vars vlist equalities =
 
 let rec substitute_expr var1 var2 expr =
   match expr with
-  | Exp.Var a ->
-    ( match var2 with
-      | Exp.Var v2 -> if (a=v2) then var1 else Exp.Var a
-      | _ -> Exp.Var a )
-  | CVar a ->
-    ( match var2 with
-      | Exp.CVar v2 -> if (a=v2) then var1 else Exp.CVar a
-      | _ -> Exp.CVar a )
+  | Exp.Var _ when expr=var2 -> var1
+  | Var a -> Exp.Var a
+  | CVar _ when expr=var2 -> var1
+  | CVar a -> CVar a
   | Const a -> Const a
   | UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
   | BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
