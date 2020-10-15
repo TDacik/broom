@@ -257,6 +257,12 @@ let disjoint_union {pi = pi1; sigma = sigma1} {pi = pi2; sigma = sigma2} =
   {pi = pi1 @ pi2;
   sigma = sigma1 @ sigma2}
 
+let rec is_invalid pi =
+  match pi with
+  | [] -> false
+  | Exp.UnOp (Invalid,_)::_ -> true
+  | _::tl -> is_invalid tl
+
 (*** FIND ALL VARIABLES IN FORMULA ***)
 
 (* returns: ptr new_sigma new_cvars *)

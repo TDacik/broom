@@ -110,6 +110,8 @@ val diff : t -> t -> t
 (** [disjoint_union f1 f2] *)
 val disjoint_union : t -> t -> t
 
+(** [is_invalid pi] returns true, if [pi] contains Invalid predicate *)
+val is_invalid : pi -> bool
 
 (** {3 Find all variables in formula} *)
 

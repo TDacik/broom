@@ -112,8 +112,54 @@ let rec post_contract_application_vars state pvarmap seed pvars=
 
 exception Conflict_between_freed_and_slseg
 
+let cut_freed_and_invalid_parts ?(replaced=false) {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 form freed_list invalid_list =
+    let check_eq_base_ll a base =
+      let query=Boolean.mk_not ctx
+        (Boolean.mk_eq ctx
+          (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names base)])
+          (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names a)])
+        )
+        :: form_z3
+      in
+      (Solver.check solv query)=UNSATISFIABLE
+    in
+    let rec check_eq_base a base_list =
+      match base_list with
+      | [] -> false
+      | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
+    in
+    let rec cut_spatial sp base_list  =
+      match sp with
+      | [] -> []
+      | Hpointsto (a,b,c) :: rest ->
+        if (check_eq_base a base_list)
+        then (cut_spatial rest base_list )
+        else Hpointsto (a,b,c) ::(cut_spatial rest base_list )
+      | Slseg (a,b,c) :: rest ->
+        if (check_eq_base a base_list)
+        then raise Conflict_between_freed_and_slseg
+        else Slseg (a,b,c) ::(cut_spatial rest base_list )
+    in
+    (* cat all "Stack(x,_)" predicates, where base(x) is part of base_list
+       if replaced is true, add Invalid(x) *)
+    let rec cut_pure pure base_list =
+      match pure with
+      | [] -> []
+      | Exp.BinOp (Stack,a,b) :: rest -> (
+          if (check_eq_base a base_list)
+          then (if replaced
+            then Exp.UnOp (Invalid,a) ::(cut_pure rest base_list)
+            else (cut_pure rest base_list) )
+          else Exp.BinOp (Stack,a,b) ::(cut_pure rest base_list)
+      )
+      | first::rest -> first :: (cut_pure rest base_list)
+    in
+
+    {sigma=(cut_spatial form.sigma (freed_list @ invalid_list));
+     pi=(cut_pure form.pi invalid_list)}
+
 (* freed are on heap / invalid are on stack *)
-let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form =
+let remove_freed_and_invalid_parts solver form =
   let get_freed pure =
     let get_base exp =
       match exp with
@@ -138,53 +184,24 @@ let remove_freed_and_invalid_parts {ctx=ctx; solv=solv; z3_names=z3_names} form 
       | Exp.UnOp (Freed,_) | Exp.UnOp (Invalid,_) ->  cut_freed_invalid rest
       | _ -> first :: (cut_freed_invalid rest)
   in
-  let form_z3=formula_to_solver ctx {sigma=form.sigma; pi=cut_freed_invalid form.pi} in
-  let check_eq_base_ll a base =
-    let query=Boolean.mk_not ctx
-      (Boolean.mk_eq ctx
-        (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names base)])
-        (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names a)])
-      )
-      :: form_z3
+
+  let freed_list = get_freed form.pi in
+  let invalid_list = get_invalid form.pi in
+  let form_z3=formula_to_solver solver.ctx {sigma=form.sigma; pi=cut_freed_invalid form.pi} in
+  cut_freed_and_invalid_parts solver form_z3 form freed_list invalid_list
+
+let remove_stack ?(replaced=false) solver form =
+  let get_stack pure =
+    let get_base exp =
+      match exp with
+      | Exp.BinOp (Stack,a,_) -> Some a
+      | _ -> None
     in
-    (Solver.check solv query)=UNSATISFIABLE 
+    List.filter_map get_base pure
   in
-  let rec check_eq_base a base_list =
-    match base_list with
-    | [] -> false
-    | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
-  in
-  let rec cut_spatial sp base_list  =
-    match sp with
-    | [] -> []
-    | Hpointsto (a,b,c) :: rest ->
-      if (check_eq_base a base_list)
-      then (cut_spatial rest base_list )
-      else Hpointsto (a,b,c) ::(cut_spatial rest base_list )
-    | Slseg (a,b,c) :: rest ->
-      if (check_eq_base a base_list)
-      then raise Conflict_between_freed_and_slseg
-      else Slseg (a,b,c) ::(cut_spatial rest base_list )
-  in
-  (* cat all "Stack(x,_)" predicates, where base(x) is part of base_list *)
-  let rec cut_pure pure base_list  =
-    match pure with
-    | [] -> []
-    | Exp.BinOp (op,a,b) :: rest -> (
-      match op with
-      | Stack ->
-        if (check_eq_base a base_list)
-        then (cut_pure rest base_list)
-        else Exp.BinOp (op,a,b) ::(cut_pure rest base_list)
-      | _ -> Exp.BinOp (op,a,b) ::(cut_pure rest base_list)
-    )
-    | first ::rest -> first :: (cut_pure rest base_list)  
-  in
-
-  let freed_list = (get_freed form.pi) in
-  let invalid_list = (get_invalid form.pi) in
-  {sigma=(cut_spatial form.sigma (freed_list @ invalid_list)) ; pi=(cut_pure form.pi invalid_list)}
-
+  let invalid_list = get_stack form.pi in
+  let form_z3=formula_to_solver solver.ctx form in
+  cut_freed_and_invalid_parts ~replaced solver form_z3 form [] invalid_list
 
 (* after contract application do the following thing
   1: rename variables according to pvarmap
@@ -257,6 +274,11 @@ let prerr_error str =
     then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
     else prerr_endline ("!!! error: "^str)
 
+let prerr_warn str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;35m!!! warning: "^str^"\027[0m")
+    else prerr_endline ("!!! warning: "^str)
+
 let prerr_note str =
   if (Unix.isatty Unix.stderr)
     then prerr_endline ("\027[1;35m!!! note: "^str^"\027[0m")
@@ -292,7 +314,7 @@ let set_fnc_error_contract ?(status=Contract.OK) fnc_tbl states fuid insn =
    value of gvars
    gvars - global variables (may appear after calling function)
    tmp_vars - local program variables *)
-let set_fnc_contract ?status:(status=Contract.OK) fnc_tbl states fuid insn =
+let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid insn =
   print_endline ">>> final contract";
   let anchors = CL.Util.get_anchors_uid fuid in
   let gvars = CL.Util.stor.global_vars in
@@ -316,17 +338,22 @@ let set_fnc_contract ?status:(status=Contract.OK) fnc_tbl states fuid insn =
     else gvars ) in
   let fixed = 0::(anchors @ memcheck_gvars) in
   let get_contract s =
+      let removed_vars = tmp_vars @ s.lvars in
+      let nostack_s = {
+        miss = remove_stack solver s.miss;
+        curr = remove_stack ~replaced:true solver s.curr;
+        lvars = removed_vars} in
       try
-        let removed_vars = tmp_vars @ s.lvars in
-        let tmp_s = {miss = s.miss; curr = s.curr; lvars = removed_vars} in
-        let subs = State.simplify2 fixed tmp_s in
+        let subs = State.simplify2 fixed nostack_s in
         State.print subs;
+        if (is_invalid subs.curr.pi) then
+          prerr_warn "function returns address of local variable";
         let c = state2contract ~status:status subs 0 in
         let new_c = add_gvars_moves gvars c in
         Contract.print new_c;
         Some new_c
       with State.RemovedSpatialPartFromMiss -> (
-        set_fnc_error_contract fnc_tbl [s] fuid insn;
+        set_fnc_error_contract fnc_tbl [nostack_s] fuid insn;
         None
       )
   in
@@ -365,7 +392,7 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
                   empty_is_err_ref := false;
                   solve_contract tl
                 | Aborted ->
-                  set_fnc_contract ~status:c.s tbl [simple_s] fuid insn;
+                  set_fnc_contract ~status:c.s solver tbl [simple_s] fuid insn;
                   empty_is_err_ref := false;
                   solve_contract tl
 
@@ -466,9 +493,9 @@ and exec_insn tbl bb_tbl states insn =
   | InsnRET _ ->
     let c = Contract.get_contract insn in
     let new_states = get_new_states c in
-    set_fnc_contract tbl new_states bb_tbl.fuid insn; []
+    set_fnc_contract solver tbl new_states bb_tbl.fuid insn; []
   | InsnABORT ->
-    set_fnc_contract ~status:Aborted tbl states bb_tbl.fuid insn;
+    set_fnc_contract ~status:Aborted solver tbl states bb_tbl.fuid insn;
     []
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
