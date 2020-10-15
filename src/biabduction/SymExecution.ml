@@ -203,6 +203,20 @@ let remove_stack ?(replaced=false) solver form =
   let form_z3=formula_to_solver solver.ctx form in
   cut_freed_and_invalid_parts ~replaced solver form_z3 form [] invalid_list
 
+(* because abduction doing something weird, when is used only remove_stack *)
+let remove_stack2 ?(replaced=false) solver form lvars =
+  let get_stack pure =
+    let get_base exp =
+      match exp with
+      | Exp.BinOp (Stack,Var a,Var b) when List.mem a lvars && List.mem b lvars -> Some (Exp.Var a)
+      | _ -> None
+    in
+    List.filter_map get_base pure
+  in
+  let invalid_list = get_stack form.pi in
+  let form_z3=formula_to_solver solver.ctx form in
+  cut_freed_and_invalid_parts ~replaced solver form_z3 form [] invalid_list
+
 (* after contract application do the following thing
   1: rename variables according to pvarmap
   2: for each freed(x) predicate in pure part remove the spatial predicates
@@ -216,8 +230,12 @@ let post_contract_application state solver pvarmap pvars =
       not (List.exists eq l)
   in
   let new_lvars=List.filter (notmem pvars) vars in
-  let final_state={miss=step1.miss; curr=(remove_freed_and_invalid_parts solver step1.curr); lvars=new_lvars} in
-   (* check that both parts of the resulting state are satisfiable *)
+  let final_state={
+    miss=(remove_stack2 solver step1.miss step1.lvars);
+    curr=(remove_freed_and_invalid_parts solver step1.curr);
+    lvars=new_lvars} in
+	State.print final_state;
+  (* check that both parts of the resulting state are satisfiable *)
   let sat_query_curr=formula_to_solver solver.ctx final_state.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_state.miss in
   if ((Solver.check solver.solv sat_query_curr)=SATISFIABLE) &&
