@@ -501,14 +501,8 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
   if (List.length form1.sigma)>0 then -1
   else
   (
-    let rec print_evars xx=
-  	match xx with
-	| [] -> print_string "]\n"
-	| a::b -> print_string ((string_of_int a)^", "); (print_evars b)
-  	in
-  	print_string "EVARS: [ "; print_evars evars;  flush stdout;
 
-  flush stdout;
+  print_endline (lvariables_to_string evars);
   (* First all Slseg(x,y,_) are replaced by x=y --- i.e. empty list *)
   let rec remove_slseg_form2 f2 =
     match f2.sigma with
@@ -608,7 +602,7 @@ let try_match_onstack solver form1 form2 level _  =
   let m=find_match_onstack solver form1 form2 level in
   match m with
   | (-1,-1) -> Fail
-  | (i1,i2) -> print_string ("Match onstack Apply"^(string_of_int i1)^" "^(string_of_int i2) ^"\n") ;
+  | (i1,i2) -> print_endline ("Match onstack Apply "^(string_of_int i1)^" "^(string_of_int i2)) ;
 	let nequiv a b = not (a=b) in
 	let remove k form =
 	    { sigma=form.sigma;
@@ -922,12 +916,7 @@ and entailment solver form1 form2 evars=
   Formula.print_with_lambda form1_s;
   print_string "FORM2: ";
   Formula.print_with_lambda form2_s;
-  let rec print_evars xx=
-  	match xx with
-	| [] -> print_string "]\n"
-	| a::b -> print_string ((string_of_int a)^", "); (print_evars b)
-  in
-  print_string "EVARS: [ "; print_evars evars;  flush stdout;*)
+  print_endline (lvariables_to_string evars); *)
   let conflicts1=find_vars form1_s in
   let form2_rename,evars2=match (rename_ex_variables form2_s evars conflicts1) with
     | f -> f
@@ -940,7 +929,7 @@ and entailment solver form1 form2 evars=
   let res=
   	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
   in
-  if res then print_string "ENT VALID\n" else print_string "ENT INVALID\n"; flush stdout;
+  if res then print_endline "ENT VALID" else print_endline "ENT INVALID";
   res
 
 (****************************************************)
