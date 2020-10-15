@@ -148,10 +148,10 @@ val get_varmap : pi -> (Exp.variable * Exp.variable) list
 val get_eq_vars : 'a list -> ('a * 'a) list -> 'a list
 
 (** [substitute_vars new_var old_var form] *)
-val substitute_vars : Exp.variable -> Exp.variable -> t -> t
+val substitute_vars : ?fix_stack:bool -> Exp.variable -> Exp.variable -> t -> t
 
 (** [substitute_vars_cvars new_var old_var form] same as above, but vars should be Var/CVar *)
-val substitute_vars_cvars : Exp.t -> Exp.t -> t -> t
+val substitute_vars_cvars : ?fix_stack:bool -> Exp.t -> Exp.t -> t -> t
 
 (** [substitute var eqvarlist form] *)
 val substitute : Exp.variable -> Exp.variable list -> t -> t

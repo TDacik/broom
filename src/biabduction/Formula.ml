@@ -417,8 +417,8 @@ let rec get_eq_vars vlist equalities =
   | [] -> []
   | _ -> CL.Util.list_join_unique eq (get_eq_vars (CL.Util.list_join_unique eq vlist) equalities)
 
-
-let rec substitute_expr var1 var2 expr =
+(* Stack(a,b) - changing value of b doesn't mean changing pointer on b *)
+let rec substitute_expr ?(fix_stack=false) var1 var2 expr =
   match expr with
   | Exp.Var _ when expr=var2 -> var1
   | Var a -> Exp.Var a
@@ -426,7 +426,8 @@ let rec substitute_expr var1 var2 expr =
   | CVar a -> CVar a
   | Const a -> Const a
   | UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
-  | BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
+  | BinOp (Stack,a,b) when fix_stack && b=var2 -> BinOp(Stack,a,b)
+  | BinOp (op,a,b) -> BinOp (op, substitute_expr ~fix_stack var1 var2 a, substitute_expr ~fix_stack var1 var2 b)
   | Void -> Void
   | Undef -> Undef
 
@@ -437,27 +438,27 @@ let rec substitute_sigma var1 var2 sigma =
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       let l_new = substitute_expr var1 var2 l in
-      Hpointsto (a_new,l_new,b_new) :: substitute_sigma var1 var2 rest
+      Hpointsto (a_new,l_new,b_new):: substitute_sigma var1 var2 rest
     | Slseg (a,b,l) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       Slseg (a_new,b_new,l) :: substitute_sigma var1 var2 rest
 
 
-let rec substitute_pi var1 var2 pi =
+let rec substitute_pi ?(fix_stack=false) var1 var2 pi =
   match pi with
-  | expr::rest -> (substitute_expr var1 var2 expr) :: (substitute_pi var1 var2 rest)
+  | expr::rest -> (substitute_expr ~fix_stack var1 var2 expr) :: (substitute_pi ~fix_stack var1 var2 rest)
   |  [] -> []
 
 
-let substitute_vars_cvars var1 var2 form =
+let substitute_vars_cvars ?(fix_stack=false) var1 var2 form =
   let sigma_out = substitute_sigma var1 var2 form.sigma in
-  let pi_out = substitute_pi var1 var2 form.pi in
+  let pi_out = substitute_pi ~fix_stack var1 var2 form.pi in
   {sigma = sigma_out; pi = pi_out}
 
 
-let substitute_vars var1 var2 form =
-  substitute_vars_cvars (Var var1) (Var var2) form
+  let substitute_vars ?(fix_stack=false) var1 var2 form =
+  substitute_vars_cvars ~fix_stack (Var var1) (Var var2) form
 
 
 let rec substitute var1 eqvarlist form =
