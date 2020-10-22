@@ -115,12 +115,11 @@ let substate fixed_vars state =
    lvars = all_vars}
 
 let remove_equiv_vars gvars evars s =
-  let rec rename_eqviv_vars evars state = 
-    let equiv=Formula.get_varmap state.curr.pi in
+  let rec rename_eqviv_vars evars state =
     match evars with
     | [] -> state
     | a :: rest ->
-      let eq_vars=(Formula.get_eq_vars [a] equiv) in
+      let eq_vars=(Formula.get_equiv_vars a state.curr.pi) in
       let notmem l x =
         let eq y= (x=y) in
         not (List.exists eq l)

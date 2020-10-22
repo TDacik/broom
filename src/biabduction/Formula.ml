@@ -390,8 +390,8 @@ let rec subformula vars f =
 (* Function to simplify formula by removing equivalent existential variables *)
 
 (* get a list of pair of equal variables from Pure part *)
-let rec get_varmap f =
-  match f with
+let rec get_varmap pi =
+  match pi with
   | [] -> []
   | elm :: t -> ( match elm with
     | Exp.BinOp ( Peq, Var fst, Var scd) -> ( fst, scd ) :: get_varmap t
@@ -408,14 +408,19 @@ let rec get_eq_vars_ll vlist equalities =
   | (a,b) :: rest ->
     let add_1 = if ((mem a) && (not (mem b) )) then [b] else [] in
     let add_2 = if ((mem b) && (not (mem a) )) then [a] else [] in
-    List.append add_2 (List.append add_1 (get_eq_vars_ll vlist rest))
+    add_2 @ add_1 @ (get_eq_vars_ll vlist rest)
 
-(* We are computing a transitive closure *)
-let rec get_eq_vars vlist equalities =
-  let eq = get_eq_vars_ll vlist equalities in
-  match eq with
-  | [] -> []
-  | _ -> CL.Util.list_join_unique eq (get_eq_vars (CL.Util.list_join_unique eq vlist) equalities)
+(* get all variables equivalent with a from pure part by computing a transitive
+   closure *)
+let get_equiv_vars a pi =
+  let equalities = get_varmap pi in
+  let rec get_eq_vars vlist =
+    let eq = get_eq_vars_ll vlist equalities in
+    match eq with
+    | [] -> []
+    | _ -> CL.Util.list_join_unique eq (get_eq_vars (CL.Util.list_join_unique eq vlist))
+  in
+  get_eq_vars [a]
 
 (* Stack(a,b) - changing value of b doesn't mean changing pointer on b *)
 let rec substitute_expr ?(fix_stack=false) var1 var2 expr =
@@ -483,11 +488,10 @@ let rec remove_redundant_eq pi =
    gvars - global variables, evars - existential variables *)
 let remove_equiv_vars gvars evars f =
   let rec rename_eqviv_vars gvars form =
-    let equiv=get_varmap form.pi in
     match gvars with
     | [] -> form
     | a :: rest ->
-      let eq_vars=(get_eq_vars [a] equiv) in
+      let eq_vars=(get_equiv_vars a form.pi) in
       let mem x =
         let eq y= (x=y) in
         List.exists eq evars

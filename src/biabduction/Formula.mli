@@ -140,12 +140,9 @@ val find_vars : t -> Exp.variable list
     [vars] - list of Exp, but expect CVar and Var only *)
 val subformula : Exp.t list -> t -> bool * Exp.t list * t
 
-(** [get_varmap f] simplify formula by removing equivalent existential variables
-    get a list of pair of equal variables from Pure part *)
-val get_varmap : pi -> (Exp.variable * Exp.variable) list
-
-(** [get_eq_vars varlist equalities] computes a transitive closure *)
-val get_eq_vars : 'a list -> ('a * 'a) list -> 'a list
+(** [get_equiv_vars a pi] get all variables equivalent with [a] from pure part
+    by computing a transitive closure *)
+val get_equiv_vars : Exp.variable -> pi -> Exp.variable list
 
 (** [substitute_vars new_var old_var form] *)
 val substitute_vars : ?fix_stack:bool -> Exp.variable -> Exp.variable -> t -> t
