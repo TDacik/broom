@@ -420,7 +420,7 @@ let get_equiv_vars a pi =
     | [] -> []
     | _ -> CL.Util.list_join_unique eq (get_eq_vars (CL.Util.list_join_unique eq vlist))
   in
-  get_eq_vars [a]
+  get_eq_vars a
 
 (* Stack(a,b) - changing value of b doesn't mean changing pointer on b *)
 let rec substitute_expr ?(fix_stack=false) var1 var2 expr =
@@ -457,14 +457,74 @@ let rec substitute_pi ?(fix_stack=false) var1 var2 pi =
 
 
 let substitute_vars_cvars ?(fix_stack=false) var1 var2 form =
-  let sigma_out = substitute_sigma var1 var2 form.sigma in
   let pi_out = substitute_pi ~fix_stack var1 var2 form.pi in
+  let sigma_out = substitute_sigma var1 var2 form.sigma in
   {sigma = sigma_out; pi = pi_out}
 
 
-  let substitute_vars ?(fix_stack=false) var1 var2 form =
+let substitute_vars ?(fix_stack=false) var1 var2 form =
   substitute_vars_cvars ~fix_stack (Var var1) (Var var2) form
 
+(* experimental version ***************************************************)
+
+(* Stack(a,b) - changing value of b doesn't mean changing pointer on b *)
+let rec substitute2_expr ?(fix_addr=false) var1 var2 expr =
+  match expr with
+  | Exp.Var _ when expr=var2 -> [],var1
+  | Var a -> [],Exp.Var a
+  | CVar _ when expr=var2 -> [],var1
+  | CVar a -> [],CVar a
+  | Const a -> [],Const a
+  | UnOp (op,a) ->
+    let ign,a2 = substitute2_expr ~fix_addr var1 var2 a in
+    ign, UnOp (op, a2)
+  | BinOp (Stack,a,b) when fix_addr && b=var2 -> print_string "AAAAA: ";[a],BinOp(Stack,a,b)
+  | BinOp (Static,a,b) when fix_addr && b=var2 -> [a],BinOp(Static,a,b)
+  | BinOp (op,a,b) ->
+    let ign_a,a2 = substitute2_expr ~fix_addr var1 var2 a in
+    let ign_b,b2 = substitute2_expr ~fix_addr var1 var2 b in
+    (CL.Util.list_join_unique ign_a ign_b), BinOp (op, a2, b2)
+  | Void -> [],Void
+  | Undef -> [],Undef
+
+let rec substitute2_sigma ignore var1 var2 sigma =
+  match sigma with
+    | [] -> []
+    | Hpointsto (Var a,l,b) ::rest when List.mem a ignore ->
+      Hpointsto (Var a,l,b) :: substitute2_sigma ignore var1 var2 rest
+    | Hpointsto (a,l,b) ::rest ->
+      let a_new = substitute_expr var1 var2 a in
+      let b_new = substitute_expr var1 var2 b in
+      let l_new = substitute_expr var1 var2 l in
+      Hpointsto (a_new,l_new,b_new):: substitute2_sigma ignore var1 var2 rest
+    | Slseg (a,b,l) ::rest ->
+      let a_new = substitute_expr var1 var2 a in
+      let b_new = substitute_expr var1 var2 b in
+      Slseg (a_new,b_new,l) :: substitute2_sigma ignore var1 var2 rest
+
+
+let rec substitute2_pi ?(fix_addr=false) var1 var2 pi =
+  match pi with
+  | expr::rest ->
+    let ign_expr,expr2 = substitute2_expr ~fix_addr var1 var2 expr in
+    let ign_rest,rest2 = substitute2_pi ~fix_addr var1 var2 rest in
+    (CL.Util.list_join_unique ign_expr ign_rest), (expr2 :: rest2)
+  | [] -> [],[]
+
+(* CVars are not ignored *)
+let substitute2_vars_cvars ?(fix_addr=false) var1 var2 form =
+  let (ignore,pi_out) = substitute2_pi ~fix_addr var1 var2 form.pi in
+  let ignore_uids = Exp.get_list_uids ignore in
+  let all_ignore = ignore_uids @ get_equiv_vars ignore_uids pi_out in
+  print_endline (lvariables_to_string all_ignore);
+  let sigma_out = substitute2_sigma all_ignore var1 var2 form.sigma in
+  {sigma = sigma_out; pi = pi_out}
+
+
+let substitute2_vars ?(fix_addr=false) var1 var2 form =
+  substitute2_vars_cvars ~fix_addr (Var var1) (Var var2) form
+
+(* experimental version - end *********************************************)
 
 let rec substitute var1 eqvarlist form =
   match eqvarlist with
@@ -491,7 +551,7 @@ let remove_equiv_vars gvars evars f =
     match gvars with
     | [] -> form
     | a :: rest ->
-      let eq_vars=(get_equiv_vars a form.pi) in
+      let eq_vars=(get_equiv_vars [a] form.pi) in
       let mem x =
         let eq y= (x=y) in
         List.exists eq evars

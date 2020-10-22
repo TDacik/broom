@@ -142,13 +142,17 @@ val subformula : Exp.t list -> t -> bool * Exp.t list * t
 
 (** [get_equiv_vars a pi] get all variables equivalent with [a] from pure part
     by computing a transitive closure *)
-val get_equiv_vars : Exp.variable -> pi -> Exp.variable list
+val get_equiv_vars : Exp.variable list -> pi -> Exp.variable list
 
 (** [substitute_vars new_var old_var form] *)
 val substitute_vars : ?fix_stack:bool -> Exp.variable -> Exp.variable -> t -> t
 
 (** [substitute_vars_cvars new_var old_var form] same as above, but vars should be Var/CVar *)
 val substitute_vars_cvars : ?fix_stack:bool -> Exp.t -> Exp.t -> t -> t
+
+(** [substitute2_vars new_var old_var form] very EXPERIMENTAL version of
+    substitute_vars *)
+val substitute2_vars : ?fix_addr:bool -> Exp.variable -> Exp.variable -> t -> t
 
 (** [substitute var eqvarlist form] *)
 val substitute : Exp.variable -> Exp.variable list -> t -> t

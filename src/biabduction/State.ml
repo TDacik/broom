@@ -119,7 +119,7 @@ let remove_equiv_vars gvars evars s =
     match evars with
     | [] -> state
     | a :: rest ->
-      let eq_vars=(Formula.get_equiv_vars a state.curr.pi) in
+      let eq_vars=(Formula.get_equiv_vars [a] state.curr.pi) in
       let notmem l x =
         let eq y= (x=y) in
         not (List.exists eq l)
