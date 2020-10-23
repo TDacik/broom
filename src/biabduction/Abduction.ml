@@ -558,6 +558,18 @@ let check_match_onstack {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i
   else
   match level with
   | 1 ->
+  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_src rhs_src);
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
+		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+	in
+  	(Solver.check solv query1)=UNSATISFIABLE
+  | 2 ->
+  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);
+        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
+		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+	in
+	(lhs_dest=rhs_dest) &&((Solver.check solv query2)=SATISFIABLE)
+  | 3 ->
   	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);
         	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
 	in
@@ -566,7 +578,7 @@ let check_match_onstack {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i
 		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
 	in
 	((Solver.check solv query1)=UNSATISFIABLE) &&((Solver.check solv query2)=SATISFIABLE)
-  | 2 ->
+  | 4 ->
   	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);
         	(Boolean.mk_and ctx (formula_to_solver ctx form1));
 		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
@@ -623,11 +635,11 @@ let try_match_onstack solver form1 form2 level _  =
 	let x_eq=[(Exp.BinOp ( Peq, x1,x2))] in
         let y_eq=[(Exp.BinOp ( Peq, y1,y2))] in
       	match level with
-	| 1 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ f1.pi},
+	| 2 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq},
           [])
-      	| 2 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
+      	| 1 | 4 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq @ y_eq },
           [])
