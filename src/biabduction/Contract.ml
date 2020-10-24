@@ -423,8 +423,8 @@ let contract_for_alloca dst size =
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
-(* PRE: base(src)=src POS: freed(src)
-   PRE: src=NULL      POS:
+(* PRE: var-(size)->c1 & stack(var,c1) & base(var)=var POS: invalid(var)
+   PRE: c1-(size)->var & stack(c1,var) & base(c1)=c1   POS: invalid(c1)
 *)
 let contract_for_clobber var =
 	let var_uid = ( match var.data with
@@ -443,11 +443,12 @@ let contract_for_clobber var =
 		let sig_add = Hpointsto (CVar cvar, size_exp, ef_var.root) in
 		let stack = Exp.BinOp ( Stack, CVar cvar, ef_var.root) in
 		let base = Exp.BinOp ( Peq, (UnOp (Base, CVar cvar)), CVar cvar) in
+		let (new_var, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=cvar; root=ef_var.root} in
 		let rhs_pi = Exp.UnOp (Invalid, CVar cvar) in
 		{lhs = {pi = stack :: base :: ef_var.f.pi; sigma = sig_add :: ef_var.f.sigma};
 			rhs = {pi = [rhs_pi]; sigma = []};
-			cvars = cvar;
-			pvarmap = [];
+			cvars = new_var.cnt_cvars;
+			pvarmap = pvarmap;
 			s = OK}
 	| CVar _ ->
 		let stack = Exp.BinOp ( Stack, ef_var.root, Var var_uid) in
