@@ -234,7 +234,6 @@ let post_contract_application state solver pvarmap pvars =
     miss=(remove_stack2 solver step1.miss step1.lvars);
     curr=(remove_freed_and_invalid_parts solver step1.curr);
     lvars=new_lvars} in
-	State.print final_state;
   (* check that both parts of the resulting state are satisfiable *)
   let sat_query_curr=formula_to_solver solver.ctx final_state.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_state.miss in

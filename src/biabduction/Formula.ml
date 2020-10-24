@@ -478,7 +478,7 @@ let rec substitute2_expr ?(fix_addr=false) var1 var2 expr =
   | UnOp (op,a) ->
     let ign,a2 = substitute2_expr ~fix_addr var1 var2 a in
     ign, UnOp (op, a2)
-  | BinOp (Stack,a,b) when fix_addr && b=var2 -> print_string "AAAAA: ";[a],BinOp(Stack,a,b)
+  | BinOp (Stack,a,b) when fix_addr && b=var2 -> [a],BinOp(Stack,a,b)
   | BinOp (Static,a,b) when fix_addr && b=var2 -> [a],BinOp(Static,a,b)
   | BinOp (op,a,b) ->
     let ign_a,a2 = substitute2_expr ~fix_addr var1 var2 a in
@@ -516,7 +516,7 @@ let substitute2_vars_cvars ?(fix_addr=false) var1 var2 form =
   let (ignore,pi_out) = substitute2_pi ~fix_addr var1 var2 form.pi in
   let ignore_uids = Exp.get_list_uids ignore in
   let all_ignore = ignore_uids @ get_equiv_vars ignore_uids pi_out in
-  print_endline (lvariables_to_string all_ignore);
+  (* print_endline (lvariables_to_string all_ignore); *)
   let sigma_out = substitute2_sigma all_ignore var1 var2 form.sigma in
   {sigma = sigma_out; pi = pi_out}
 
