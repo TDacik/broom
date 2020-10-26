@@ -148,7 +148,9 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 		   to: C2 -(1)-> C & C2 = C1 + off *)
 		| Offset off ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
+			let stor = (if ef.cnt_cvars != cvars_ptr
+				then get_storage ptr var (* object on stack or static storage *)
+				else []) in
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
 			let const_off = Exp.Const (Int (Int64.of_int off)) in
@@ -159,7 +161,7 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
 			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
-				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
+				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
 			("Offset, " ^ dbg, ef_new)
