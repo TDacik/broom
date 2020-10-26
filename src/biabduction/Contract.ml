@@ -114,9 +114,10 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
 		| Item _ ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			let stor = (if ef.cnt_cvars != cvars_ptr
-				then get_storage ptr var (* object on stack or static storage *)
-				else []) in
+			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
+				(* object on stack or static storage *)
+				then (get_storage ptr var), "Record acc2, "
+				else [], "Record acc1, ") in
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_ptr + 1 in
@@ -142,15 +143,16 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
-			("Record acc, " ^ dbg, ef_new)
+			(dbg_add ^ dbg, ef_new)
 
 		(* from: C1 -(1)-> <var>
 		   to: C2 -(1)-> C & C2 = C1 + off *)
 		| Offset off ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			let stor = (if ef.cnt_cvars != cvars_ptr
-				then get_storage ptr var (* object on stack or static storage *)
-				else []) in
+			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
+				(* object on stack or static storage *)
+				then (get_storage ptr var), "Offset2, "
+				else [], "Offset1, ") in
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
 			let const_off = Exp.Const (Int (Int64.of_int off)) in
@@ -164,7 +166,7 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
-			("Offset, " ^ dbg, ef_new)
+			(dbg_add ^ dbg, ef_new)
 		)
 
 let constant_to_exformula data accs ef =
