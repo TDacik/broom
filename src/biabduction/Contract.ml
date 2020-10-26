@@ -116,8 +116,8 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
 				(* object on stack or static storage *)
-				then (get_storage ptr var), "Record acc2, "
-				else [], "Record acc1, ") in
+				then (get_storage ptr var), "Record acc1, "
+				else [], "Record acc2, ") in
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_ptr + 1 in
@@ -151,8 +151,8 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
 				(* object on stack or static storage *)
-				then (get_storage ptr var), "Offset2, "
-				else [], "Offset1, ") in
+				then (get_storage ptr var), "Offset1, "
+				else [], "Offset2, ") in
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
 			let const_off = Exp.Const (Int (Int64.of_int off)) in
