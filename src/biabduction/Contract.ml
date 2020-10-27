@@ -159,9 +159,10 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let elm = Exp.BinOp ( Peq, CVar cvar_elm, BinOp ( Pplus, ptr, const_off)) in
 			let pi_add = [ elm;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, ptr))) ] in
-			let ptr_size = CL.Util.get_type_size ac.acc_typ in
-			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size, CVar cvar_last) ] in
+			let elm_typ = CL.Util.get_type_ptr ac.acc_typ in
+			let ptr_size_elm = CL.Util.get_type_size elm_typ in
+			let exp_ptr_size_elm = Exp.Const (Int (Int64.of_int ptr_size_elm)) in
+			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
 				cnt_cvars=cvar_last;
@@ -320,12 +321,12 @@ let contract_for_binop code dst src1 src2 =
 	match bin_exp with
 	| [_] ->
 		let pi_add = ( match code with
-			| CL_BINOP_POINTER_PLUS -> [ assign; Exp.BinOp ( Plesseq,
+			| CL_BINOP_POINTER_PLUS -> [ assign(* ; Exp.BinOp ( Plesseq,
 				 new_dst.root,
 				 BinOp ( Pplus,
 					 UnOp (Base, new_dst.root),
 					 UnOp (Len, new_dst.root))
-				 ) ]
+				 ) *) ]
 			| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV | CL_BINOP_TRUNC_MOD ->
 				[ assign; Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
 			| _ -> [assign]
