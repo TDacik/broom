@@ -7,7 +7,7 @@ struct node {
 
 struct node g = {3, NULL};
 
-int *return_glob() {
+struct node *return_glob() {
 	return &g; // ok
 }
 
