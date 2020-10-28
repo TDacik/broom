@@ -1,7 +1,6 @@
 ## TODO
 
-- [x] calling functions with arguments;
-  bug: [tomas-test-01.c](tests/tomas-test-01.c#L14)
+- [x] calling functions with arguments; bug: argument with accessors [tomas-test-01.c](tests/tomas-test-01.c#L14)
 
 - [x] global variables
 
@@ -13,14 +12,14 @@
   - [x] offset
   <br/>
 - [ ] stack allocation and static storage in logic;
-  instruction and functions: `clobber`, `alloca` / `__builtin_alloca` / `__builtin_alloca_with_align` `__builtin_stack_restore`, `__builtin_stack_save`;
-  bug: [easy-12-err.c](tests/easy-12-err.c#L9), [tomas-test-01.c](tests/tomas-test-01.c#L14)
-    1. edit Formula/Z3, to accept `invalid(x)`, `stack(x,y)`, `static(x,y)`
-    2. extend Z3 checks for `invalid` and `freed`
-    3. edit contracts
-    4. post-clobber - remove specific points-to on stack
-    5. post-return/simplify remove all points-to on stack
-    6. not allow stack/static in abstraction
+  bug: [alias-10.c](tests/alias-10.c#L15)
+    - [ ] introduce `invalid(x)`, `stack(x,y)`, and `static(x,y)` predicates
+        1. edit abduction, to correctly resolve `static(x,y)`
+        2. not allow stack/static in abstraction
+    - [x] `clobber`
+    - [x] `alloca` / `__builtin_alloca`
+    - [ ] `__builtin_alloca_with_align`
+    - [ ] `__builtin_stack_restore`, `__builtin_stack_save`
   <br/>
 - [x] sls abstraction
 
