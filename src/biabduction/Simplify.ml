@@ -119,28 +119,28 @@ let remove_stack2 ?(replaced=false) solver form lvars =
 let rec subformula solver vars f =
   match vars with
   | [] ->
-    print_string ("END_SUBFORMULA: "); print_endline (to_string f);
+    (* print_string ("END_SUBFORMULA: "); print_endline (to_string f); *)
     (* remove stack and static predicates from f *)
     let get_ignore pure =
       let get_base exp =
         match exp with
         | FExp.BinOp (Stack,a,_) -> Some a
-		| BinOp (Static,a,_) -> Some a
+        | BinOp (Static,a,_) -> Some a
         | _ -> None
       in
       List.filter_map get_base pure
     in
     let ignore_list = get_ignore f.pi in
     let form_z3 = formula_to_solver solver.ctx f in
-	let f_new = cut_freed_and_invalid_parts solver form_z3 {sigma = f.sigma; pi = []} [] ignore_list in
+    let f_new = cut_freed_and_invalid_parts solver form_z3 {sigma = f.sigma; pi = []} [] ignore_list in
     let removed_sigma = if (f_new.sigma = []) then false else true in
     (removed_sigma,vars,empty)
   | _ ->
     let (new_vars,new_f) = subformula_only vars f in
     let (flag,tl_vars,tl_f) = subformula solver new_vars (diff f new_f) in
     let all_vars = (vars @ tl_vars) in
-	  (* print_string ("subformula:"^CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
-	  print_string (CL.Util.list_to_string (Exp.to_string) all_vars ^ "ALL\n"); *)
+    (* print_string ("subformula:"^CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
+    print_string (CL.Util.list_to_string (Exp.to_string) all_vars ^ "ALL\n"); *)
     (flag,all_vars, disjoint_union new_f tl_f)
 
 exception RemovedSpatialPartFromMiss
