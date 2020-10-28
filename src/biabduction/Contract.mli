@@ -33,7 +33,7 @@ val print : t -> unit
 (* FIXME vars should contain Xs from moves (_->X) *)
 (* FIXME removing spatial part ignored *)
 (* Don't use this function, use substate if possible ! *)
-val subcontract : Exp.t list -> t -> t
+(* val subcontract : Exp.t list -> t -> t *)
 
 (** [contract_for_called_fnc dst args fuid c] renames dst and args in given
     contract c for function fuid; renaming from RET(c0) and anchors(uid<0) *)

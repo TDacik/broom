@@ -210,7 +210,7 @@ let rec args_to_exformula args ef =
    vars - list of Exp, but expect CVar and Var only *)
 (* FIXME not removes false predicates *)
 (* FIXME vars should contain Xs from moves (_->X) *)
-let rec subcontract vars c =
+(* let rec subcontract vars c =
 	match vars with
 	| [] -> empty
 	| _ ->
@@ -227,7 +227,7 @@ let rec subcontract vars c =
 		 rhs = Formula.disjoint_union new_rhs tl_c.rhs;
 		 cvars = c.cvars;
 		 pvarmap = c.pvarmap;
-		 s = c.s}
+		 s = c.s} *)
 
 (* CREATING CONTRACTS *)
 
