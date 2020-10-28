@@ -131,14 +131,10 @@ val find_vars : t -> Exp.variable list
 
 (** {3 Formula simplification} *)
 
-(** [subformula vars form] returns
-    flag if something was removed from spatial part
-    list of all variables that may be in subformula
-    a subformula that contains clauses with variables from [vars] and related
-    variables to them
-    [form] - expect satisfiable formula only
-    [vars] - list of Exp, but expect CVar and Var only *)
-val subformula : Exp.t list -> t -> bool * Exp.t list * t
+(** [subformula_only vars form] returns list of all variables in subformula
+    including vars and a subformula that contains only clauses with variables
+    from [vars] *)
+val subformula_only : Exp.t list -> t -> (Exp.t list * t)
 
 (** [get_equiv_vars a pi] get all variables equivalent with [a] from pure part
     by computing a transitive closure *)
@@ -175,12 +171,6 @@ val remove_equiv_vars : Exp.variable list -> Exp.variable list -> t -> t
       2) there is no transitive reference from spatial part or program variables
     [form] expect satisfiable formula only *)
 val remove_useless_conjuncts : t -> Exp.variable list -> t
-
-(** [simplify2 fixed_vars form] is global simplify function, returns true, if
-    something was removed from sigma and simplified formula
-    [fixed_vars] - variables can't be removed
-    [form] - expect satisfiable formula only *)
-val simplify2 : Exp.variable list -> t -> bool * t
 
 (** [simplify form evars] is global simplify function, [evars] is a list of Ex.
     q. variables, which can be renamed/removed/etc...

@@ -359,32 +359,13 @@ let rec subsigma vars sigma =
     else
       (tl_vars,subtl)
 
-(* returns a subformula that contains clauses with variables from vars and
-   related variables to them and list of all variables that may be in
-   subformula and flag if something was removed from spatial part
-   form - expect satisfiable formula only
-   vars - list of Exp, but expect CVar and Var only *)
-let rec subformula vars f =
-  (* returns a subformula that contains only clauses with variables from vars
-     and list of all variables in subformula expect vars *)
-  let subformula_only only_vars ff =
-    let (pi_vars,pi_f) = subpi only_vars ff.pi in
-    let (sigma_vars,sigma_f) = subsigma only_vars ff.sigma in
-    ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
-  in
+(* returns list of all variables in subformula including vars and a subformula
+   that contains only clauses with variables from vars *)
+let subformula_only vars ff =
+  let (pi_vars,pi_f) = subpi vars ff.pi in
+  let (sigma_vars,sigma_f) = subsigma vars ff.sigma in
+  ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
 
-  match vars with
-  | [] ->
-	  (* print_string ("END\n"); *)
-    let removed_sigma = if (f.sigma = []) then false else true in
-    (removed_sigma,vars,empty)
-  | _ ->
-    let (new_vars,new_f) = subformula_only vars f in
-    let (flag,tl_vars,tl_f) = subformula new_vars (diff f new_f) in
-    let all_vars = (vars @ tl_vars) in
-	  (* print_string ("subformula:"^CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
-	  print_string (CL.Util.list_to_string (Exp.to_string) all_vars ^ "ALL\n"); *)
-    (flag,all_vars, disjoint_union new_f tl_f)
 
 (**** FORMULA SIMPLIFICATION ****)
 (* Function to simplify formula by removing equivalent existential variables *)
@@ -625,14 +606,6 @@ let remove_useless_conjuncts form evars =
   let ref_vars=CL.Util.list_join_unique (find_vars_sigma form.sigma)  gvars in
   let new_pi=get_referenced_conjuncts form.pi ref_vars in
   {sigma=form.sigma; pi=new_pi}
-
-(* fixed_vars - variables can't be removed
-   form - expect satisfiable formula only *)
-let simplify2 fixed_vars form =
-  let fixed_vars_exp = Exp.get_list_vars fixed_vars in
-  let (removed_sigma,all_vars,subf) = subformula fixed_vars_exp form in
-  let evars = CL.Util.list_diff (Exp.get_list_uids all_vars) fixed_vars in
-  (removed_sigma,remove_equiv_vars fixed_vars evars subf)
 
 (* now we have everything for global simplify function,
    evars is a list of Ex. q. variables, which can be renamed/removed/etc...

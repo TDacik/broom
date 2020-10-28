@@ -8,9 +8,6 @@ type t = {
     lvars: variable list;
 }
 
-(** Raise in case of ... *)
-exception RemovedSpatialPartFromMiss
-
 let empty = {miss = Formula.empty; curr = Formula.empty; lvars = []}
 
 let to_string state =
@@ -82,38 +79,6 @@ let init_main fuid =
   | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
     init fuid (* handling as with an ordinary function *)
 
-(* [substate fixed_vars state] contains in miss and curr only clauses with
-   variables from [fixed_vars] and related variables
-   [state] - expect satisfiable state only
-   [fixed_vars] - list of Exp, but expect CVar and Var only
-
-   miss_vars = fixed_vars + related
-   curr_vars = fixed_vars + related from miss + related from curr *)
-(* TODO errors/warnings handling *)
-let substate fixed_vars state =
-  let get_lvar var =
-    match var with
-    | Formula.Exp.Var v when (List.mem v state.lvars) -> Some v
-    | _ -> None
-  in
-  (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) fixed_vars ^ "FIXED\n"); *)
-  let (miss_removed_sigma,miss_vars,new_miss) =
-    Formula.subformula fixed_vars state.miss in
-  if (miss_removed_sigma)
-  then raise RemovedSpatialPartFromMiss;
-  (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
-  let (curr_removed_sigma,curr_vars,new_curr) =
-    Formula.subformula miss_vars state.curr in
-  if (curr_removed_sigma)
-  then (if (Unix.isatty Unix.stderr) (* TODO more general *)
-    then prerr_endline "\027[1;35m!!! MEMORY LEAK\027[0m"
-    else prerr_endline "!!! MEMORY LEAK");
-    (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) curr_vars ^ "AFTER curr\n"); *)
-  let all_vars = List.filter_map get_lvar (curr_vars) in
-  {miss = new_miss;
-   curr = new_curr;
-   lvars = all_vars}
-
 let remove_equiv_vars gvars evars s =
   let rec rename_eqviv_vars evars state =
     match evars with
@@ -135,16 +100,6 @@ let remove_equiv_vars gvars evars s =
   {miss= {pi = Formula.remove_redundant_eq s_rename.miss.pi; sigma = s_rename.miss.sigma};
   curr= {pi = Formula.remove_redundant_eq s_rename.curr.pi; sigma = s_rename.curr.sigma};
   lvars=s_rename.lvars}
-
-(* fixed_vars - variables can't be removed
-   state - expect satisfiable state only *)
-(* FIXME may be more variables in lvars than are in state *)
-let simplify2 fixed_vars state =
-  let fixed_vars_exp = FExp.get_list_vars fixed_vars in
-  let rems = remove_equiv_vars fixed_vars state.lvars state in
-  let subs = substate fixed_vars_exp rems in
-  (* (find_vars rems.miss) @ (find_vars rems.curr) in *)
-  subs
 
 (* state - expect satisfiable state only *)
 let simplify state =
