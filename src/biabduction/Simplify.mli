@@ -22,23 +22,6 @@ val remove_stack : ?replaced:bool -> Z3wrapper.solver -> Formula.t -> Formula.t
 val remove_stack2 : ?replaced:bool -> Z3wrapper.solver -> Formula.t ->
                     FExp.variable list -> Formula.t
 
-(** [subformula solver vars form] returns
-    flag if something was removed from spatial part
-    list of all variables that may be in subformula
-    a subformula that contains clauses with variables from [vars] and related
-    variables to them
-    [form] - expect satisfiable formula only
-    [vars] - list of Exp, but expect CVar and Var only *)
-val subformula : Z3wrapper.solver -> FExp.t list -> Formula.t ->
-                 bool * FExp.t list * Formula.t
-
-(** [substate solver fixed_vars state] contains in miss and curr only clauses
-    with variables from [fixed_vars] and related variables
-    [state] - expect satisfiable state only
-    [fixed_vars] - list of Exp, but expect CVar and Var only *)
-val substate : Z3wrapper.solver -> FExp.t list -> State.t -> State.t
-
-
 (* SIMPLIFY *)
 
 (** [formula solver fixed_vars form] is global simplify function for formula,

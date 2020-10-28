@@ -109,7 +109,7 @@ let remove_stack2 ?(replaced=false) solver form lvars =
   let form_z3=formula_to_solver solver.ctx form in
   cut_freed_and_invalid_parts ~replaced solver form_z3 form [] invalid_list
 
-(** [subformula vars form] returns
+(*  [subformula solver vars form] returns
     flag if something was removed from spatial part
     list of all variables that may be in subformula
     a subformula that contains clauses with variables from [vars] and related
@@ -145,8 +145,8 @@ let rec subformula solver vars f =
 
 exception RemovedSpatialPartFromMiss
 
-(* [substate fixed_vars state] contains in miss and curr only clauses with
-   variables from [fixed_vars] and related variables
+(* [substate solver fixed_vars state] contains in miss and curr only clauses
+   with variables from [fixed_vars] and related variables
    [state] - expect satisfiable state only
    [fixed_vars] - list of FExp, but expect CVar and Var only
 
@@ -180,7 +180,7 @@ let substate solver fixed_vars state =
 
 (* SIMPLIFY *)
 
-(** [formula_simplify2 solver fixed_vars form] is global simplify function,
+(** [formula solver fixed_vars form] is global simplify function,
     returns true, if something was removed from sigma and simplified formula
     [fixed_vars] - variables can't be removed
     [form] - expect satisfiable formula only *)
