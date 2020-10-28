@@ -100,22 +100,3 @@ let remove_equiv_vars gvars evars s =
   {miss= {pi = Formula.remove_redundant_eq s_rename.miss.pi; sigma = s_rename.miss.sigma};
   curr= {pi = Formula.remove_redundant_eq s_rename.curr.pi; sigma = s_rename.curr.sigma};
   lvars=s_rename.lvars}
-
-(* state - expect satisfiable state only *)
-let simplify state =
-  let mem lst x =
-    let eq y= (x=y) in
-    (List.exists eq lst )
-  in
-  let nomem lst x = not (mem lst x) in
-  let vars = CL.Util.list_join_unique (Formula.find_vars state.curr) (Formula.find_vars state.miss) in
-  let used_lvars = List.filter (mem vars) state.lvars in
-  let gvars = List.filter (nomem state.lvars) vars in
-  let state0 = {miss=state.miss; curr=state.curr; lvars=used_lvars} in
-  let state1 = remove_equiv_vars gvars used_lvars state0 in
-  let miss_new = Formula.remove_useless_conjuncts state1.miss state1.lvars in
-  (* logical variables used in miss_new can not be removed from curr_new by means of remove_useless_conjuncts in order to preserve anchors 
-     --- if miss_new contains l1 -- (8)-- >_ and curr_new freed(l1) then freed(l1) can not be removed *)
-  let lvars_unused_in_miss = List.filter (nomem (Formula.find_vars state.miss)) state1.lvars in
-  let curr_new= Formula.remove_useless_conjuncts state1.curr lvars_unused_in_miss in
-  {miss=miss_new; curr=curr_new; lvars=state1.lvars }
