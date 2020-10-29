@@ -7,7 +7,8 @@ open Formula
 (* width of the bitvector TODO: as a config parameter *)
 let bw_width=64
 
-(* The functions base, len, size, onstack, etc in SL are used as uninterpreted functions in z3 *)
+(** The functions base, len, size, onstack, etc in separation logic are used as
+    uninterpreted functions in Z3 *)
 type sl_function_names_z3 = {
   base : FuncDecl.func_decl;
   len : FuncDecl.func_decl;
@@ -43,8 +44,9 @@ let config_solver () =
   let z3_names = get_sl_functions_z3 ctx in
   {ctx = ctx; solv = solv; z3_names = z3_names}
 
-(* Create existential quantifier 
-   ctx - Z3context, evars - a list of variables for quantification, form - Z3 expression *)
+(* Create existential quantifier
+   ctx - Z3context, evars - a list of variables for quantification, form - Z3
+   expressions *)
 let create_ex_quantifier ctx evars form =
       match evars with
       | [] -> form
@@ -392,13 +394,13 @@ let rec sigma_to_solver ctx names_z3 sigma quantify_undef =
 	in
   	List.append sp_pred_z3_fin (sigma_to_solver ctx names_z3 rest quantify_undef)
 
-let rec formula_to_string exprs =
+let rec query_to_string exprs =
   match exprs with
   | [] -> ""
   | expr::tl -> let sort = Expr.get_sort expr in
     "SORT:"^(Sort.to_string sort)^"~~~"^
     (Expr.to_string expr)^"\n"^
-    (formula_to_string tl)
+    (query_to_string tl)
 
 let formula_to_solver ctx form =
   let names_z3=get_sl_functions_z3 ctx in
@@ -424,7 +426,7 @@ let formula_to_solver_with_quantified_undefs ctx form =
     (Expr.mk_app ctx names_z3.base [BitVector.mk_numeral ctx "0" bw_width]) in
   pi @ sigma @ [null_not_alloc; base0]
 
-(* check the lambda within the Slseq predicates,
+(* check the lambda within the Slseg predicates,
    returns **true** iff the lambda satisfy the basic properties *)
 let rec check_sp_predicate ctx solv pred =
   let z3_names=get_sl_functions_z3 ctx in
@@ -452,6 +454,16 @@ and check_all_lambdas ctx solv sigma =
   | [] -> true
   | first::rest -> (check_sp_predicate ctx solv first) && (check_all_lambdas ctx solv rest)
 
+(* check, if form_z3 & not(base(a) = base(base_ptr)) is unsatisfiable *)
+let check_eq_base {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 a base_ptr =
+  let query=Boolean.mk_not ctx
+    (Boolean.mk_eq ctx
+      (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names base_ptr)])
+      (Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names a)])
+    )
+    :: form_z3
+  in
+  (Solver.check solv query)=UNSATISFIABLE
 
 (* Experiments *)
 

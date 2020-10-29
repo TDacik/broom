@@ -4,31 +4,23 @@ open Z3wrapper
 
 exception Conflict_between_freed_and_slseg
 
-let cut_freed_and_invalid_parts ?(replaced=false) {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 form freed_list invalid_list =
-    let check_eq_base_ll a base =
-      let query=Z3.Boolean.mk_not ctx
-        (Z3.Boolean.mk_eq ctx
-          (Z3.Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names base)])
-          (Z3.Expr.mk_app ctx z3_names.base [(expr_to_solver_only_exp ctx z3_names a)])
-        )
-        :: form_z3
-      in
-      (Z3.Solver.check solv query)=UNSATISFIABLE
-    in
-    let rec check_eq_base a base_list =
+let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list invalid_list =
+    let rec check_eq_bases a base_list =
       match base_list with
       | [] -> false
-      | first::rest -> (check_eq_base_ll a first) || (check_eq_base a rest)
+      | first::rest ->
+        (Z3wrapper.check_eq_base solver form_z3 a first) ||
+        (check_eq_bases a rest)
     in
     let rec cut_spatial sp base_list  =
       match sp with
       | [] -> []
       | Hpointsto (a,b,c) :: rest ->
-        if (check_eq_base a base_list)
+        if (check_eq_bases a base_list)
         then (cut_spatial rest base_list )
         else Hpointsto (a,b,c) ::(cut_spatial rest base_list )
       | Slseg (a,b,c) :: rest ->
-        if (check_eq_base a base_list)
+        if (check_eq_bases a base_list)
         then raise Conflict_between_freed_and_slseg
         else Slseg (a,b,c) ::(cut_spatial rest base_list )
     in
@@ -38,7 +30,7 @@ let cut_freed_and_invalid_parts ?(replaced=false) {ctx=ctx; solv=solv; z3_names=
       match pure with
       | [] -> []
       | FExp.BinOp (Stack,a,b) :: rest -> (
-          if (check_eq_base a base_list)
+          if (check_eq_bases a base_list)
           then (if replaced
             then FExp.UnOp (Invalid,a) ::(cut_pure rest base_list)
             else (cut_pure rest base_list) )
