@@ -41,6 +41,10 @@ struct w {
 
 int m[5][5][5];
 
+extern struct w g(int arg1[1][1], struct t *arg2, int arg3[2]);
+
+extern struct w f(struct w (*arg1)[5], int *arg2, struct t *arg3, int arg4[2]);
+
 int main() {
 	struct p ***ppp;
 
@@ -203,6 +207,34 @@ int main() {
 	/* %reg20 := ar_w[1]
 	   a := &*%reg20.item1.arr[0][0]
 	*/
+
+// 10. more operands
+
+	sp.item1 = &sp;                                          //BUG!!!!!
+	/* sp.item1 := &sp */
+
+	ar_w[1] = (struct w *) &ar_w;                            //BUG!!!!!
+	/* ar_w[1] := &ar_w */
+
+	*(a + 1) = (int) &a;
+	/* %reg21 := &a
+	   %reg_a := a
+	   %reg22 := (%reg_a [ptr]+ 4U)
+	   %reg23 := %reg21
+	   *%reg22 := %reg23
+	*/
+	
+	*pp = (struct p *) &pp;
+	/* %reg_pp := pp
+	   *%reg_pp := &pp */
+	
+	w = g(w.item1.arr, &(w.item1), w.arr);
+	/* w := g(&w.item1.arr, &w.item1, &w.arr) */
+	
+	struct w arr_w[5];
+	
+	arr_w[1] = f(&arr_w, &(arr_w[1].item1.arr[0][0]), &(arr_w[1].item1), arr_w[1].arr);
+	/* arr_w[1] := f(&arr_w, &arr_w[1].item1.arr[0][0], &arr_w[1].item1, &arr_w[1].arr) */
 
 	return 0;
 }
