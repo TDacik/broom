@@ -432,7 +432,7 @@ let get_zeroinitializer typ_code =
   | TypePtr _ | TypeString -> Some Exp.null
   | TypeBool -> Some (Const (Bool false))
   | TypeReal -> Some (Const (Float 0.0))
-  | TypeStruct _ | TypeUnion _ | TypeArray _ -> assert false (* FIXME *)
+  | TypeStruct _ | TypeUnion _ | TypeArray _ -> Some Exp.zero
   | TypeFnc _ -> assert false
   | _ -> None
 
