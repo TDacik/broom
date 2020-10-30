@@ -171,7 +171,7 @@ let rec add_gvars_moves gvars c =
   match gvars with
   | [] -> c
   | gvar::tl -> let new_cvar = c.Contract.cvars + 1 in
-    let new_rhs = substitute_vars_cvars (CVar new_cvar) (Var gvar) c.rhs in
+    let new_rhs = substitute2_vars_cvars ~fix_addr:true (CVar new_cvar) (Var gvar) c.rhs in
     let new_c = if (new_rhs = c.rhs) then c
     else {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap; s = c.s} in
 	(add_gvars_moves tl new_c)
