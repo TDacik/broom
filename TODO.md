@@ -1,12 +1,12 @@
 ## TODO
 
-- [x] calling functions with arguments; bug: argument with accessors [tomas-test-01.c](tests/tomas-test-01.c#L14)
+- [x] calling functions with arguments; bug: argument with accessors [tomas-test-01.c](tests/tomas-test-01.c#L14), same arguments [tests/call-01-ok.c](tests/call-01-ok.c#L23)
 
 - [x] global variables
 
 - [ ] accessors
   - [x] reference
-  - [x] dereference; bug: [easy-08-ok.c](tests/easy-08-ok.c#L13)
+  - [x] dereference
   - [ ] array dereference
   - [x] record accessor
   - [x] offset
