@@ -65,10 +65,19 @@ let get_storage ptr var =
 (* var is Exp.t but only Var/CVar, last C represents root
    returns tuple (debub_string, ef) where debug_string contains the order of
    applying accessors rules *)
-let rec var_to_exformula var accs ef = (* empty_ext_formula *)
+let variable_to_exformula end_typ var accs ef =
+  let rec var_to_exformula var accs ef =
 	match accs with
 	| [] -> ("", {f=ef.f; cnt_cvars=ef.cnt_cvars; root=var})
-	| ac::tl -> (match ac.acc_data with
+	| ac::tl ->
+		let get_pointsto_size ptr_typ =
+			(* result type after last accessor should be the same as operand
+			   type itself, but not necessary (explicit type casting) *)
+			if tl=[] && ptr_typ != end_typ
+			then "[difftyp]", CL.Util.get_type_size end_typ
+			else "", CL.Util.get_type_size ptr_typ
+		in
+		(match ac.acc_data with
 
 		(* C -()-> <var> *)
 		| Ref ->
@@ -97,16 +106,14 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 		| Deref ->
 			let last_cvar = ef.cnt_cvars + 1 in
 			let ptr_typ = CL.Util.get_type_ptr ac.acc_typ in
-			let ptr_size = CL.Util.get_type_size ptr_typ in
-			(* FIXME: void*, need to find size somewhere else *)
-			assert (ptr_size != 0);
+			let dbg_typ, ptr_size = get_pointsto_size ptr_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
 			let sig_add = [ Hpointsto (var, exp_ptr_size, CVar last_cvar) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar last_cvar) tl
 				{f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi};
 				cnt_cvars=last_cvar;
 				root=(CVar last_cvar)} in
-			("Deref, " ^ dbg, ef_new)
+			("Deref" ^ dbg_typ ^ ", " ^ dbg, ef_new)
 
 		| DerefArray _ (* idx *) -> assert false (* TODO *)
 
@@ -116,8 +123,8 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
 				(* object on stack or static storage *)
-				then (get_storage ptr var), "Record acc1, "
-				else [], "Record acc2, ") in
+				then (get_storage ptr var), "Record acc1"
+				else [], "Record acc2") in
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_ptr + 1 in
@@ -130,20 +137,14 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 				Exp.BinOp ( Peq, CVar cvar_itm, ptr)) in
 			let pi_add = [ field;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_itm)), (UnOp (Base, ptr))) ] in
-			(* let exp_obj = (match obj with (* move to LHS only! *)
-				| CVar _ ->
-					let ptr_size_obj = CL.Util.get_type_size ac.acc_typ in
-					let exp_ptr_size_obj = Exp.Const (Int (Int64.of_int ptr_size_obj)) in
-					[ Hpointsto (ptr, exp_ptr_size_obj, var) ]
-				| _ -> [] ) in *)
-			let ptr_size_itm = CL.Util.get_type_size itm_typ in
+			let dbg_typ, ptr_size_itm = get_pointsto_size itm_typ in
 			let exp_ptr_size_itm = Exp.Const (Int (Int64.of_int ptr_size_itm)) in
 			let sig_add = [ Hpointsto (CVar cvar_itm, exp_ptr_size_itm, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
-			(dbg_add ^ dbg, ef_new)
+			(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)
 
 		(* from: C1 -(1)-> <var>
 		   to: C2 -(1)-> C & C2 = C1 + off *)
@@ -151,8 +152,8 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
 				(* object on stack or static storage *)
-				then (get_storage ptr var), "Offset1, "
-				else [], "Offset2, ") in
+				then (get_storage ptr var), "Offset1"
+				else [], "Offset2") in
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
 			let const_off = Exp.Const (Int (Int64.of_int off)) in
@@ -160,15 +161,17 @@ let rec var_to_exformula var accs ef = (* empty_ext_formula *)
 			let pi_add = [ elm;
 			BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, ptr))) ] in
 			let elm_typ = CL.Util.get_type_ptr ac.acc_typ in
-			let ptr_size_elm = CL.Util.get_type_size elm_typ in
+			let dbg_typ, ptr_size_elm = get_pointsto_size elm_typ in
 			let exp_ptr_size_elm = Exp.Const (Int (Int64.of_int ptr_size_elm)) in
 			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
-			(dbg_add ^ dbg, ef_new)
+			(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)
 		)
+  in
+  var_to_exformula var accs ef
 
 let constant_to_exformula data accs ef =
 	if (accs != []) then assert false;
@@ -186,7 +189,7 @@ let constant_to_exformula data accs ef =
 let operand_to_exformula op ef =
 	match op.data with
 		| OpVar uid ->
-			let (dbg, ef_new) = var_to_exformula (Var uid) op.accessor ef in
+			let (dbg, ef_new) = variable_to_exformula op.typ (Var uid) op.accessor ef in
 			(if (dbg <> "")
 			then print_string ("OP \""^(CL.Printer.operand_to_string op)^"\": "^dbg));
 			ef_new
