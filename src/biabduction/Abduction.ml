@@ -530,30 +530,33 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
     )
 
 (******************************************************************************)
-(**** MATCH Stack pure predicates ****)
+(**** MATCH Stack and Static pure predicates ****)
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *)
 
 let check_match_onstack {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level= 
   let ff = Boolean.mk_false ctx in
-  let lhs_src,lhs_dest =
+  let lhs_src,lhs_dest, lhs_flag =
     match (List.nth form1.pi i1) with
     | Exp.BinOp (op,a,b) ->
     	(match op with 
-	| Stack ->  (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
-	| _ -> ff,ff
+	| Stack -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b), 0 
+	| Static -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b), 1
+	| _ -> ff,ff,3
 	)
-    | _ -> ff,ff
+    | _ -> ff,ff,3
   in
-  let rhs_src,rhs_dest =
+  let rhs_src,rhs_dest, rhs_flag =
     match (List.nth form2.pi i2) with
     | Exp.BinOp (op,a,b) ->
     	(match op with 
-	| Stack ->  (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
-	| _ -> ff,ff
+	| Stack ->  (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b),0
+	| Static -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b),1
+	| _ -> ff,ff,4
 	)
-    | _ -> ff,ff
+    | _ -> ff,ff,4
   in
-  if (lhs_src=ff)||(rhs_src=ff) 
+  (*if (lhs_src=ff)||(rhs_src=ff) *)
+  if not (lhs_flag=rhs_flag) 
   then false
   else
   match level with
@@ -610,6 +613,7 @@ let rec find_match_onstack_ll solver form1 i1 form2 level  =
 let find_match_onstack solver form1 form2 level =
   find_match_onstack_ll solver form1 0 form2 level 
 
+(* try to mathc stack and static predicates *)
 let try_match_onstack solver form1 form2 level _  =
   let m=find_match_onstack solver form1 form2 level in
   match m with
@@ -982,8 +986,8 @@ let rec biabduction solver form1 form2 pvars =
     | [] -> Fail
   in
   let rules_onstack=[
-    (try_match_onstack,1,"Match-Onstack-1");
-    (try_match_onstack,2,"Match-Onstack-2");
+    (try_match_onstack,1,"Match-Stack/Static-1");
+    (try_match_onstack,2,"Match-Stack/Static-2");
   ] in
   (* First test SAT of form1 and form2.
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
