@@ -514,6 +514,20 @@ let rec substitute var1 eqvarlist form =
     let form1=substitute_vars var1 first form in
       substitute var1 rest form1
 
+let list_add_unique a pi =
+  let mem x =
+    let eq y =
+      match x, y with
+      | _,_ when x=y -> true
+      (* | Exp.BinOp (Peq,a,b),_ when a=b -> true *)
+      | Exp.BinOp (Peq,a,b),Exp.BinOp (Peq,c,d) when a=d && b=c -> true
+      | Exp.BinOp (Pneq,a,b),Exp.BinOp (Pneq,c,d) when a=d && b=c -> true
+      | _ -> false
+    in
+    List.exists eq pi
+  in
+  if mem a then pi else a::pi
+
 (* remove redundant equalities from pure part formula *)
 let rec remove_redundant_eq pi =
   match pi with
@@ -522,7 +536,7 @@ let rec remove_redundant_eq pi =
     match first with
     | Exp.BinOp (Peq,a,b) when a=b ->
       remove_redundant_eq rest
-    | _ -> first :: (remove_redundant_eq rest)
+    | _ -> list_add_unique first (remove_redundant_eq rest)
 
 (* simplify the formula, that rename equivalent variables as one and
    remove redundant equalities from pure part
