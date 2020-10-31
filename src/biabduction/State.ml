@@ -18,6 +18,10 @@ let to_string state =
 let print state =
   print_endline (to_string state)
 
+(* gets unique variable uid for function defined by fuid *)
+let get_fresh_lvar fuid lvars =
+  (CL.Util.list_max_positive ((CL.Util.get_pvars fuid) @ lvars)) + 1
+
 (* create anchors (vars with negative uid) for arguments of function *)
 let init fuid =
   let get_anchor elm =
@@ -62,7 +66,7 @@ let init_main fuid =
     if not (check_main_args_type args) then
       anchor_state
     else
-      let new_var = (CL.Util.list_max_positive (CL.Util.get_pvars fuid))+1 in
+      let new_var = get_fresh_lvar fuid [] in
       let len = FExp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
       let base = FExp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
       let size = FExp.BinOp ( Plesseq, FExp.zero, Var new_var) in

@@ -426,15 +426,29 @@ and exec_insns tbl bb_tbl states insns =
       exec_insns tbl bb_tbl s tl
   )
 
-let get_zeroinitializer typ_code =
+let exec_zeroinitializer fuid s (uid, var) =
+  let assign exp =
+    let pi_add = Exp.BinOp (Peq, Var uid, exp) in
+    {miss = s.miss;
+    curr = {pi=pi_add::s.curr.pi; sigma=s.curr.sigma};
+    lvars = s.lvars}
+  in
+  let typ_code = CL.Util.get_type_code var.CL.Var.typ in
   match typ_code with
-  | CL.Type.TypeInt | TypeChar | TypeEnum -> Some Exp.zero
-  | TypePtr _ | TypeString -> Some Exp.null
-  | TypeBool -> Some (Const (Bool false))
-  | TypeReal -> Some (Const (Float 0.0))
-  | TypeStruct _ | TypeUnion _ | TypeArray _ -> Some Exp.zero
+  | CL.Type.TypeInt | TypeChar | TypeEnum -> assign Exp.zero
+  | TypePtr _ | TypeString -> assign Exp.null
+  | TypeBool -> assign (Const (Bool false))
+  | TypeReal -> assign (Const (Float 0.0))
+  | TypeStruct _ | TypeUnion _ | TypeArray _ ->
+    (* l1 -(type.size)-> 0 & static(l1,var) & len(l1)=type.size & base(l1)=l1 *)
+    let fresh_var = State.get_fresh_lvar fuid s.lvars in
+    let size, stor = Contract.get_storage_with_size (Var fresh_var) (Var uid) in
+    let sig_add = Hpointsto ((Var fresh_var), size, Exp.zero) in
+    {miss = s.miss;
+    curr = {pi=s.curr.pi @ stor; sigma=sig_add::s.curr.sigma};
+    lvars = fresh_var::s.lvars}
   | TypeFnc _ -> assert false
-  | _ -> None
+  | _ -> s
 
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
@@ -443,7 +457,7 @@ let get_zeroinitializer typ_code =
 
    execute initials of all global variables, if they are initialized
    fuid belons to function 'main' *)
-(* FIXME no need tbl and bb_tbl arguments *)
+(* FIXME no need tbl arguments *)
 let init_state_main tbl bb_tbl =
   let rec exec_init_global_var states vars =
     match vars with
@@ -452,17 +466,10 @@ let init_state_main tbl bb_tbl =
       if (gv.initials=[]) && not(gv.is_extern) then
         match states with (* implicit initialization *)
         | [s] -> (
-          let zero_exp = get_zeroinitializer (CL.Util.get_type_code gv.typ) in
-          match zero_exp with
-          | None -> states
-          | Some exp ->
-            let assign = Exp.BinOp (Peq, Var uid, exp) in
-            let new_s = {
-              miss = s.miss;
-              curr = {pi=assign::s.curr.pi; sigma=s.curr.sigma};
-              lvars = s.lvars} in
-            exec_init_global_var [new_s] tl )
-        | _ -> assert false
+          let new_s = exec_zeroinitializer bb_tbl.StateTable.fuid s (uid,gv) in
+          State.print new_s;
+          exec_init_global_var [new_s] tl )
+        | _ -> assert false (* expect exactly 1 init state *)
       else (* explicit initialization *)
         exec_init_global_var (exec_insns tbl bb_tbl states gv.initials) tl
   in

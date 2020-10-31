@@ -48,24 +48,55 @@ let to_string c =
 let print c = print_endline (to_string c)
 
 (* var is Exp.t but only Var/CVar *)
-let get_storage ptr var =
+let get_storage_with_size ptr var =
 	match var with
 	| Exp.Var uid -> (
 		let variable = CL.Util.get_var uid in
+		let get_pi () =
+			let size = CL.Util.get_type_size variable.typ in
+			let exp_size = Exp.Const (Int (Int64.of_int size)) in
+			exp_size, [ Exp.BinOp ( Peq, (UnOp (Len, ptr)), exp_size);
+			BinOp ( Peq, (UnOp (Base, ptr)), ptr) ]
+		in
 		match variable.code with
-		| VAR_GL -> [
-			Exp.BinOp ( Static, ptr, var );
-			BinOp ( Peq, (UnOp (Base, ptr)), ptr) ]
-		| VAR_LC | VAR_FNC_ARG -> [
-			Exp.BinOp ( Stack, ptr, var );
-			BinOp ( Peq, (UnOp (Base, ptr)), ptr) ]
-		| _ -> [])
-	| _ -> []
+		| VAR_GL -> let size, pi = get_pi () in
+			size, Exp.BinOp (Static, ptr, var)::pi
+		| VAR_LC | VAR_FNC_ARG -> let size, pi = get_pi () in
+			size, BinOp (Stack, ptr, var)::pi
+		| _ -> Exp.zero,[])
+	| _ -> Exp.zero,[]
+
+let get_storage ptr var =
+	let _,pi = get_storage_with_size ptr var in
+	pi
+
+let constant_to_exformula data accs ef =
+	if (accs != []) then assert false;
+	let pi_add = (match data with
+	| CstPtr i -> Exp.Const (Ptr i)
+	| CstInt i -> Const (Int i)
+	| CstEnum i -> Const (Int (Int64.of_int i))
+	| CstChar i -> Const (Int (Int64.of_int (Char.code i)))
+	| CstBool b -> Const (Bool b)
+	| CstReal r -> Const (Float r)
+	| CstString str -> Const (String str)
+	| CstStruct | CstUnion | CstArray | CstFnc _ -> assert false) in
+	{f=ef.f; cnt_cvars = ef.cnt_cvars; root = pi_add}
+
+let rec operand_to_exformula op ef =
+	match op.data with
+		| OpVar uid ->
+			let (dbg, ef_new) = variable_to_exformula op.typ (Exp.Var uid) op.accessor ef in
+			(if (dbg <> "")
+			then print_string ("OP \""^(CL.Printer.operand_to_string op)^"\": "^dbg));
+			ef_new
+		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
+		| OpVoid -> ef
 
 (* var is Exp.t but only Var/CVar, last C represents root
    returns tuple (debub_string, ef) where debug_string contains the order of
    applying accessors rules *)
-let variable_to_exformula end_typ var accs ef =
+and variable_to_exformula end_typ var accs ef =
   let rec var_to_exformula var accs ef =
 	match accs with
 	| [] -> ("", {f=ef.f; cnt_cvars=ef.cnt_cvars; root=var})
@@ -84,17 +115,12 @@ let variable_to_exformula end_typ var accs ef =
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-			let (pi_add, sig_add, dbg_add) =
+			let (pi_add, sig_add, dbg_add) = (
 				if ef.cnt_cvars = cvars_ptr then (* points-to exists *)
 					([], [], "Ref2, ")
-				else (
-					let pi_stor = (
-						let stor = get_storage ptr var in
-						if stor != [] then (
-							let len = Exp.BinOp ( Peq, (UnOp (Len, ptr)), exp_ptr_size) in
-							len::stor)
-						else []) in
-					(pi_stor, [ Hpointsto (ptr, exp_ptr_size, var) ],"Ref1, ")
+				else
+					get_storage ptr var,
+					[ Hpointsto (ptr, exp_ptr_size, var) ], "Ref1, "
 				) in
 			let (dbg, ef_new) = var_to_exformula ptr tl
 				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
@@ -115,7 +141,39 @@ let variable_to_exformula end_typ var accs ef =
 				root=(CVar last_cvar)} in
 			("Deref" ^ dbg_typ ^ ", " ^ dbg, ef_new)
 
-		| DerefArray _ (* idx *) -> assert false (* TODO *)
+		(* from: C1 -()-> <var>
+		   to: C2-(size_C)->C & C2 = C1 + (idx * size_C) & base(C2)=base(C1)*)
+		| DerefArray idx ->
+		assert (idx.accessor = []);
+		let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
+		let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
+			(* object on stack or static storage *)
+			then (get_storage ptr var), "Array1"
+			else [], "Array2") in
+
+		(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
+		let cvar_elm = cvars_ptr + 1 in
+		let cvar_last = cvar_elm + 1 in
+		let op_idx = operand_to_exformula idx empty_exformula in
+		let elm_typ = CL.Util.get_type_array ac.acc_typ in
+		let dbg_typ, ptr_size_elm = get_pointsto_size elm_typ in
+		let exp_ptr_size_elm = Exp.Const (Int (Int64.of_int ptr_size_elm)) in
+		let field = (if op_idx.root = Exp.zero (* need to use = insted of == *)
+		then
+			Exp.BinOp ( Peq, CVar cvar_elm, ptr)
+		else
+			Exp.BinOp (
+				Peq, CVar cvar_elm, BinOp (
+					Pplus, ptr, BinOp (
+						Pmult, op_idx.root, exp_ptr_size_elm))) ) in
+		let pi_add = [ field;
+		BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, ptr))) ] in
+		let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
+		let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
+			{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
+			cnt_cvars=cvar_last;
+			root=(CVar cvar_last)} in
+		(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)
 
 		(* from: C1 -()-> <var>
 		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
@@ -172,29 +230,6 @@ let variable_to_exformula end_typ var accs ef =
 		)
   in
   var_to_exformula var accs ef
-
-let constant_to_exformula data accs ef =
-	if (accs != []) then assert false;
-	let pi_add = (match data with
-	| CstPtr i -> Exp.Const (Ptr i)
-	| CstInt i -> Const (Int i)
-	| CstEnum i -> Const (Int (Int64.of_int i))
-	| CstChar i -> Const (Int (Int64.of_int (Char.code i)))
-	| CstBool b -> Const (Bool b)
-	| CstReal r -> Const (Float r)
-	| CstString str -> Const (String str)
-	| CstStruct | CstUnion | CstArray | CstFnc _ -> assert false) in
-	{f=ef.f; cnt_cvars = ef.cnt_cvars; root = pi_add}
-
-let operand_to_exformula op ef =
-	match op.data with
-		| OpVar uid ->
-			let (dbg, ef_new) = variable_to_exformula op.typ (Var uid) op.accessor ef in
-			(if (dbg <> "")
-			then print_string ("OP \""^(CL.Printer.operand_to_string op)^"\": "^dbg));
-			ef_new
-		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
-		| OpVoid -> ef
 
 (* return tuple (args,ef) where args is list of arguments and ef is formula
    describing all arguments *)

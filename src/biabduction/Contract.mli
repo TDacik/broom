@@ -25,6 +25,11 @@ val to_string : t -> string
 
 val print : t -> unit
 
+(** [get_storage ptr var] returns size of storage and pure part desribed
+    storage of [var]
+    arguments are Exp.t but only Var/CVar *)
+val get_storage_with_size : Exp.t -> Exp.t -> (Exp.t * pi)
+
 (* [subcontract vars c] contains in lhs and rhs only clauses with variables
    from vars and related variables
    if removes cvars, doesn't reduce count of contract variables

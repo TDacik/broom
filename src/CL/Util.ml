@@ -152,6 +152,12 @@ let get_type_ptr uid =
 	| TypePtr t -> t
 	| _ -> assert false
 
+let get_type_array uid =
+	let typ = get_type uid in
+	match typ.code with
+	| TypeArray (_, t) -> t
+	| _ -> assert false
+
 let get_type_item items id =
 	let i = Array.get items id in
 	let iname = (match i.item_name with
