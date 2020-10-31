@@ -26,5 +26,5 @@ int main() {
 	int idx = 2;
 	m[0][0][0] = 1;
 	m[3][idx][1] = 5;
-	return (int) m[3][2][1];
+	return ok() + (int) m[3][2][1];
 }
