@@ -70,6 +70,13 @@ let get_storage ptr var =
 	let _,pi = get_storage_with_size ptr var in
 	pi
 
+(* base(ptr) <= ptr & ptr <= ( base(ptr) + len(base(ptr)) ) *)
+let get_range ptr =
+	[ Exp.BinOp ( Plesseq, UnOp (Base, ptr), ptr );
+	BinOp ( Plesseq, ptr,
+		BinOp (Pplus, UnOp (Base, ptr), UnOp (Len, UnOp (Base, ptr))) )
+	]
+
 let constant_to_exformula data accs ef =
 	if (accs != []) then assert false;
 	let pi_add = (match data with
@@ -168,9 +175,13 @@ and variable_to_exformula end_typ var accs ef =
 						Pmult, op_idx.root, exp_ptr_size_elm))) ) in
 		let pi_add = [ field;
 		BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, ptr))) ] in
+		let range = (if CL.Util.is_constant idx
+			then []
+			else get_range (CVar cvar_elm) ) in
 		let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
 		let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
-			{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
+			{f={sigma = new_sigma @ sig_add;
+				pi = ef.f.pi @ stor @ pi_add @ range};
 			cnt_cvars=cvar_last;
 			root=(CVar cvar_last)} in
 		(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)

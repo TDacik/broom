@@ -76,6 +76,11 @@ let is_void op =
 	| OpVoid -> true
 	| _ -> false
 
+let is_constant op =
+	match op.Operand.data with
+	| OpCst _ -> true
+	| _ -> false
+
 let is_extern op =
 	match op.Operand.data with
 	| OpCst { cst_data } -> ( match cst_data with

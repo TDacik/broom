@@ -52,6 +52,8 @@ val is_loop_closing_block: Loc.cl_uid -> Fnc.insn -> bool
 (** [is_viod op] if operand is void *)
 val is_void: Operand.t -> bool
 
+val is_constant: Operand.t -> bool
+
 (** [is_extern op] if operand is extern - valid for function *)
 val is_extern: Operand.t -> bool
 
