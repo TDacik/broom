@@ -96,8 +96,8 @@ let rec post_contract_application_vars state pvarmap seed pvars=
       let new_var=get_fresh_var seed conflicts in
       let tmp_curr=substitute2_vars ~fix_addr:true new_var a state.curr in
       let new_curr=substitute2_vars ~fix_addr:true a b tmp_curr in
-      let tmp_miss=substitute_vars new_var a state.miss in
-      let new_miss=substitute_vars a b tmp_miss in
+      let tmp_miss=substitute2_vars ~fix_addr:true new_var a state.miss in
+      let new_miss=substitute2_vars ~fix_addr:true a b tmp_miss in
       let new_lvars=
         let eq y= not (b=y) in
         List.filter eq state.lvars
