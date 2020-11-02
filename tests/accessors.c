@@ -108,8 +108,6 @@ int main() {
 	short si = *((short *)&s);
 	/* %reg8 := &s
 	   si := *%reg8     *reg8 has different target type
-	   
-	   we create %reg8 -(4)->si instead of %reg8 -(2)->si      BUG!!!!!
 	*/
 
 // 5. &(s.item1), &(s.item1.item2)
