@@ -13,7 +13,7 @@ int foo(int i)
 {
 	a.i = 1;
 	a.j = 2;
-	a.x[i] = 0; // error if i<-2 and i>3
+	a.x[i] = 0; // error if i<-1 and i>2
 	return a.i + a.j;
 }
 
