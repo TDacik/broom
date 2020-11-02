@@ -1,21 +1,19 @@
 ## TODO
 
-- [x] calling functions with arguments; bug: argument with accessors [tomas-test-01.c](tests/tomas-test-01.c#L14), same arguments [tests/call-01-ok.c](tests/call-01-ok.c#L23)
+- [x] calling functions with arguments; bug: argument with accessors [tomas-test-01.c](tests/tomas-test-01.c#L14), same arguments [call-01-ok.c](tests/call-01-ok.c#L23)
 
 - [x] global variables
 
-- [ ] accessors
+- [x] accessors; bug: abduction rules for variable offset [alias-10.c](tests/alias-10.c#L16)
   - [x] reference
   - [x] dereference
-  - [ ] array dereference
+  - [x] array dereference
   - [x] record accessor
   - [x] offset
   <br/>
 - [ ] stack allocation and static storage in logic;
-  bug: [alias-10.c](tests/alias-10.c#L15)
-    - [ ] introduce `invalid(x)`, `stack(x,y)`, and `static(x,y)` predicates
-        1. edit abduction, to correctly resolve `static(x,y)`
-        2. not allow stack/static in abstraction
+    - [x] introduce `invalid(x)`, `stack(x,y)`, and `static(x,y)` predicates
+        1. not allow stack/static in abstraction
     - [x] `clobber`
     - [x] `alloca` / `__builtin_alloca`
     - [ ] `__builtin_alloca_with_align`
@@ -32,7 +30,7 @@
 - [ ] calling extern functions; `dst = fnc(&a)` means `dst=undef & a=undef`
 
 - [ ] contracts for standard library functions (related to memory)
-  - [x] `malloc`
+  - [x] `malloc`; bug: malloc(0) [easy-03-ok.c](tests/easy-03-ok.c#L4)
   - [ ] `calloc`
   - [ ] `realloc`
   - [ ] `aligned_alloc` (since C11)
