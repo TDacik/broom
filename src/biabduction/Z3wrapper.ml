@@ -253,7 +253,10 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         /\ len(a) >=size 
         /\ a>0 
         /\ base(a)<=a 
-        /\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector*)
+        /\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector
+	/\ len(base(a))=len(a) + (a-base(a)) 
+	/\ a<=base(a)+len(base(a)) *)
+
     let x,exundef1=alloc a in
     let local_c1= Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]] in
     let local_c2= Boolean.mk_eq ctx
@@ -264,6 +267,15 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     let local_c4 = BitVector.mk_sgt ctx x (BitVector.mk_numeral ctx "0" bw_width) in
     let local_c5 = BitVector.mk_sle ctx (Expr.mk_app ctx func.base [x]) x in
     let local_c6 = BitVector.mk_sle ctx x (BitVector.mk_add ctx x size_z3) in
+    let local_c7 = Boolean.mk_eq ctx 
+    		(Expr.mk_app ctx func.len [(Expr.mk_app ctx func.base [x])])
+		(BitVector.mk_add ctx (Expr.mk_app ctx func.len [x])
+			(BitVector.mk_sub ctx x (Expr.mk_app ctx func.base [x])))
+    in
+    let local_c8 =  BitVector.mk_sle ctx x 
+    			(BitVector.mk_add ctx (Expr.mk_app ctx func.base [x]) (Expr.mk_app ctx func.len [(Expr.mk_app ctx func.base [x])]))
+    in
+
       
     (* Create constrains for two space predicates *)
     (*  dist_fields: x!=y /\ [base(x)= base(y) => y + size_y<=x \/ x+size_x<=y] *)
@@ -325,7 +337,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
       | [] -> [],[]
     in
     let noneq,exundef3=create_noneq rest_preds in
-    ((Boolean.mk_and ctx [ local_c1; local_c2; local_c3; local_c4; local_c5; local_c6 ]) :: noneq), (exundef1@exundef2@exundef3)
+    ((Boolean.mk_and ctx [ local_c1; local_c2; local_c3; local_c4; local_c5; local_c6; local_c7; local_c8 ]) :: noneq), (exundef1@exundef2@exundef3)
     )
   | Slseg (a,b,_) ->
     let x,exundef1=alloc a in
