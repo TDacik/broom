@@ -255,7 +255,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         /\ base(a)<=a 
         /\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector
 	/\ len(base(a))=len(a) + (a-base(a)) 
-	/\ a<=base(a)+len(base(a)) *)
+	/\ a+size_of_field_a<=base(a)+len(base(a)) *)
 
     let x,exundef1=alloc a in
     let local_c1= Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]] in
@@ -272,7 +272,8 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 		(BitVector.mk_add ctx (Expr.mk_app ctx func.len [x])
 			(BitVector.mk_sub ctx x (Expr.mk_app ctx func.base [x])))
     in
-    let local_c8 =  BitVector.mk_sle ctx x 
+    let local_c8 =  BitVector.mk_sle ctx 
+    			(BitVector.mk_add ctx x size_z3)
     			(BitVector.mk_add ctx (Expr.mk_app ctx func.base [x]) (Expr.mk_app ctx func.len [(Expr.mk_app ctx func.base [x])]))
     in
 
