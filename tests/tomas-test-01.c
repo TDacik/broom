@@ -11,12 +11,14 @@ void f(struct sll_node **x) {
 }
 
 struct sll_node *g(struct sll_node *x) {
-        f(&x);
-        f(&x);
+	struct sll_node **xx = &x;
+        f(xx);
+        f(xx);
         return x;
 }
 
-/* 
+ 
+
 int main() {
         struct sll_node *n1 = (struct sll_node *)malloc(sizeof(struct sll_node));
         struct sll_node *n2 = (struct sll_node *)malloc(sizeof(struct sll_node));
@@ -39,4 +41,4 @@ int main() {
 
         return 0;
 }
-*/
+
