@@ -560,9 +560,7 @@ let remove_equiv_vars gvars evars f =
 
 (* remove usless conjuncts from pure part
    - a conjunct is useless iff
-   1a) contains evars only
-   1b) it is of the form exp1 !=exp2 and evars  are not togather with ref_vars in exp1/2
-      --- r1 != e1 (r1 referenced, e1 existential) => this conjunct is not needed
+   1) contains evars only
    2) there is no transitive reference from spatial part or program variables *)
 
 let rec get_referenced_conjuncts_ll pi ref_vars =
@@ -574,23 +572,6 @@ let rec get_referenced_conjuncts_ll pi ref_vars =
   match pi with
   | [] -> [],[]
   | first::rest ->
-    match first with
-    | Exp.BinOp ( Pneq, a, b) -> ( (* handle the case 1b *)
-      let a_vars=find_vars_expr a in
-      let b_vars=find_vars_expr b in
-      let referenced_a=List.filter mem a_vars in
-      let referenced_b=List.filter mem b_vars in
-      let non_referenced_a = List.filter nomem a_vars in
-      let non_referenced_b = List.filter nomem b_vars in
-      match referenced_a,referenced_b,non_referenced_a,non_referenced_b with
-      | [],[],_,_ -> get_referenced_conjuncts_ll rest ref_vars
-      | _,[],[],_ -> get_referenced_conjuncts_ll rest ref_vars
-      | [],_,_,[] -> get_referenced_conjuncts_ll rest ref_vars
-      | _,_,nrefs_a,nrefs_b ->
-        let ref_conjuncts,transitive_refs= get_referenced_conjuncts_ll rest ref_vars in
-          first::ref_conjuncts, (CL.Util.list_join_unique transitive_refs (CL.Util.list_join_unique nrefs_a nrefs_b))
-    )
-    | _ ->
       let vars_in_first=find_vars_expr first in
       let referenced=List.filter mem vars_in_first in
       let non_referenced = List.filter nomem vars_in_first in
