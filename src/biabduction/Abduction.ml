@@ -217,16 +217,6 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
   if ((lhs=ff)||(rhs=ff))
   then false
   else
-  let query_eq_base_sat = [
-	(Boolean.mk_eq ctx
-            	(Expr.mk_app ctx z3_names.base [rhs])
-              	(Expr.mk_app ctx z3_names.base [lhs]));
-  	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-  	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
-  in
-  if (Solver.check solv query_eq_base_sat)=UNSATISFIABLE
-  then false
-  else
 
   match level with
   | 1 ->
@@ -279,16 +269,6 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
     | Slseg (_) -> ff,ff
   in
   if ((lhs=ff)||(rhs=ff))
-  then false
-  else
-  let query_eq_base_sat = [
-	(Boolean.mk_eq ctx
-            	(Expr.mk_app ctx z3_names.base [rhs])
-              	(Expr.mk_app ctx z3_names.base [lhs]));
-  	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-  	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
-  in
-  if (Solver.check solv query_eq_base_sat)=UNSATISFIABLE
   then false
   else
   match level with
