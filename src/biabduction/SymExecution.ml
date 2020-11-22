@@ -151,12 +151,15 @@ let contract_application solver state c pvars =
 	| [] -> []
 	| (a,b)::rest -> [a;b]@get_vars_from_varmoves rest
   in
-  (* variables from the c_rename.pvarmap must be considered as pvars to 
-     avoid creation of a logical variable with the same ID within biabduction *)
-  let pvars_new=CL.Util.list_join_unique pvars (get_vars_from_varmoves c_rename.pvarmap) in
-  match (apply_contract solver state c_rename pvars_new) with
+  (* Some rules in abduction procedure creates fresh variables.
+     Therefore all used variables must be provided to abduction call to 
+     avoid creation of a logical variable with the same ID within abduction *)
+  let used_vars=pvars @ (get_vars_from_varmoves c_rename.pvarmap)
+  	@(find_vars state.miss) @ (find_vars state.curr) 
+	@(find_vars c_rename.lhs)@(find_vars c_rename.rhs)in
+  match (apply_contract solver state c_rename used_vars) with
   | CAppFail -> CAppFail
-  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars_new)
+  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap used_vars)
 
 
 (* PREPARE STATE FOR CONTRACT
