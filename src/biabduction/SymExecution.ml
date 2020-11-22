@@ -131,7 +131,8 @@ let post_contract_application state solver pvarmap pvars =
   if ((Solver.check solver.solv sat_query_curr)=SATISFIABLE) &&
      ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
   then  CAppOk final_state
-  else (prerr_endline "SAT Fail"; CAppFail)
+  else 
+  (prerr_endline "SAT Fail (Contract application)"; CAppFail)
 
 (* Do
    1) rename conflicting contract variables
@@ -145,9 +146,17 @@ let post_contract_application state solver pvarmap pvars =
 *)
 let contract_application solver state c pvars =
   let c_rename = rename_contract_vars_ll state c 1 pvars in
-  match (apply_contract solver state c_rename pvars) with
+  let rec get_vars_from_varmoves varmoves =
+  	match varmoves with
+	| [] -> []
+	| (a,b)::rest -> [a;b]@get_vars_from_varmoves rest
+  in
+  (* variables from the c_rename.pvarmap must be considered as pvars to 
+     avoid creation of a logical variable with the same ID within biabduction *)
+  let pvars_new=CL.Util.list_join_unique pvars (get_vars_from_varmoves c_rename.pvarmap) in
+  match (apply_contract solver state c_rename pvars_new) with
   | CAppFail -> CAppFail
-  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars)
+  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap pvars_new)
 
 
 (* PREPARE STATE FOR CONTRACT

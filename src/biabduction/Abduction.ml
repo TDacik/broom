@@ -331,7 +331,17 @@ let find_split solver form1 form2 level =
   find_split_ll solver form1 0 form2 level
 
 
-let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
+let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
+  let variables=(find_vars form1)@(find_vars form2)@pvars in
+  let mem lst x =
+    let eq y= (x=y) in
+    List.exists eq lst
+  in
+  let rec get_fresh_var seed confl=
+    if (mem confl seed)
+    then get_fresh_var (seed+1) confl
+    else seed
+  in
   let m=find_split {ctx;solv;z3_names} form1 form2 level in
   let nequiv a b = not (a=b) in
   let remove k form =
@@ -359,6 +369,8 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         then (Exp.zero)
         else tmp_size_first
       in
+      let size_first_var = (get_fresh_var 1 variables) in
+      let size_first_eq = (Exp.BinOp (Peq,Exp.Var size_first_var,size_first)) in
       (* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
       let size_last=
         let tmp_size_last=
@@ -374,35 +386,47 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         if (Solver.check solv query)=UNSATISFIABLE then (Exp.zero)
         else tmp_size_last
       in
+      let size_last_var = get_fresh_var (size_first_var+1) ([size_first_var]@variables) in
+      let size_last_eq = (Exp.BinOp (Peq,Exp.Var size_last_var,size_last)) in
+      (* pointer to the last segment *)
       let ptr_last=(Exp.BinOp(Pplus,x2,s2)) in
+      let ptr_last_var = get_fresh_var (size_last_var+1) ([size_first_var; size_last_var]@variables) in
+      let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
+      (* destination of the split (null/undefined)*)
       let split_dest=
         let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y1, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form1))
         ] in
         if (Solver.check solv query_null)=UNSATISFIABLE then Exp.zero else Exp.Undef
       in
-      let sigma1_new,pi_tmp1, pi_tmp2= (* compute the splitted part of sigma and new pi*)
+      let sigma1_new,pi_tmp1, pi_tmp2, new_lvars= (* compute the splitted part of sigma and new pi*)
         if size_first=(Exp.zero) then
           [ Hpointsto (x1,s2,split_dest);
-            Hpointsto (ptr_last,size_last,split_dest)],
+            Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
            [ Exp.BinOp(Peq,x1,x2) ;
              BinOp ( Plesseq, s1, UnOp ( Len, x1));
-             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last))],
-           [ Exp.BinOp(Pless,s2,s1) ]
+             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, Exp.Var ptr_last_var));
+	     ptr_last_eq; size_last_eq],
+           [ Exp.BinOp(Pless,s2,s1) ],
+	   [ptr_last_var;size_last_var]
         else if  size_last=(Exp.zero) then
-          [Hpointsto (x1,size_first,split_dest);
+          [Hpointsto (x1,Exp.Var size_first_var,split_dest);
            Hpointsto (x2,s2,split_dest)],
            [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
              BinOp ( Plesseq, s1, UnOp ( Len, x1));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
-           [Exp.BinOp(Pless,s2,s1) ]
-        else [Hpointsto (x1,size_first,split_dest);
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
+	    size_first_eq],
+           [Exp.BinOp(Pless,s2,s1) ],
+	   [size_first_var]
+        else [Hpointsto (x1,Exp.Var size_first_var,split_dest);
           Hpointsto (x2,s2,split_dest);
-          Hpointsto (ptr_last,size_last,split_dest)],
+          Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
           [BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last))],
-          [Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ]
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last));
+	    size_first_eq; ptr_last_eq; size_last_eq],
+          [Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ],
+	  [size_first_var;ptr_last_var;size_last_var]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
@@ -411,7 +435,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
       Apply (  {sigma=sigma1_new@ (remove i1 form1).sigma; pi=form1.pi @ new_pi},
         form2,
         {sigma=[]; pi=new_pi},
-        [])
+        new_lvars)
 
     | 2 ->   (* split right *)
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
@@ -427,6 +451,8 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         then (Exp.zero)
         else tmp_size_first
       in
+      let size_first_var = (get_fresh_var 1 variables) in
+      let size_first_eq = (Exp.BinOp (Peq,Exp.Var size_first_var,size_first)) in
       (* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
       let size_last=
         let tmp_size_last=
@@ -443,7 +469,13 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         then (Exp.zero)
         else tmp_size_last
       in
+      let size_last_var = get_fresh_var (size_first_var+1) ([size_first_var]@variables) in
+      let size_last_eq = (Exp.BinOp (Peq,Exp.Var size_last_var,size_last)) in
+      (* pointer to the last block *)
       let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
+      let ptr_last_var = get_fresh_var (size_last_var+1) ([size_first_var; size_last_var]@variables) in
+      let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
+      (* The RHS of the splitted points to can be null or undef *)
       let split_dest=
         let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y2, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form2))
@@ -452,24 +484,30 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
         then Exp.zero
         else Exp.Undef
       in
-      let sigma2_new,pi_tmp1,pi_tmp2= (* compute the splitted part of sigma *)
+      let sigma2_new,pi_tmp1,pi_tmp2,new_lvars= (* compute the splitted part of sigma *)
         if size_first=(Exp.zero) then
           [ Hpointsto (x1,s1,split_dest);
-            Hpointsto (ptr_last,size_last,split_dest)],
-           [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2)) ],
-           [ Exp.BinOp(Pless,s1,s2) ]
+            Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
+           [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2));
+	   ptr_last_eq; size_last_eq],
+           [ Exp.BinOp(Pless,s1,s2) ],
+	   [ptr_last_var; size_last_var]
         else if  size_last=(Exp.zero) then
-          [Hpointsto (x2,size_first,split_dest);
+          [Hpointsto (x2,Exp.Var size_first_var,split_dest);
            Hpointsto (x1,s1,split_dest)],
            [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
              BinOp ( Plesseq, s2, UnOp ( Len, x2));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
-           [Exp.BinOp(Pless,s1,s2) ]
-        else [Hpointsto (x2,size_first,split_dest);
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
+	    size_first_eq],
+           [Exp.BinOp(Pless,s1,s2) ],
+	   [ size_first_var]
+        else [Hpointsto (x2,Exp.Var size_first_var,split_dest);
           Hpointsto (x1,s1,split_dest);
-          Hpointsto (ptr_last,size_last,split_dest)],
-          [BinOp ( Plesseq, s2, UnOp ( Len, x2)); BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
-          [Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ]
+          Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
+          [BinOp ( Plesseq, s2, UnOp ( Len, x2)); BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
+	  ptr_last_eq; size_last_eq; size_first_eq ],
+          [Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ],
+	  [size_first_var;ptr_last_var;size_last_var ]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
@@ -479,7 +517,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level _ =
       Apply ({sigma=form1.sigma; pi=form1.pi @ new_pi},
         {sigma=sigma2_new@ (remove i2 form2).sigma; pi=form2.pi},
         {sigma=[]; pi=new_pi},
-        [])
+        new_lvars)
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 (******************************************************************************)
