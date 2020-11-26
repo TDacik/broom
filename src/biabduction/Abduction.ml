@@ -691,25 +691,26 @@ let try_match_onstack solver form1 form2 level _  =
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
 let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
-  let lhs_ll,flag_l =
+  let ff_noZ3 = Exp.Const (Bool false)in
+  let lhs_ll,lhs_noZ3,flag_l =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),0
-    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),1
+    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),a,0
+    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),a,1
   in
-  let lhs_size =
+  let lhs_size,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s)
-    | Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
+    | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s),s
+    | Slseg _ -> ff,ff_noZ3 (* we do not speak about sizes before the slseg is unfolded *)
   in
-  let rhs_ll,flag_r =
+  let rhs_ll,rhs_noZ3,flag_r =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),0
-    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),1
+    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),a,0
+    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),a,1
   in
-  let rhs_size =
+  let rhs_size,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s)
-    | Slseg _ -> ff (* we do not speak about sizes before the slseg is unfolded *)
+    | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s),s
+    | Slseg _ -> ff,ff_noZ3 (* we do not speak about sizes before the slseg is unfolded *)
   in
   (* Note that if one site contains list segment and the other one points-to then we compare bases
      within the SMT queries *)
@@ -722,6 +723,8 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
     else rhs_ll
   in
   match level with
+  | 0 -> (* static checks - no solver calls *)
+	(lhs_noZ3=rhs_noZ3) && ((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
   | 1 ->
     let query_size =
       if ((lhs_size=ff)||(rhs_size=ff)) then true
@@ -884,7 +887,7 @@ and try_match solver form1 form2 level pvars  =
       (* size1 = size2 is added if Hpointsto is mathced with Hpointsto *)
       let size_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, size1,size2))] else [] in
       match level with
-      | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
+      | 0 | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=[]},
           added_lvars)
@@ -1040,6 +1043,7 @@ let rec biabduction solver form1 form2 pvars =
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
   let rules=[
+    (try_match,0,"Match0");
     (try_match,1,"Match1");
     (try_split,1,"Split1");
     (try_match,2,"Match2");
