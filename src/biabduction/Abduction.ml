@@ -204,21 +204,40 @@ let try_learn_slseg solver form1 form2 level _=
 
 let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
-  let lhs,lhs_size =
+  let ff_noZ3 = Exp.Const (Bool false) in
+  let lhs,lhs_size,lhs_noZ3,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
-    | Slseg (_) -> ff,ff
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
+    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
   in
-  let rhs,rhs_size =
+  let rhs,rhs_size,rhs_noZ3,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
-    | Slseg (_) -> ff,ff
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
+    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
   in
   if ((lhs=ff)||(rhs=ff))
   then false
   else
-
   match level with
+  | 0 -> (* static query for split without calling a solver *)
+  	(match lhs_noZ3,rhs_noZ3,lhs_size_noZ3, rhs_size_noZ3 with
+	| Exp.Var l, Exp.Var r, Exp.Const (Int l_size), Exp.Const (Int r_size) ->
+		let l_cl = l::(get_equiv_vars [l] form1.pi) in
+		let r_cl = r::(get_equiv_vars [r] form2.pi) in
+		let mem lst x =
+		    let eq y= (x=y) in
+		    List.exists eq lst
+  		in
+		let rec intersect l1 l2 =
+			match l1 with
+			| [] -> false
+			| first::rest -> if (mem l2 first) then true else (intersect rest l2)
+		in
+		((intersect l_cl r_cl)&&(l_size>r_size))
+	| _,_,Exp.Const (Int l_size), Exp.Const (Int r_size) -> ((lhs_noZ3 = rhs_noZ3)&&(l_size>r_size))
+	| _ -> false
+	)
+
   | 1 ->
     let query=[
       Boolean.mk_not ctx (
@@ -258,20 +277,40 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
 
 let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
-  let lhs,lhs_size =
+  let ff_noZ3 = Exp.Const (Bool false) in
+  let lhs,lhs_size,lhs_noZ3,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
-    | Slseg (_) -> ff,ff
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
+    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
   in
-  let rhs,rhs_size =
+  let rhs,rhs_size,rhs_noZ3,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
-    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s)
-    | Slseg (_) -> ff,ff
+    | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
+    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
   in
   if ((lhs=ff)||(rhs=ff))
   then false
   else
   match level with
+  | 0 -> (* static query for split without calling a solver *)
+  	(match lhs_noZ3,rhs_noZ3,lhs_size_noZ3, rhs_size_noZ3 with
+	| Exp.Var l, Exp.Var r, Exp.Const (Int l_size), Exp.Const (Int r_size) -> 
+		let l_cl = l::(get_equiv_vars [l] form1.pi) in
+		let r_cl = r::(get_equiv_vars [r] form2.pi) in
+		let mem lst x =
+		    let eq y= (x=y) in
+		    List.exists eq lst
+  		in
+		let rec intersect l1 l2 =
+			match l1 with
+			| [] -> false
+			| first::rest -> if (mem l2 first) then true else (intersect rest l2)
+		in
+
+		((intersect l_cl r_cl)&&(l_size<r_size))
+	| _,_,Exp.Const (Int l_size), Exp.Const (Int r_size) -> ((lhs_noZ3 = rhs_noZ3)&&(l_size<r_size))
+	| _ -> false
+	)
   | 1 ->
     let query=[
       Boolean.mk_not ctx (
@@ -724,7 +763,23 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
   in
   match level with
   | 0 -> (* static checks - no solver calls *)
-	(lhs_noZ3=rhs_noZ3) && ((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
+  	(match lhs_noZ3,rhs_noZ3 with
+	| Exp.Var l,Exp.Var r ->
+		let l_cl = l::(get_equiv_vars [l] form1.pi) in
+		let r_cl = r::(get_equiv_vars [r] form2.pi) in
+		let mem lst x =
+		    let eq y= (x=y) in
+		    List.exists eq lst
+	  	in
+		let rec intersect l1 l2 =
+			match l1 with
+			| [] -> false
+			| first::rest -> if (mem l2 first) then true else (intersect rest l2)
+		in
+
+		(intersect l_cl r_cl)&&((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
+	| _ -> (lhs_noZ3=rhs_noZ3) && ((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
+	)
   | 1 ->
     let query_size =
       if ((lhs_size=ff)||(rhs_size=ff)) then true
@@ -887,11 +942,11 @@ and try_match solver form1 form2 level pvars  =
       (* size1 = size2 is added if Hpointsto is mathced with Hpointsto *)
       let size_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, size1,size2))] else [] in
       match level with
-      | 0 | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
+      | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=[]},
           added_lvars)
-      | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
+      | 0 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq},
           added_lvars)
@@ -1044,6 +1099,7 @@ let rec biabduction solver form1 form2 pvars =
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
   let rules=[
     (try_match,0,"Match0");
+    (try_split,0,"Split0");
     (try_match,1,"Match1");
     (try_split,1,"Split1");
     (try_match,2,"Match2");
