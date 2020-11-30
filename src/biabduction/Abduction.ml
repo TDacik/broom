@@ -245,8 +245,7 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
         (BitVector.mk_sle ctx lhs rhs);
         (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
         (BitVector.mk_sgt ctx lhs_size rhs_size)
-        ] );
-      (Boolean.mk_and ctx (formula_to_solver ctx form1))
+        ] )
     ] in
     (Solver.check solv query)=UNSATISFIABLE
     (*&& ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
@@ -257,9 +256,7 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
         (BitVector.mk_sle ctx lhs rhs);
         (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
         (BitVector.mk_sgt ctx lhs_size rhs_size)
-        ] );
-      (Boolean.mk_and ctx (formula_to_solver ctx form1));
-      (Boolean.mk_and ctx (formula_to_solver ctx form2))
+        ] )
     ] in
     (Solver.check solv query)=UNSATISFIABLE 
     (* &&((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) *)(* here we may thing about better Undef recognition *)
@@ -267,9 +264,7 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
     let query=[
       (BitVector.mk_sle ctx lhs rhs);
       (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
-      (BitVector.mk_sgt ctx lhs_size rhs_size);
-      (Boolean.mk_and ctx (formula_to_solver ctx form1));
-      (Boolean.mk_and ctx (formula_to_solver ctx form2))
+      (BitVector.mk_sgt ctx lhs_size rhs_size) 
     ] in
     (Solver.check solv query)=SATISFIABLE 
       (*&& ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
@@ -318,8 +313,7 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
         (BitVector.mk_sge ctx lhs rhs);
         (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
         (BitVector.mk_slt ctx lhs_size rhs_size)
-        ] );
-      (Boolean.mk_and ctx (formula_to_solver ctx form1))
+        ] )
     ] in
     (Solver.check solv query)=UNSATISFIABLE 
     (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
@@ -330,19 +324,15 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
         (BitVector.mk_sge ctx lhs rhs);
         (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
         (BitVector.mk_slt ctx lhs_size rhs_size)
-        ] );
-      (Boolean.mk_and ctx (formula_to_solver ctx form1));
-      (Boolean.mk_and ctx (formula_to_solver ctx form2))
-    ] in
+        ] )
+     ] in
     (Solver.check solv query)=UNSATISFIABLE 
     (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
       (BitVector.mk_sge ctx lhs rhs);
       (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
-      (BitVector.mk_slt ctx lhs_size rhs_size);
-      (Boolean.mk_and ctx (formula_to_solver ctx form1));
-      (Boolean.mk_and ctx (formula_to_solver ctx form2))
+      (BitVector.mk_slt ctx lhs_size rhs_size)
     ] in
     (Solver.check solv query)=SATISFIABLE 
     (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) *) (* here we may thing about better Undef recognition *)
@@ -367,7 +357,17 @@ let rec find_split_ll solver form1 i1 form2 level=
     | x,lr -> (i1,x,lr)
 
 let find_split solver form1 form2 level =
-  find_split_ll solver form1 0 form2 level
+  let ctx=solver.ctx in
+  let common_part=match level with
+  | 1 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
+  | 2 | 4 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
+          (Boolean.mk_and ctx (formula_to_solver ctx form2))]
+  | _ -> []
+  in
+  Solver.add solver.solv common_part;
+  let res= find_split_ll solver form1 0 form2 level in
+  Solver.reset solver.solv; res
+
 
 
 let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
@@ -785,29 +785,21 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
       if ((lhs_size=ff)||(rhs_size=ff)) then true
       else
         let qq1 =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-            (Boolean.mk_and ctx (formula_to_solver ctx form1)) ]
+          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)]
         in
       ((Solver.check solv qq1)=UNSATISFIABLE)
     in
-    let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+    let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
     in
     query_size && ((Solver.check solv query1)=UNSATISFIABLE)
   | 2 ->
     let query_size =
       if ((lhs_size=ff)||(rhs_size=ff)) then true
       else
-        let qq =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-          (Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2))
-        ] in
+        let qq =[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)] in
       (Solver.check solv qq)=UNSATISFIABLE
     in
-    let query = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-        	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+    let query = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
     in
     query_size && ((Solver.check solv query)=UNSATISFIABLE)
   | 3 ->
@@ -815,20 +807,15 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
       if ((lhs_size=ff)||(rhs_size=ff)) then true
       else
         let qq1 =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-            (Boolean.mk_and ctx (formula_to_solver ctx form1)) ]
+          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size) ]
         in
       ((Solver.check solv qq1)=UNSATISFIABLE)
     in
-    let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
-        (Boolean.mk_and ctx (formula_to_solver ctx form2));
+    let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form2));
         (Boolean.mk_eq ctx lhs rhs)
       ]
     in
-    let query2=[Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));
-        (Boolean.mk_and ctx (formula_to_solver ctx form1))
-      ]
-    in
+    let query2=[Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]))] in
     query_size
     && ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
   | 4 ->
@@ -836,17 +823,10 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
       if ((lhs_size=ff)||(rhs_size=ff)) then true
       else
         let qq =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size);
-          (Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2))
-        ] in
+          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)] in
       (Solver.check solv qq)=UNSATISFIABLE
     in
-    let query=[(Boolean.mk_and ctx (formula_to_solver ctx form1));
-        (Boolean.mk_and ctx (formula_to_solver ctx form2));
-        (Boolean.mk_eq ctx lhs rhs)
-      ]
-    in
+    let query=[(Boolean.mk_eq ctx lhs rhs)] in
     query_size && ((Solver.check solv query)=SATISFIABLE)
   | _ -> false
 
@@ -867,7 +847,17 @@ let rec find_match_ll solver form1 i1 form2 level  =
     | x -> (i1,x)
 
 let find_match solver form1 form2 level =
-  find_match_ll solver form1 0 form2 level 
+  let ctx=solver.ctx in
+  let common_part=match level with
+  | 1 | 3 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
+  | 2 | 4 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
+          (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
+  | _ -> []
+  in
+  Solver.add solver.solv common_part;
+  let res=find_match_ll solver form1 0 form2 level in
+  Solver.reset solver.solv; res
+
 
 
 (* apply the match rule to i=(i1,i2)
@@ -1100,8 +1090,8 @@ let rec biabduction solver form1 form2 pvars =
   let rules=[
     (try_match,0,"Match0");
     (try_split,0,"Split0");
-    (try_match,1,"Match1");
-    (try_split,1,"Split1");
+    (*(try_match,1,"Match1");*)
+    (*(try_split,1,"Split1");*)
     (try_match,2,"Match2");
     (try_split,2,"Split2");
     (try_match,3,"Match3");
