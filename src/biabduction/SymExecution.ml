@@ -159,7 +159,9 @@ let contract_application solver state c pvars =
 	@(find_vars c_rename.lhs)@(find_vars c_rename.rhs)in
   match (apply_contract solver state c_rename used_vars) with
   | CAppFail -> CAppFail
-  | CAppOk s_applied -> (post_contract_application s_applied solver c_rename.pvarmap used_vars)
+  | CAppOk s_applied ->  
+  		(* The post contrat application must be called with pvars. All variables outside pvars are considered to be logical. *)
+		(post_contract_application s_applied solver c_rename.pvarmap pvars)
 
 
 (* PREPARE STATE FOR CONTRACT
