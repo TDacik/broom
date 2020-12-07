@@ -48,8 +48,7 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
     let lhs= (expr_to_solver_only_exp ctx z3_names a) in (* Existential quantification is probably not needed. *)(* SIZE missing *)
     let query1= [ Boolean.mk_not ctx (
       Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));
-      (Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs));
-      (Boolean.mk_and ctx (formula_to_solver ctx form1))
+      (Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs))
       ]
     in
     if ((Solver.check solv query1)=UNSATISFIABLE) then z
@@ -81,12 +80,13 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
               	(Expr.mk_app ctx z3_names.base [lhs]))
         ) :: list_eq rest
     in
-    let query = match (list_eq form1.sigma) with
-      | [] -> [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
-      | a -> [ (Boolean.mk_not ctx (Boolean.mk_or ctx a));
-          (Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
+    (* in the level 3, form2 is added within th try_learn_poinsto function into the solver. Therefore we do not need to add it here *)
+    let query = match (list_eq form1.sigma),level with
+      | [],1 -> [ (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
+      | a,1 -> [ (Boolean.mk_not ctx (Boolean.mk_or ctx a));
+          	(Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
+      | [],_ -> [ ]
+      | a,_ -> [ (Boolean.mk_not ctx (Boolean.mk_or ctx a)) ]
     in
     match level with
     | 1 ->   if ((Solver.check solv query)=SATISFIABLE) then
@@ -98,6 +98,13 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
 
 (* try to apply learn1 rule for pointsto *)
 let try_learn_pointsto solver form1 form2 level _ =
+  let ctx=solver.ctx in
+  let common_part=match level with
+  | 1 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)] 
+  | _ ->  [Boolean.mk_and ctx (formula_to_solver ctx form1); 
+  	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+  in
+  Solver.add solver.solv common_part;
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
@@ -114,13 +121,15 @@ let try_learn_pointsto solver form1 form2 level _ =
       sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
   in
   match (get_index 0) with
-  | (-1,-1) -> Fail
-  | (-3,i2) -> (* learn with level 3 *)
+  | (-1,-1) -> Solver.reset solver.solv; Fail
+  | (-3,i2) -> Solver.reset solver.solv; 
+    (* learn with level 3 *)
     Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i2 form2),
       {sigma=[List.nth form2.sigma i2]; pi=[]},
       [])
-  | (i1,i2) -> (* learn with level 1 *)
+  | (i1,i2) -> Solver.reset solver.solv;
+    (* learn with level 1 *)
     let (y1,_,_) = to_hpointsto_unsafe (List.nth form1.sigma i1) in
     let (y2,_,_) = to_hpointsto_unsafe (List.nth form2.sigma i2) in
 
@@ -160,24 +169,28 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
     | 1 -> (match  (list_eq form1.sigma) with
       | [] -> false (* learn1 can not be applied with empty sigma on LHS *)
       | a ->
-        let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
-           (Boolean.mk_or ctx a)]
+        let query = [ (Boolean.mk_or ctx a)]
         in
         (Solver.check solv query)=UNSATISFIABLE
       )
     | 2 ->   let query =
         match (list_eq form1.sigma) with
-        | [] -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
-        | a ->   [ (Boolean.mk_not ctx (Boolean.mk_or ctx a));
-          (Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2)) ]
+        | [] -> []
+        | a ->   [ (Boolean.mk_not ctx (Boolean.mk_or ctx a))]
       in
       (Solver.check solv query)=SATISFIABLE
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 (* try to apply learn rule for slseg *)
 let try_learn_slseg solver form1 form2 level _=
+  let ctx=solver.ctx in
+  let common_part=match level with
+  | 1 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
+  | 2 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
+          (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
+  | _ -> []
+  in
+  Solver.add solver.solv common_part;
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
@@ -193,8 +206,8 @@ let try_learn_slseg solver form1 form2 level _=
       sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
   in
   match (get_index 0) with
-  | -1 -> Fail
-  | i -> Apply ( { sigma=form1.sigma; pi = form1.pi},
+  | -1 -> Solver.reset solver.solv; Fail
+  | i -> Solver.reset solver.solv; Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i form2),
       {sigma=[List.nth form2.sigma i]; pi=[]},
       [])
