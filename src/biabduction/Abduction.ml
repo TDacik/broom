@@ -1056,7 +1056,7 @@ let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   else
   if (List.length form2.sigma)>0 then NoFinish
   (* FINISH TRUE, return MISSING pure part (form2.pi) and FRAME (form1) *)
-  else Finish ({pi=form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
+  else Finish ({pi=form1.pi@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
 
 (* main biabduction function *)
 (* The result is:  "missing, frame, added_lvars" *)
