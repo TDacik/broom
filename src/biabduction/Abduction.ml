@@ -896,9 +896,9 @@ let rec apply_match solver i pred_type form1 form2 pvars =
   | (i1,i2) ->
     match pred_type with
     | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
-    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) in
+    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) 1 in
       ApplyOK (form1, new_form2, new_lvars)
-    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) in
+    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) 1 in
       ApplyOK (new_form1, form2, new_lvars)
     | 3 ->
       let _,y1,ls1 = to_slseg_unsafe  (List.nth form1.sigma i1) in

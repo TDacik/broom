@@ -91,6 +91,7 @@ and lambda = {
 and heap_pred =
   | Hpointsto of Exp.t * Exp.t * Exp.t (** source, size_of_field, destination *)
   | Slseg of Exp.t * Exp.t * lambda    (** source, destination, lambda *)
+  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
 
 and sigma = heap_pred list
 
@@ -191,4 +192,4 @@ val rename_ex_variables : t -> Exp.variable list -> Exp.variable list -> t * Exp
 
 (** {3 Unfold predicate} *)
 
-val unfold_predicate : t -> int -> Exp.variable list -> t * Exp.variable list
+val unfold_predicate : t -> int -> Exp.variable list -> int -> t * Exp.variable list

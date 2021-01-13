@@ -383,7 +383,7 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_triples fla
         1: slseg(x,y) * pointsto(y,z)
 *)
 let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
-	let unfolded_form,_=unfold_predicate form i_slseg gvars in
+	let unfolded_form,_=unfold_predicate form i_slseg gvars 1 in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded slseg *)
 	let new_i1=if i_pto<i_slseg then i_pto else (i_pto-1) in
 	(* serch for the index i2 in the unfolded_form,

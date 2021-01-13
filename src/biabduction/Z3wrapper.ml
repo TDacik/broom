@@ -328,6 +328,17 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         Boolean.mk_or ctx
         	[ Boolean.mk_not ctx (base_eq al alloc_aa);
         	Boolean.mk_eq ctx alloc_aa alloc_bb ], exundef
+      | Dlseg (aa1,_,aa2,bb,_) -> (* (base(al) != base(aa1) and base(al) != base(aa2)) or Dlseq is empty aa1=bb *)
+        let alloc_aa1,ex1 = alloc aa1 in
+        let alloc_aa2,ex2 = alloc aa2 in
+	let alloc_bb,ex3 = alloc bb in
+	let exundef=ex1@ex2@ex3 in
+        Boolean.mk_or ctx
+        	[ Boolean.mk_and ctx [
+			Boolean.mk_not ctx (base_eq al alloc_aa1);
+			Boolean.mk_not ctx (base_eq al alloc_aa2);
+			];
+        	Boolean.mk_eq ctx alloc_aa1 alloc_bb ], exundef
     in
     let rec create_noneq to_parse =
       match to_parse with
@@ -367,7 +378,18 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         	[ Boolean.mk_not ctx (base_eq al alloc_aa );
         	Boolean.mk_eq ctx al dst;
         	Boolean.mk_eq ctx alloc_aa alloc_bb ], (exu1@exu2)
-
+      | Dlseg (aa1,_,aa2,bb,_) -> (* (base(al) != base(aa1) and base(al) != base(aa2)) or one of the list predicates is empty al=dst \/ aa1=bb *)
+        let alloc_aa1,ex1 = alloc aa1 in
+        let alloc_aa2,ex2 = alloc aa2 in
+	let alloc_bb,ex3 = alloc bb in
+	let exundef=ex1@ex2@ex3 in
+        Boolean.mk_or ctx
+        	[ Boolean.mk_and ctx [
+			Boolean.mk_not ctx (base_eq al alloc_aa1);
+			Boolean.mk_not ctx (base_eq al alloc_aa2);
+			];
+		Boolean.mk_eq ctx al dst;
+        	Boolean.mk_eq ctx alloc_aa1 alloc_bb ], exundef
     in
     let rec sp_constraints to_parse =
       match to_parse with
@@ -379,6 +401,79 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     in
     let sp_constr,exundef3 = (sp_constraints rest_preds) in
     ([c1;c2;c3] @ sp_constr), (exundef1@exundef2@exundef3)
+  | Dlseg (first,ptr_back,last,ptr_from_last,_) ->
+      let x1,exundef1=alloc first in
+      let x2,exundef2=alloc last in
+      let y,exundef3=alloc ptr_from_last in
+      let y2,exundef4=alloc ptr_back in
+      (* (alloc base(x1) /\ alloc base(x2)) or (x1=y /\ x2=y2)
+         base(x1)=base(base(x1)) /\ base(x1)=base(base(x1))
+         x1>=0 /\ x2>=0 --- x can be 0 in the case of x1=y=null *)
+      let c1 = Boolean.mk_or ctx
+        [ Boolean.mk_and ctx [
+		Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x1]];
+		Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x2]];
+		];
+        Boolean.mk_and ctx [(Boolean.mk_eq ctx x1 y); (Boolean.mk_eq ctx x2 y2)] ]  in
+      let c2= Boolean.mk_and ctx [
+      		Boolean.mk_eq ctx
+		          (Expr.mk_app ctx func.base [x1])
+		          (Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x1])]);
+      		Boolean.mk_eq ctx
+		          (Expr.mk_app ctx func.base [x2])
+		          (Expr.mk_app ctx func.base [(Expr.mk_app ctx func.base [x2])]);
+		]
+      in
+      let c3 =  Boolean.mk_and ctx [
+		      BitVector.mk_sge ctx x1 (BitVector.mk_numeral ctx "0" bw_width);
+		      BitVector.mk_sge ctx x2 (BitVector.mk_numeral ctx "0" bw_width);
+		] in
+    let two_sp_preds_c first last nextlast sp_rule =
+      match sp_rule with
+      | Hpointsto (aa, _, _) -> (* (base(first) != base(aa) /\ (base(last) != base(aa))or Dlseq is empty first=nextlast *)
+	let alloc_aa,exu1=alloc aa in
+        Boolean.mk_or ctx
+        	[ Boolean.mk_and ctx [
+			Boolean.mk_not ctx (base_eq first alloc_aa );
+			Boolean.mk_not ctx (base_eq last alloc_aa );
+			];
+        	Boolean.mk_eq ctx first nextlast ],exu1
+      | Slseg (aa,bb,_) ->(* (base(first) != base(aa) /\ base(last)!=base(aa))or one of the list segments is empty first=nextlast \/ aa=bb *)
+	let alloc_aa,exu1=alloc aa in
+	let alloc_bb,exu2=alloc bb in
+        Boolean.mk_or ctx
+        	 [  Boolean.mk_and ctx [
+			Boolean.mk_not ctx (base_eq first alloc_aa );
+			Boolean.mk_not ctx (base_eq last alloc_aa );
+			];
+        	Boolean.mk_eq ctx first nextlast;
+        	Boolean.mk_eq ctx alloc_aa alloc_bb ], (exu1@exu2)
+      | Dlseg (aa1,_,aa2,bb,_) -> (* (base(first|last) != base(aa1) and base(first|last) != base(aa2)) 
+      					or one of the list predicates is empty al=dst \/ aa1=bb *)
+        let alloc_aa1,ex1 = alloc aa1 in
+        let alloc_aa2,ex2 = alloc aa2 in
+	let alloc_bb,ex3 = alloc bb in
+	let exundef=ex1@ex2@ex3 in
+        Boolean.mk_or ctx
+        	[ Boolean.mk_and ctx [
+			Boolean.mk_not ctx (base_eq first alloc_aa1);
+			Boolean.mk_not ctx (base_eq first alloc_aa2);
+			Boolean.mk_not ctx (base_eq last alloc_aa1);
+			Boolean.mk_not ctx (base_eq last alloc_aa2);
+			];
+		Boolean.mk_eq ctx first nextlast;
+        	Boolean.mk_eq ctx alloc_aa1 alloc_bb ], exundef
+    in
+    let rec sp_constraints to_parse =
+      match to_parse with
+        | first:: rest -> 
+		let exp,exundef=(two_sp_preds_c x1 x2 y first) in
+		let rest_exp,rest_exundef = sp_constraints rest in
+		exp::rest_exp, exundef@rest_exundef
+        | [] -> [],[]
+    in
+    let sp_constr,exundef5 = (sp_constraints rest_preds) in
+      ([c1;c2;c3]@sp_constr), (exundef1@exundef2@exundef3@exundef4@exundef5)
 
 (* Creation of the Z3 formulae for a SL formulae *)
 
