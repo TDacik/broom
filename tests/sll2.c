@@ -20,8 +20,9 @@ void sll_insert(struct sll_item **plist, int data)
     (*plist) = p;
 }
 
-// in-pace list reversal
-struct sll_item *sll_reverse(struct sll_item *list) { 
+// in-place list reversal
+struct sll_item *sll_reverse(struct sll_item *list)
+{
     struct sll_item *prev = NULL;
     struct sll_item *next;
 
@@ -34,7 +35,8 @@ struct sll_item *sll_reverse(struct sll_item *list) {
     return prev;
 }
 
-void sll_print(struct sll_item *list) {
+void sll_print(struct sll_item *list)
+{
     while (list != NULL) {
         printf("%d ",list->data);
         list = list->next;
