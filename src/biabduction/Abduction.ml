@@ -24,12 +24,15 @@ type res =
   | Fail
 
 let to_slseg_unsafe hpred = match hpred with
-  | Hpointsto (_, _, _) -> raise (IllegalArgumentException "Received points-to assertion instead of list")
+  | Hpointsto _ | Dlseg _ -> raise (IllegalArgumentException "Received points-to assertion instead of list")
   | Slseg (a,b,l) -> (a,b,l)
 
 let to_hpointsto_unsafe hpred = match hpred with
-  | Slseg (_, _, _) -> raise (IllegalArgumentException "Received list instead of points-to assertion")
+  | Slseg _ | Dlseg _ -> raise (IllegalArgumentException "Received list instead of points-to assertion")
   | Hpointsto (a,l,b) -> (a,l,b)
+let to_dlseg_unsafe hpred = match hpred with
+  | Hpointsto _ | Slseg _ -> raise (IllegalArgumentException "Received points-to assertion instead of list")
+  | Dlseg (a,b,c,d,l) -> (a,b,c,d,l)
 
 (**** LEARN - pointsto ****)
 
@@ -886,7 +889,7 @@ type apply_match_res =
 (* NOTE that apply_match, try_match, entailment_ll, entailment and check_lambda_entailment are in mutual recursion *)
 (* To break the mutual recursion, you can replace entailment call in apply_match by equality of lambdas *)
 
-let rec apply_match solver i pred_type form1 form2 pvars =
+let rec apply_match solver i pred_type form1 form2 pvars dir =
   let nequiv a b = not (a=b) in
   let remove k form =
     { pi=form.pi;
@@ -896,9 +899,9 @@ let rec apply_match solver i pred_type form1 form2 pvars =
   | (i1,i2) ->
     match pred_type with
     | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
-    | 1 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) 1 in
+    | 1 | 10 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) dir in
       ApplyOK (form1, new_form2, new_lvars)
-    | 2 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) 1 in
+    | 2 | 20 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) dir in
       ApplyOK (new_form1, form2, new_lvars)
     | 3 ->
       let _,y1,ls1 = to_slseg_unsafe  (List.nth form1.sigma i1) in
@@ -911,6 +914,21 @@ let rec apply_match solver i pred_type form1 form2 pvars =
         ApplyOK (lhs, rhs, [])
 	
       else  ApplyFail
+    | 30 ->
+      let a1,b1,c1,d1,ls1 = to_dlseg_unsafe  (List.nth form1.sigma i1) in
+      let a2,b2,c2,d2,ls2 = to_dlseg_unsafe (List.nth form2.sigma i2) in
+      (*if (ls1=ls2) then *) (* Use this line to break the mutual recursion. *)
+      let lhs=(remove i1 form1) in
+      let rhs_tmp=(remove i2 form2) in
+      (match (check_lambda_entailment solver ls1 ls2),dir with
+      | 1,1 ->
+      		let rhs={sigma=(Dlseg (d1,c1,c2,d2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
+        	ApplyOK (lhs, rhs, [])
+      | 1,2 ->
+      		let rhs={sigma=(Dlseg (a2,b2,b1,a1,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
+        	ApplyOK (lhs, rhs, [])
+      | _ -> ApplyFail
+      )
     | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
 
 
@@ -923,39 +941,47 @@ let rec apply_match solver i pred_type form1 form2 pvars =
 *)
 and try_match solver form1 form2 level pvars  =
   let m=find_match solver form1 form2 level in
+  let dir=1 in
   match m with
   | (-1,-1) -> Fail
   | (i1,i2) ->
-    let x1,y1,type1,size1=match (List.nth form1.sigma i1) with
-      | Hpointsto (a,size,b) -> (a,b,0,size)
-      | Slseg (a,b,_) -> (a,b,2,Exp.Void) in
-    let x2,y2,type2,size2=match (List.nth form2.sigma i2) with
-      | Hpointsto (a,size,b) -> (a,b,0,size)
-      | Slseg (a,b,_) -> (a,b,1,Exp.Void) in
-    match apply_match solver (i1,i2) (type1+type2) form1 form2 pvars with
+    let x1,y1,backx1,backy1,type1,size1=match (List.nth form1.sigma i1) with
+      | Hpointsto (a,size,b) -> (a,b,Exp.Void,Exp.Void,0,size)
+      | Slseg (a,b,_) -> (a,b,Exp.Void,Exp.Void,2,Exp.Void) 
+      | Dlseg (a,b,c,d,_) -> (a,d,c,b,20,Exp.Void) in
+    let x2,y2,backx2,backy2,type2,size2=match (List.nth form2.sigma i2) with
+      | Hpointsto (a,size,b) -> (a,b,Exp.Void,Exp.Void,0,size)
+      | Slseg (a,b,_) -> (a,b,Exp.Void,Exp.Void,1,Exp.Void) 
+      | Dlseg (a,b,c,d,_) -> (a,d,c,b,10,Exp.Void) in
+    match apply_match solver (i1,i2) (type1+type2) form1 form2 pvars dir with
     | ApplyFail -> Fail
     | ApplyOK (f1,f2,added_lvars) ->
       (* x1 = x2 if equal predicate types match. Othervice base(x1) = base(x2) is added. *)
-      let x_eq=if ((type1+type2)=0 || (type1+type2=3))
-        then [(Exp.BinOp ( Peq, x1,x2))]
-        else [(Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,x2)))]
+      let x_eq,dll_eq=match (type1+type2),dir with
+      | 0,_ | 3,_ -> [Exp.BinOp ( Peq, x1,x2)],[]
+      | 30,1 -> [Exp.BinOp ( Peq, x1,x2)],[Exp.BinOp ( Peq, backy1,backy2)]
+      | _,1 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,x2))],[]
+      | 10,2 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,backx2))],[]
+      | 20,2 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,backx1), Exp.UnOp(Base,x2))],[]
+      | 30,2 -> [Exp.BinOp ( Peq, backx1,backx2)],[Exp.BinOp ( Peq, y1,y2)]
+      | _ -> raise (TempExceptionBeforeApiCleanup "try_match: this should not happen")
       in
       (* y1 = y2 is added only if Hpointsto is mathced with Hpointsto *)
       let y_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, y1,y2))] else [] in
       (* size1 = size2 is added if Hpointsto is mathced with Hpointsto *)
       let size_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, size1,size2))] else [] in
       match level with
-      | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ f1.pi},
+      | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ dll_eq @ f1.pi},
           f2,
-          {sigma=[]; pi=[]},
+          {sigma=[]; pi=dll_eq},
           added_lvars)
-      | 0 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
+      | 0 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ f1.pi},
           f2,
-          {sigma=[]; pi=x_eq},
+          {sigma=[]; pi=x_eq @ dll_eq},
           added_lvars)
-      | _ ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ size_eq @ f1.pi},
+      | _ ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ size_eq @ f1.pi},
           f2,
-          {sigma=[]; pi=x_eq @ size_eq},
+          {sigma=[]; pi=x_eq @ dll_eq @ size_eq},
           added_lvars)
 
 

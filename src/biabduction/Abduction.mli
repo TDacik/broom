@@ -43,3 +43,10 @@ val entailment : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
     -> bool
 
 val check_lambda_entailment : Z3wrapper.solver -> Formula.lambda -> Formula.lambda -> int
+
+(* temporary added *)
+type apply_match_res =
+| ApplyOK of Formula.t * Formula.t * variable list
+| ApplyFail
+
+val apply_match:  Z3wrapper.solver -> int * int -> int -> Formula.t -> Formula.t -> variable list -> int -> apply_match_res

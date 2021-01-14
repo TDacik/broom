@@ -15,6 +15,7 @@ let () =
 
 open Biabd.Formula
 open Biabd.Z3wrapper
+open Biabd.Abduction
 
 let() =
 	let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
@@ -48,9 +49,13 @@ let() =
 	(*print_with_lambda form2;
 	let q=formula_to_solver solv.ctx form2 in
 	if (Z3.Solver.check solv.solv q)==SATISFIABLE then print_string "OK" else print_string "FAIL"*)
-	let form_unf,_=unfold_predicate form1 0 [] 2 in
+	(*let form_unf,_=unfold_predicate form1 0 [] 2 in
 	let form_unf2,_=unfold_predicate form_unf 2 [] 2 in
-	print_with_lambda form_unf2
+	print_with_lambda form_unf2*)
+	match (apply_match solv (0,0) 30 form1 form2 [] 2) with
+    	| ApplyOK (f1,f2,added_lvars) ->
+		print f1;
+		print f2;
 
 
 
