@@ -46,7 +46,7 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
   let (a, _, _) = to_hpointsto_unsafe (List.nth form2.sigma i2) in (* SIZE missing *) (* RHS can be Hpointsto only *)
   let rhs = expr_to_solver_only_exp ctx z3_names a in (* Existential quantification of undef is probably not needed. *)
   match (List.nth form1.sigma z) with
-    | Slseg (_,_,_) -> (find_z ctx solv z3_names form1 (z+1) form2 i2)
+    | Slseg _ | Dlseg _ -> (find_z ctx solv z3_names form1 (z+1) form2 i2)
     | Hpointsto (a,_, _) ->
     let lhs= (expr_to_solver_only_exp ctx z3_names a) in (* Existential quantification is probably not needed. *)(* SIZE missing *)
     let query1= [ Boolean.mk_not ctx (
@@ -64,7 +64,7 @@ let rec find_z ctx solv z3_names form1 z form2 i2 =
 *)
 let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 level =
   match (List.nth form2.sigma i2) with
-  | Slseg _ -> -1 (* Slseg is skipped, only Hpointsto is allowed in this function *)
+  | Slseg _ | Dlseg _ -> -1 (* Slseg/Dlseg is skipped, only Hpointsto is allowed in this function *)
   | Hpointsto (a,_,_) ->
     let rhs = (expr_to_solver_only_exp ctx z3_names a) in (* It is safe to leave undef without ex. quantification *)
     (* create list of equalities between form2.sigma[i2] and all items in form1.sigma *)
@@ -224,12 +224,12 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
   let lhs,lhs_size,lhs_noZ3,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
     | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
-    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
+    | Slseg _ | Dlseg _ -> ff,ff,ff_noZ3,ff_noZ3
   in
   let rhs,rhs_size,rhs_noZ3,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
     | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
-    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
+    | Slseg _ | Dlseg _ -> ff,ff,ff_noZ3,ff_noZ3
   in
   if ((lhs=ff)||(rhs=ff))
   then false
@@ -292,12 +292,12 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
   let lhs,lhs_size,lhs_noZ3,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
     | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
-    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
+    | Slseg _ | Dlseg _ -> ff,ff,ff_noZ3,ff_noZ3
   in
   let rhs,rhs_size,rhs_noZ3,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
     | Hpointsto (a,s ,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names s),a,s
-    | Slseg (_) -> ff,ff,ff_noZ3,ff_noZ3
+    | Slseg _ | Dlseg _ -> ff,ff,ff_noZ3,ff_noZ3
   in
   if ((lhs=ff)||(rhs=ff))
   then false
@@ -744,36 +744,46 @@ let try_match_onstack solver form1 form2 level _  =
 (* The level parameter gives the level of match, the only difference is in check_match function *)
 
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
-let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
+(* dir - direction of Dlseg vs. (Hpointsto/Slseg) match: 1 from the beginning 2 from the end. 
+   When applied to something else then Dlseg on one side, false is returned. *)
+
+let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level dir =
   let ff = Boolean.mk_false ctx in
   let ff_noZ3 = Exp.Const (Bool false)in
   let lhs_ll,lhs_noZ3,flag_l =
-    match (List.nth form1.sigma i1) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),a,0
-    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),a,1
+    match (List.nth form1.sigma i1),dir with
+    | Hpointsto (a,_ ,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,0
+    | Slseg (a,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,1
+    | Dlseg (a,_,_,_,_),1 -> (expr_to_solver_only_exp ctx z3_names a),a,5
+    | Dlseg (_,_,a,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,5
   in
   let lhs_size,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
     | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s),s
-    | Slseg _ -> ff,ff_noZ3 (* we do not speak about sizes before the slseg is unfolded *)
+    | Slseg _ | Dlseg _ -> ff,ff_noZ3 (* we do not speak about sizes before the slseg is unfolded *)
   in
   let rhs_ll,rhs_noZ3,flag_r =
-    match (List.nth form2.sigma i2) with
-    | Hpointsto (a,_ ,_) -> (expr_to_solver_only_exp ctx z3_names a),a,0
-    | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),a,1
+    match (List.nth form2.sigma i2),dir with
+    | Hpointsto (a,_ ,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,0
+    | Slseg (a,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,1
+    | Dlseg (a,_,_,_,_),1 -> (expr_to_solver_only_exp ctx z3_names a),a,5
+    | Dlseg (_,_,a,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,5
   in
   let rhs_size,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
     | Hpointsto (_, s ,_) -> (expr_to_solver_only_exp ctx z3_names s),s
-    | Slseg _ -> ff,ff_noZ3 (* we do not speak about sizes before the slseg is unfolded *)
+    | Slseg _ | Dlseg _ -> ff,ff_noZ3 (* we do not speak about sizes before the slseg is unfolded *)
   in
+  (* if dir !=1 then Dlseg must be exactly on one side --- i.e. (flag_l+flag_r=5). *)
+  if ((dir>1)&&((flag_l+flag_r)!=5)) then false
+  else
   (* Note that if one site contains list segment and the other one points-to then we compare bases
      within the SMT queries *)
-  let lhs=if (flag_l+flag_r)=1
+  let lhs=if ((flag_l+flag_r)=1 || (flag_l+flag_r)=5)
     then (Expr.mk_app ctx z3_names.base [lhs_ll])
     else lhs_ll
   in
-  let rhs=if (flag_l+flag_r)=1
+  let rhs=if ((flag_l+flag_r)=1 || (flag_l+flag_r)=5)
     then (Expr.mk_app ctx z3_names.base [rhs_ll])
     else rhs_ll
   in
@@ -850,17 +860,20 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
 let rec find_match_ll solver form1 i1 form2 level  =
   let rec try_with_rhs i2 =
     if (List.length form2.sigma) <= i2
-    then -1
-    else (if (check_match solver form1 i1 form2 i2 level)
-      then i2
-      else (try_with_rhs (i2+1)))
+    then -1,-1
+    else (if (check_match solver form1 i1 form2 i2 level 1)
+      then i2,1
+      else (if (check_match solver form1 i1 form2 i2 level 2)
+      	then i2,2 
+	else (try_with_rhs (i2+1)))
+    )
   in
   if (List.length form1.sigma) <= i1
-  then (-1,-1)
+  then (-1,-1,-1)
   else
     match (try_with_rhs 0) with
-    | -1 -> (find_match_ll solver form1 (i1+1) form2 level)
-    | x -> (i1,x)
+    | -1,_ -> (find_match_ll solver form1 (i1+1) form2 level)
+    | x,dir -> (i1,x,dir)
 
 let find_match solver form1 form2 level =
   let ctx=solver.ctx in
@@ -941,10 +954,9 @@ let rec apply_match solver i pred_type form1 form2 pvars dir =
 *)
 and try_match solver form1 form2 level pvars  =
   let m=find_match solver form1 form2 level in
-  let dir=1 in
   match m with
-  | (-1,-1) -> Fail
-  | (i1,i2) ->
+  | (-1,-1,_) -> Fail
+  | (i1,i2,dir) ->
     let x1,y1,backx1,backy1,type1,size1=match (List.nth form1.sigma i1) with
       | Hpointsto (a,size,b) -> (a,b,Exp.Void,Exp.Void,0,size)
       | Slseg (a,b,_) -> (a,b,Exp.Void,Exp.Void,2,Exp.Void) 
@@ -958,12 +970,12 @@ and try_match solver form1 form2 level pvars  =
     | ApplyOK (f1,f2,added_lvars) ->
       (* x1 = x2 if equal predicate types match. Othervice base(x1) = base(x2) is added. *)
       let x_eq,dll_eq=match (type1+type2),dir with
-      | 0,_ | 3,_ -> [Exp.BinOp ( Peq, x1,x2)],[]
+      | 0,1 | 3,1 -> [Exp.BinOp ( Peq, x1,x2)],[]
       | 30,1 -> [Exp.BinOp ( Peq, x1,x2)],[Exp.BinOp ( Peq, backy1,backy2)]
       | _,1 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,x2))],[]
       | 10,2 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,backx2))],[]
       | 20,2 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,backx1), Exp.UnOp(Base,x2))],[]
-      | 30,2 -> [Exp.BinOp ( Peq, backx1,backx2)],[Exp.BinOp ( Peq, y1,y2)]
+      (*| 30,2 -> [Exp.BinOp ( Peq, backx1,backx2)],[Exp.BinOp ( Peq, y1,y2)]*) (* not needed, two Dlsegs are match in the equal direction *)
       | _ -> raise (TempExceptionBeforeApiCleanup "try_match: this should not happen")
       in
       (* y1 = y2 is added only if Hpointsto is mathced with Hpointsto *)
