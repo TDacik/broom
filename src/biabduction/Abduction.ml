@@ -75,13 +75,22 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
         (match first with
         | Hpointsto (a,_, _) -> 
       		let lhs=(expr_to_solver_only_exp ctx z3_names a) in
-		(Boolean.mk_eq ctx rhs lhs)
+		[Boolean.mk_eq ctx rhs lhs]
         | Slseg (a,_,_) -> 
       		let lhs=(expr_to_solver_only_exp ctx z3_names a) in
-		(Boolean.mk_eq ctx
+		[Boolean.mk_eq ctx
               	(Expr.mk_app ctx z3_names.base [rhs])
-              	(Expr.mk_app ctx z3_names.base [lhs]))
-        ) :: list_eq rest
+              	(Expr.mk_app ctx z3_names.base [lhs])]
+        | Dlseg (a,_,b,_,_) -> 
+      		let lhs1=(expr_to_solver_only_exp ctx z3_names a) in
+      		let lhs2=(expr_to_solver_only_exp ctx z3_names b) in
+		[Boolean.mk_eq ctx
+              	(Expr.mk_app ctx z3_names.base [rhs])
+              	(Expr.mk_app ctx z3_names.base [lhs1]);
+		Boolean.mk_eq ctx
+              	(Expr.mk_app ctx z3_names.base [rhs])
+              	(Expr.mk_app ctx z3_names.base [lhs2])]
+        ) @ list_eq rest
     in
     (* in the level 3, form2 is added within th try_learn_poinsto function into the solver. Therefore we do not need to add it here *)
     let query = match (list_eq form1.sigma),level with
@@ -148,10 +157,14 @@ let try_learn_pointsto solver form1 form2 level _ =
 *)
 
 let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 level =
-  match (List.nth form2.sigma i2) with
-  | Hpointsto (_,_,_) ->  false (* This funmction cover slseg learn only *)
-  | Slseg (a,_,_) ->
-    let rhs = (expr_to_solver_only_exp ctx z3_names a) in (* no negation -> no need to add existential quantification of undef *)
+  let ff = Boolean.mk_false ctx in
+  let rhs,rhs2=match (List.nth form2.sigma i2) with
+	  | Hpointsto (_,_,_) ->  ff,ff
+	  | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
+	  | Dlseg (a,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
+  in
+  if (rhs==ff) then false
+  else
     (* create diffbase(rhs) and diffls(rhs) *)
     let rec list_eq sigma =
       match sigma with
@@ -160,13 +173,27 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
         (match first with
         | Hpointsto (a,_, _) -> 
         	let lhs=expr_to_solver_only_exp ctx z3_names a in
-		(Boolean.mk_eq ctx
+		let eq1=Boolean.mk_eq ctx
         	      (Expr.mk_app ctx z3_names.base [rhs])
-	              (Expr.mk_app ctx z3_names.base [lhs]))
+	              (Expr.mk_app ctx z3_names.base [lhs]) 
+		in
+		let eq2=Boolean.mk_eq ctx
+        	      (Expr.mk_app ctx z3_names.base [rhs2])
+	              (Expr.mk_app ctx z3_names.base [lhs]) 
+		in
+		if (rhs2==ff) then [eq1] else [eq1;eq2]
         | Slseg (a,_,_) -> 
         	let lhs=expr_to_solver_only_exp ctx z3_names a in
-		(Boolean.mk_eq ctx rhs (lhs))
-        ) :: list_eq rest
+		let eq1=Boolean.mk_eq ctx rhs (lhs) in
+		let eq2=Boolean.mk_eq ctx rhs2 (lhs) in
+		if (rhs2==ff) then [eq1] else [eq1;eq2]
+	| Dlseg (a,_,b,_,_) ->
+        	let lhs1=expr_to_solver_only_exp ctx z3_names a in
+        	let lhs2=expr_to_solver_only_exp ctx z3_names b in
+		let eq1=[Boolean.mk_eq ctx rhs (lhs1); Boolean.mk_eq ctx rhs (lhs2)] in
+		let eq2=[Boolean.mk_eq ctx rhs2 (lhs1); Boolean.mk_eq ctx rhs2 (lhs2)] in
+		if (rhs2==ff) then eq1 else (eq1@eq2)
+        ) @ list_eq rest
     in
     match level with
     | 1 -> (match  (list_eq form1.sigma) with
@@ -590,17 +617,26 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
   (
 
   print_endline (lvariables_to_string evars);
-  (* First all Slseg(x,y,_) are replaced by x=y --- i.e. empty list *)
-  let rec remove_slseg_form2 f2 =
+  (* First all Slseg(a,b,_) are replaced by a=b 
+     and Dlseg(a,b,c,d,_) are prelaced by a=d and b=c --- i.e. empty lists *)
+  let rec remove_lseg_form2 f2 =
     match f2.sigma with
     | [] -> RemOk f2.pi
     | Hpointsto _ :: _ -> RemFail
     | Slseg (a,b,_) :: rest ->
-      match (remove_slseg_form2 {pi=f2.pi; sigma=rest}) with
+      (match (remove_lseg_form2 {pi=f2.pi; sigma=rest}) with
       | RemFail -> RemFail
       | RemOk f2_new -> RemOk (Exp.BinOp ( Peq, a, b):: f2_new)
+      )
+    | Dlseg (a,b,c,d,_) :: rest ->
+      (match (remove_lseg_form2 {pi=f2.pi; sigma=rest}) with
+      | RemFail -> RemFail
+      | RemOk f2_new -> RemOk ([Exp.BinOp ( Peq, a, d); Exp.BinOp ( Peq, b, c)] @ f2_new)
+      )
+
+
   in
-  match (remove_slseg_form2 form2) with
+  match (remove_lseg_form2 form2) with
   | RemFail -> 0
   | RemOk x ->
     (* form1 and form2(= x) contains now only pure parts. We want to check implication:
