@@ -209,7 +209,7 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
         | a ->   [ (Boolean.mk_not ctx (Boolean.mk_or ctx a))]
       in
       (Solver.check solv query)=SATISFIABLE
-    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+    | _ -> raise (TempExceptionBeforeApiCleanup "check_learn_slseg")
 
 (* try to apply learn rule for slseg *)
 let try_learn_slseg solver form1 form2 level _=
@@ -311,7 +311,7 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
     ] in
     (Solver.check solv query)=SATISFIABLE 
       (*&& ((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
-  | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+  | _ -> raise (TempExceptionBeforeApiCleanup "check_split_left")
 
 let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level =
   let ff = Boolean.mk_false ctx in
@@ -379,7 +379,7 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
     ] in
     (Solver.check solv query)=SATISFIABLE 
     (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef)) *) (* here we may thing about better Undef recognition *)
-  | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+  | _ -> raise (TempExceptionBeforeApiCleanup "check_split_right")
 
 
 let rec find_split_ll solver form1 i1 form2 level=
@@ -600,7 +600,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
         {sigma=sigma2_new@ (remove i2 form2).sigma; pi=form2.pi},
         {sigma=[]; pi=new_pi},
         new_lvars)
-    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+    | _ -> raise (TempExceptionBeforeApiCleanup "try_split")
 
 (******************************************************************************)
 (* Auxiliary functions and types for entailment 
@@ -751,12 +751,12 @@ let try_match_onstack solver form1 form2 level _  =
 	let x1,y1 =
 	    match (List.nth form1.pi i1) with
 	    | Exp.BinOp (_,a,b) -> a,b
-	    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+	    | _ -> raise (TempExceptionBeforeApiCleanup "try_match_onstack:1")
 	in
 	let x2,y2 =
 	    match (List.nth form2.pi i2) with
 	    | Exp.BinOp (_,a,b) -> a,b
-	    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+	    | _ -> raise (TempExceptionBeforeApiCleanup "try_match_onstack:2")
 	in
 
 	let x_eq=[(Exp.BinOp ( Peq, x1,x2))] in
@@ -770,7 +770,7 @@ let try_match_onstack solver form1 form2 level _  =
           f2,
           {sigma=[]; pi=x_eq @ y_eq },
           [])
-      	| _ ->  raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+      	| _ ->  raise (TempExceptionBeforeApiCleanup "try_match_onstack:3")
 
 
   
@@ -978,7 +978,8 @@ let rec apply_match solver i pred_type form1 form2 pvars dir =
         	ApplyOK (lhs, rhs, [])
       | _ -> ApplyFail
       )
-    | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+    (*| _ -> raise (TempExceptionBeforeApiCleanup "apply_match")*)
+    | _ -> ApplyFail
 
 
 (* Try to apply match rule. The result is:
@@ -1012,7 +1013,7 @@ and try_match solver form1 form2 level pvars  =
       | 10,2 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,x1), Exp.UnOp(Base,backx2))],[]
       | 20,2 -> [Exp.BinOp ( Peq, Exp.UnOp(Base,backx1), Exp.UnOp(Base,x2))],[]
       (*| 30,2 -> [Exp.BinOp ( Peq, backx1,backx2)],[Exp.BinOp ( Peq, y1,y2)]*) (* not needed, two Dlsegs are match in the equal direction *)
-      | _ -> raise (TempExceptionBeforeApiCleanup "try_match: this should not happen")
+      | _ -> raise (TempExceptionBeforeApiCleanup "try_match: 1")
       in
       (* y1 = y2 is added only if Hpointsto is mathced with Hpointsto *)
       let y_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, y1,y2))] else [] in
@@ -1060,7 +1061,7 @@ and check_lambda_entailment solver lambda1 lambda2 =
 		match oldparams,newparams with
 		| [],[] -> form
 		| p1::rest1,p2::rest2 -> rename_params (substitute_vars p2 p1 form) rest1 rest2
-		| _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?") (*{sigma=[];pi=[]}*)
+		| _ -> raise (TempExceptionBeforeApiCleanup "check_lambda_entailment") (*{sigma=[];pi=[]}*)
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
 	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
@@ -1089,7 +1090,7 @@ and entailment_ll solver form1 form2 evars=
   		print_string "Match2, "; flush stdout;
   		(entailment_ll solver f1 f2 evars)
      | Fail,Fail -> false)
-  | _ -> raise (TempExceptionBeforeApiCleanup "Should not be int result?")
+  | _ -> raise (TempExceptionBeforeApiCleanup "entailment_ll")
 
 and entailment solver form1 form2 evars=
   (* get fresh names for the evars to avoid conflicts in the entailment query *)

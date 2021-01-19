@@ -140,6 +140,16 @@ let () =
 		 pi = [BinOp ( Pneq, Var 10,Var 12 );BinOp ( Pneq, Var 12,Var 13);]
 	    }
 	 in
+	 let form3 =
+	    let lambda= {param=[1;2;3] ;form={
+	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ]; pi=[] }}
+	    in
+	    {
+   		 sigma = [ Dlseg (Var 10, Const (Ptr 0), Var 11,Var 12,  lambda); Dlseg (Var 12, Var 11, Var 14, Var 13,  lambda);
+		  ];
+		 pi = [BinOp ( Pneq, Var 10,Var 12 )]
+	    }
+	 in
 	print_with_lambda form1;
 	(*print_with_lambda form2;
 	let q=formula_to_solver solv.ctx form2 in
@@ -147,8 +157,5 @@ let () =
 	(*let form_unf,_=unfold_predicate form1 0 [] 2 in
 	let form_unf2,_=unfold_predicate form_unf 2 [] 2 in
 	print_with_lambda form_unf2*)
-	match (apply_match solv (0,0) 30 form1 form2 [] 2) with
-    	| ApplyOK (f1,f2,added_lvars) ->
-		print f1;
-		print f2;
+	if (entailment solv form3 form3 [11;12;14;13]) then print_string "entOK" else print_string "EntFail"
 
