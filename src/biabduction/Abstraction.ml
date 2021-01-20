@@ -52,10 +52,12 @@ let check_eq_dist_from_base ctx solv z3_names form i1 i2 =
 	let ff = Boolean.mk_false ctx in
 	let a1,l1 = match (List.nth form.sigma i1) with
 		| Slseg _ -> ff,ff
+		| Dlseg _ -> ff,ff
 		| Hpointsto (a,l,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l)
 	in
 	let a2,l2 = match (List.nth form.sigma i2) with
 		| Slseg _ -> ff,ff
+		| Dlseg _ -> ff,ff
 		| Hpointsto (a,l,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l)
 	in
 	if ((a1=ff) || (a2=ff)) then false
@@ -231,6 +233,66 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			else CheckFail
 		
 		| _ -> CheckFail
+		)
+	| Dlseg(a1,b1,c1,d1,l1), Dlseg(a2,b2,c2,d2,l2) -> ( 
+		let vars_b1 = find_vars_expr b1 in
+		let vars_b2 = find_vars_expr b2 in
+		let vars_d1 = find_vars_expr d1 in
+		let vars_d2 = find_vars_expr d2 in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] in
+		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
+		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
+		let pt_refs_d1 = List.concat(List.map eq_base vars_d1) in 
+		let pt_refs_d2 = List.concat(List.map eq_base vars_d2) in
+		let queryB=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
+			] in
+		let queryD=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names d1) (expr_to_solver_only_exp ctx z3_names d2)
+			] in
+		(* check entailment between l1 and l2 *)
+		let entailment_res=Abduction.check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
+		if entailment_res=0 then CheckFail
+		else
+		let new_lambda=if (entailment_res=1) then l2 else l1 in
+		(* check that a1 and a2 are not is equal base with a global variable *)
+		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) /\  base(g)!=base(c1) /\ base(g)!=base(c2)*)
+		let query3=if gvars=[] then []
+			else
+			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a1)) gvars);
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a2)) gvars);
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names c1)) gvars);
+				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names c2)) gvars);] 
+		in
+		if ((Solver.check solv query3)=UNSATISFIABLE) then CheckFail
+		else
+		(* check compatibility of b1 ~ b2 and d1 ~ d2 *) (* !!! To be finished !!! *)
+		let exp_false=Exp.Const (Bool false) in
+		let new_b =
+			match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
+			| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
+				if (Solver.check solv queryB)=SATISFIABLE then b1 else Undef
+			| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *)
+				if (check_block_bases ctx solv z3_names form x1 x2 
+				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2;
+				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2]@block_bases))
+				then b1 else exp_false
+			| _ -> exp_false	
+		in
+		let new_d =
+			match vars_d1, vars_d2, pt_refs_d1, pt_refs_d2 with
+			| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
+				if (Solver.check solv queryD)=SATISFIABLE then d1 else Undef
+			| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *)
+				if (check_block_bases ctx solv z3_names form x1 x2 
+				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2;
+				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2]@block_bases))
+				then d1 else exp_false
+			| _ -> exp_false	
+		in
+		if (new_b=exp_false) || (new_d=exp_false) then CheckFail
+		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda))]
 		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 

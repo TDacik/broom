@@ -150,12 +150,19 @@ let () =
 		 pi = [BinOp ( Pneq, Var 10,Var 12 )]
 	    }
 	 in
-	print_with_lambda form1;
+	 let form_empty={sigma=[];pi=[]} in
+	 let form4={sigma=[Hpointsto (Var 11, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 11, ptr_size), ptr_size, Var 3)];pi=[]} in
 	(*print_with_lambda form2;
 	let q=formula_to_solver solv.ctx form2 in
 	if (Z3.Solver.check solv.solv q)==SATISFIABLE then print_string "OK" else print_string "FAIL"*)
 	(*let form_unf,_=unfold_predicate form1 0 [] 2 in
 	let form_unf2,_=unfold_predicate form_unf 2 [] 2 in
 	print_with_lambda form_unf2*)
-	if (entailment solv form3 form3 [11;12;14;13]) then print_string "entOK" else print_string "EntFail"
+	(**if (entailment solv form3 form3 [11;12;14;13]) then print_string "entOK" else print_string "EntFail"*)
+
+	let x=biabduction solv form3 form1 [10] in
+	match x with
+	| Bok (x1,x2,_) ->
+		print_with_lambda x1; print_string "************\n";
+		print_with_lambda x2; 
 
