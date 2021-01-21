@@ -57,7 +57,7 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2end)))
 	] in
 	let query2end_res= if (include_a1=1 || a2end=ff) then true else ((Solver.check solv query2end)=UNSATISFIABLE) in
-	match query_res,query2_res,query2_res, query2end_res with 
+	match query_res,query2_res,queryend_res, query2end_res with 
 	| true, true, _,_ -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
 	| false, _, true, true -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
 	| _ -> (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
@@ -317,6 +317,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 	match pairs_of_pto with
 	| [] -> CheckOK []
 	| (i1,i2)::rest ->
+		print_string (">>> "^(string_of_int i1)^":"^(string_of_int i2)^"\n");
 		(* Slseg can not present here *)
 		let a1,s1,b1 = match (List.nth form.sigma i1) with
 			| Hpointsto (a,s,b) -> a,s,b

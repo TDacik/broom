@@ -168,6 +168,23 @@ let () =
 
 	    }
 	 in
+	 let form6=
+	    let lambda= {param=[1;2] ;form={
+	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Const (Ptr 0))  ]; 
+		pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));] }}
+	    in
+	    {
+   		 sigma = [ Hpointsto (Var 1, ptr_size, Var 10); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3); 
+		 	Slseg (Var 3, Const (Ptr 0),  lambda);
+			Hpointsto (Var 10, ptr_size, Var 20); Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11); 
+		 	Slseg (Var 11, Const (Ptr 0),  lambda);
+			];
+		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
+		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 16)));]
+
+	    }
+	 in
+
 
 	(*let x=biabduction solv form3 form1 [10] in
 	match x with
@@ -177,9 +194,9 @@ let () =
 	 print_with_lambda form5;
 	 let x=Z3.Solver.check solv.solv (formula_to_solver solv.ctx form5) in
 	 if (x=SATISFIABLE) then print_string "CheckOK" else print_string "CheckFail";
-	 (*let res=Abstraction.try_abstraction_to_lseg solv form5 0 3 [1] in
+	 let res=Abstraction.try_abstraction_to_lseg solv form5 0 3 [1] in
 	 match res with
-	 | AbstractionApply x -> print_with_lambda x*)
-	let res=Abstraction.lseg_abstaction solv form5 [1] in
-	print_with_lambda res
+	 | AbstractionApply x -> print_with_lambda x
+	(*let res=Abstraction.lseg_abstaction solv form6 [1] in
+	print_with_lambda res*)
 
