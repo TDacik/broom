@@ -20,6 +20,7 @@ type res =
 *) 
 
 let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
+	let ff = Boolean.mk_false ctx in
 	if index=(List.length form.sigma) then []
 	else
 	let mem l x =
@@ -29,21 +30,36 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
 	if (mem skip index) 
 	then  (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
 	else
-	let a2 = match (List.nth form.sigma index) with
-		| Hpointsto (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a)
-		| Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a)
+	let a2,a2end = match (List.nth form.sigma index) with
+		| Hpointsto (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
+		| Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
+		| Dlseg (a,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
 	in
 	(* form -> base(a1) = base(a2) *)
 	let query=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2])))
 	] in
+	let query_res=((Solver.check solv query)=UNSATISFIABLE) in
+	(* form -> base(a1) = base(a2end) *)
+	let queryend=if a2end=ff then [ff] else
+		[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2end])))
+	] in
+	let queryend_res= if a2end=ff then false else ((Solver.check solv queryend)=UNSATISFIABLE) in
 	(* form -> a1 != a2 *)
 	let query2= [  (Boolean.mk_and ctx (formula_to_solver ctx form));
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2)))
 	] in
-	match (Solver.check solv query), (Solver.check solv query2), include_a1 with
-	| UNSATISFIABLE, UNSATISFIABLE, 0 -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
-	| UNSATISFIABLE, _, 1 -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
+	let query2_res= if (include_a1=1) then true else ((Solver.check solv query2)=UNSATISFIABLE) in
+	(* form -> a1 != a2end *)
+	let query2end=if a2end=ff then [ff] else
+		[  (Boolean.mk_and ctx (formula_to_solver ctx form));
+		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2end)))
+	] in
+	let query2end_res= if (include_a1=1 || a2end=ff) then true else ((Solver.check solv query2end)=UNSATISFIABLE) in
+	match query_res,query2_res,query2_res, query2end_res with 
+	| true, true, _,_ -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
+	| false, _, true, true -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
 	| _ -> (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
 
 
@@ -672,7 +688,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		try_add_slseg_to_pointsto ctx solv z3_names form i2 i1 pvars 1
 
 	)
-	(*| _ -> AbstractionFail*)
+	| _ -> AbstractionFail 
 
 (* try list abstraction - first tries the last added, at least 2 predicates in
 	sigma *)

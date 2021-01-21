@@ -152,17 +152,34 @@ let () =
 	 in
 	 let form_empty={sigma=[];pi=[]} in
 	 let form4={sigma=[Hpointsto (Var 11, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 11, ptr_size), ptr_size, Var 3)];pi=[]} in
-	(*print_with_lambda form2;
-	let q=formula_to_solver solv.ctx form2 in
-	if (Z3.Solver.check solv.solv q)==SATISFIABLE then print_string "OK" else print_string "FAIL"*)
-	(*let form_unf,_=unfold_predicate form1 0 [] 2 in
-	let form_unf2,_=unfold_predicate form_unf 2 [] 2 in
-	print_with_lambda form_unf2*)
-	(**if (entailment solv form3 form3 [11;12;14;13]) then print_string "entOK" else print_string "EntFail"*)
+	 let form5=
+	    let lambda= {param=[1;2;3] ;form={
+	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ]; 
+		pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));] }}
+	    in
+	    {
+   		 sigma = [ Hpointsto (Var 1, ptr_size, Var 10); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3); 
+		 	Dlseg (Var 3, Const (Ptr 0), Var 4,Const (Ptr 0),  lambda);
+			Hpointsto (Var 10, ptr_size, Var 20); Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11); 
+		 	Dlseg (Var 11, Const (Ptr 0), Var 12,Const (Ptr 0),  lambda);
+			];
+		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
+		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 16)));]
 
-	let x=biabduction solv form3 form1 [10] in
+	    }
+	 in
+
+	(*let x=biabduction solv form3 form1 [10] in
 	match x with
 	| Bok (x1,x2,_) ->
 		print_with_lambda x1; print_string "************\n";
-		print_with_lambda x2; 
+		print_with_lambda x2; *)
+	 print_with_lambda form5;
+	 let x=Z3.Solver.check solv.solv (formula_to_solver solv.ctx form5) in
+	 if (x=SATISFIABLE) then print_string "CheckOK" else print_string "CheckFail";
+	 (*let res=Abstraction.try_abstraction_to_lseg solv form5 0 3 [1] in
+	 match res with
+	 | AbstractionApply x -> print_with_lambda x*)
+	let res=Abstraction.lseg_abstaction solv form5 [1] in
+	print_with_lambda res
 
