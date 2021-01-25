@@ -20,7 +20,8 @@
     - [ ] `__builtin_stack_restore`, `__builtin_stack_save`
   <br/>
 - [x] sls abstraction
-
+    - [ ] shared nested subheap
+  <br/>
 - [ ] dls abstraction in logic
 
 - [x] entailment; bug: [sll2.c](tests/sll2.c), [unreach.c](tests/unreach.c)
