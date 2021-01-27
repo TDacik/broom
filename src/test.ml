@@ -160,7 +160,7 @@ let () =
 	    {
    		 sigma = [ Hpointsto (Var 1, ptr_size, Var 10); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3); 
 		 	Dlseg (Var 3, Const (Ptr 0), Var 4,Const (Ptr 0),  lambda);
-			Hpointsto (Var 10, ptr_size, Var 20); Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11); 
+			Hpointsto (Var 10, ptr_size, Var 20); Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 12); 
 		 	Dlseg (Var 11, Const (Ptr 0), Var 12,Const (Ptr 0),  lambda);
 			];
 		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));

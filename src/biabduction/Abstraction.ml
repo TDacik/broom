@@ -17,9 +17,10 @@ type res =
    include_a1=0 --- pointsto "a1 -> _" is skipped
    include_a1=1 --- pointsto "a1 -> _" is included
    skip --- a list of poinsto which are skipped within the test
+   dir (in case of DLLs) -- 0: all, 1: from beginning, 2: from end (Hpointsto and Slseg are igneored)
 *) 
 
-let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
+let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 	let ff = Boolean.mk_false ctx in
 	if index=(List.length form.sigma) then []
 	else
@@ -28,7 +29,7 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
     		List.exists eq l
   	in
 	if (mem skip index) 
-	then  (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
+	then  (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
 	else
 	let a2,a2end = match (List.nth form.sigma index) with
 		| Hpointsto (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
@@ -39,28 +40,28 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip =
 	let query=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2])))
 	] in
-	let query_res=((Solver.check solv query)=UNSATISFIABLE) in
+	let query_res=if (dir=2) then false else ((Solver.check solv query)=UNSATISFIABLE) in
 	(* form -> base(a1) = base(a2end) *)
 	let queryend=if a2end=ff then [ff] else
 		[ (Boolean.mk_and ctx (formula_to_solver ctx form));
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2end])))
 	] in
-	let queryend_res= if a2end=ff then false else ((Solver.check solv queryend)=UNSATISFIABLE) in
+	let queryend_res= if ((a2end=ff) || (dir=1)) then false else ((Solver.check solv queryend)=UNSATISFIABLE) in
 	(* form -> a1 != a2 *)
 	let query2= [  (Boolean.mk_and ctx (formula_to_solver ctx form));
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2)))
 	] in
-	let query2_res= if (include_a1=1) then true else ((Solver.check solv query2)=UNSATISFIABLE) in
+	let query2_res= if ((dir=2)||(include_a1=1)) then true else ((Solver.check solv query2)=UNSATISFIABLE) in
 	(* form -> a1 != a2end *)
 	let query2end=if a2end=ff then [ff] else
 		[  (Boolean.mk_and ctx (formula_to_solver ctx form));
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2end)))
 	] in
-	let query2end_res= if (include_a1=1 || a2end=ff) then true else ((Solver.check solv query2end)=UNSATISFIABLE) in
+	let query2end_res= if (include_a1=1 || a2end=ff || dir=1) then true else ((Solver.check solv query2end)=UNSATISFIABLE) in
 	match query_res,query2_res,queryend_res, query2end_res with 
-	| true, true, _,_ -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
-	| false, _, true, true -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
-	| _ -> (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip)
+	| true, true, _,_ -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
+	| false, _, true, true -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
+	| _ -> (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
 
 
 (* Check that points-to on i1 and i2 can have (=SAT) equal distance from base of the block *)
@@ -203,8 +204,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			&& ((Solver.check solv query3)=SATISFIABLE)) then CheckFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
-		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [i2] in
-		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 (i1::a1_block) in
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [i2] 0 in
+		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 (i1::a1_block) 0 in
 		(match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 			| MatchFail -> CheckFail
 			| MatchOK matchres ->  
@@ -216,7 +217,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
-		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] 0 in
 		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
@@ -255,7 +256,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		let vars_b2 = find_vars_expr b2 in
 		let vars_d1 = find_vars_expr d1 in
 		let vars_d2 = find_vars_expr d2 in
-		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] in
+		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] 0 in
 		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
 		let pt_refs_d1 = List.concat(List.map eq_base vars_d1) in 
@@ -329,14 +330,16 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		in
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
-		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] in
-		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
-		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
+		let eq_base dir var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] dir in
+		let pt_refs_b1 = List.concat(List.map (eq_base 1) vars_b1) in 
+		let pt_refs_b2 = List.concat(List.map (eq_base 1) vars_b2) in
+		let pt_refs_b1_back = List.concat(List.map (eq_base 2) vars_b1) in 
+		let pt_refs_b2_back = List.concat(List.map (eq_base 2) vars_b2) in
 		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
 				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
-		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
-		| _,_,[],[] -> 
+		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2, pt_refs_b1_back,pt_refs_b2_back  with
+		| _,_,[],[],[],[] -> 
 			(* b1 and b2 does not points to an fixed allocated block --- i.e. only integers or undef *) 
 			(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars),(Solver.check solv query) with
 			| CheckFail,_ -> CheckFail
@@ -345,7 +348,8 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			   some abstract interpretation may be added here *)
 			| CheckOK res,_ ->  CheckOK ((i1,i2, Hpointsto (a1,s1,Undef)):: res)
 			)
-		| [x1],[x2],f1::_,f2::_ ->
+		| [x1],[x2],f1::_,f2::_,[],[] 
+		| [x1],[x2],[],[],f1::_,f2::_ ->
 			(* b1 and b2 contaisn only a single variable pointing to an allocated block *)
 			(match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
 			| true, _ ->
@@ -519,8 +523,8 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 			| Hpointsto (aa,_,_) -> (expr_to_solver_only_exp ctx z3_names aa) 
 			| _ -> raise (ErrorInAbstraction "This should not happen")
 		in
-		let a1_block=get_eq_base ctx solv z3_names unfolded_form a1 0 0 [new_i1;new_i2] in
-		let a2_block=get_eq_base ctx solv z3_names unfolded_form a2 0 0 ([new_i1;new_i2]@a1_block) in
+		let a1_block=get_eq_base ctx solv z3_names unfolded_form a1 0 0 [new_i1;new_i2] 0 in
+		let a2_block=get_eq_base ctx solv z3_names unfolded_form a2 0 0 ([new_i1;new_i2]@a1_block) 0 in
 		(* FIRST: try to find possible mapping between particular points-to predicates is block of a1/a2 *)
 		match match_pointsto_from_two_blocks ctx solv z3_names unfolded_form a1_block a2_block with
 		| MatchFail -> AbstractionFail 
@@ -628,8 +632,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			&& ((Solver.check solv (query_pvars a2))=SATISFIABLE)) then AbstractionFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
-		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 [i1;i2] in
-		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 ([i1;i2]@a1_block) in
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 [i1;i2] 0 in
+		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 ([i1;i2]@a1_block) 0 in
 		(* FIRST: try to find possible mapping between particula points-to predicates is block of a1/a2 *)
 		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 		| MatchFail -> AbstractionFail 
