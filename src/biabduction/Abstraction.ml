@@ -151,6 +151,49 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
 		else check_block_bases ctx solv z3_names form v1 v2 rest
 
+(* check that v1 and v2 are back links in Dlseg with the use of block bases --->
+   1) there exists (b1,b2) in block bases such that base(v2)=base(b1)
+   2) forall (b1,b2) in block bases (base(v1)!=base(b1) /\ base(v1)!=base(v2)) is SAT
+*)
+let rec check_backlink ctx solv z3_names form v2 block_bases =
+	match block_bases with 
+	| [] -> false,[]
+	| (b1,b2)::rest ->
+		let query_backlink=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			(Boolean.mk_not ctx 
+				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [v2]));
+			)
+		] in
+		match (check_backlink ctx solv z3_names form  v2 rest) with
+		| false,base_list ->
+			(if ((Solver.check solv query_backlink)=UNSATISFIABLE) 
+			then true,[b1;b2]@base_list
+			else false,[b1;b2]@base_list
+			)
+		| true,base_list ->  true,[b1;b2]@base_list (* backlink found, no need to query the solver *)
+
+
+
+let check_dlseg_from_block_bases ctx solv z3_names form v1 v2 block_bases =
+	match (check_backlink ctx solv z3_names form v2 block_bases) with
+	| false,_ -> false
+	| true, base_list ->
+		let non_eq b = (Boolean.mk_not ctx 
+				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b]) (Expr.mk_app ctx z3_names.base [v1]));
+			)
+		in
+		let query_nomem = (formula_to_solver ctx form)@(List.map non_eq base_list) in
+		if ((Solver.check solv query_nomem)=SATISFIABLE) then true else false
+
+(* This is called in the case that there is no allocated block before the DLL candidate *)
+let check_backlink_simplified ctx solv z3_names form i2 block_bases =
+	match (List.nth form.sigma i2) with
+	| Hpointsto (aa,_,_) ->
+		let a2 = (expr_to_solver_only_exp ctx z3_names aa) in
+		match (check_backlink ctx solv z3_names form a2 block_bases) with
+			| (x,_) -> x
+	| _ -> false 
+	
 
 (*************************************************************************************************************)
 (* Main part of the "BLOCK * BLOCK -> SLSEG" abstraction = functions:
@@ -165,7 +208,8 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 
 
 type check_res =
-| CheckOK of (int * int * heap_pred) list
+| CheckOK of (int * int * heap_pred * int) list
+| DlsegBackLink
 | CheckFail
 
 (* this function is quite similar to the try_pointsto_to_lseg, but is is dedicated to the blocks referenced from the blocks, which should be folded *)
@@ -192,6 +236,13 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 		] in
+		if not (((Solver.check solv query1)=UNSATISFIABLE)
+			&& ((Solver.check solv query2)=SATISFIABLE)) then (print_string "XXX\n"; CheckFail)
+		else
+		if (check_dlseg_from_block_bases ctx solv z3_names form a1 a2 block_bases)
+		then (print_string "Backlink discovered\n"; flush stdout; DlsegBackLink)
+		else
+		(print_string "Backlink not discovered\n"; flush stdout; 
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
 		let query3=if gvars=[] then []
 			else
@@ -199,9 +250,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				Boolean.mk_and ctx (List.map (global_bases a1) gvars);
 				Boolean.mk_and ctx (List.map (global_bases a2) gvars);] 
 		in
-		if not (((Solver.check solv query1)=UNSATISFIABLE)
-			&& ((Solver.check solv query2)=SATISFIABLE)
-			&& ((Solver.check solv query3)=SATISFIABLE)) then CheckFail
+		if not ((Solver.check solv query3)=SATISFIABLE) then CheckFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [i2] 0 in
@@ -213,7 +262,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 					| CheckOK checked_matchres -> CheckOK  checked_matchres
 					| CheckFail -> CheckFail
 				)
-		)
+		))
 	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
@@ -241,12 +290,12 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		(* check compatibility of b1 and b2 *)
 		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
 		| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
-			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
-			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda))]
+			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda),0)]
+			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda),0)]
 		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names form x1 x2 
 				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2 )::block_bases)) 
-			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda))]
+			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda),0)]
 			else CheckFail
 		
 		| _ -> CheckFail
@@ -309,7 +358,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			| _ -> exp_false	
 		in
 		if (new_b=exp_false) || (new_d=exp_false) then CheckFail
-		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda))]
+		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda),0)]
 		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 
@@ -343,10 +392,10 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			(* b1 and b2 does not points to an fixed allocated block --- i.e. only integers or undef *) 
 			(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars),(Solver.check solv query) with
 			| CheckFail,_ -> CheckFail
-			| CheckOK res,SATISFIABLE -> CheckOK ((i1,i2, Hpointsto (a1,s1,b1)):: res)
+			| CheckOK res,SATISFIABLE -> CheckOK ((i1,i2, Hpointsto (a1,s1,b1),0):: res)
 			(* Here the numerical values are abstracted to "undef" ~~ any value,
 			   some abstract interpretation may be added here *)
-			| CheckOK res,_ ->  CheckOK ((i1,i2, Hpointsto (a1,s1,Undef)):: res)
+			| CheckOK res,_ ->  CheckOK ((i1,i2, Hpointsto (a1,s1,Undef),0):: res)
 			)
 		| [x1],[x2],f1::_,f2::_,[],[] 
 		| [x1],[x2],[],[],f1::_,f2::_ ->
@@ -355,7 +404,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			| true, _ ->
 				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 				| CheckFail -> CheckFail
-				| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: res)
+				| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: res)
 				)
 			| false, 0 -> CheckFail
 			| false, _ -> 
@@ -366,11 +415,23 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 						((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2 )::block_bases) 
 						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
-					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1)):: (res @ res_rec))
+					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: (res @ res_rec))
 					)
+				| DlsegBackLink -> (match (check_matched_pointsto ctx solv z3_names form rest block_bases
+						incl_ref_blocks gvars) with
+					| CheckFail -> CheckFail
+					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
+					)
+
 				)
 			)
-
+		| _,[x2],[],f2::_,[],[] -> 
+			print_string "Checking backling simple\n"; flush stdout;
+			(match (check_backlink_simplified ctx solv z3_names form f2 block_bases),
+				(check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
+					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
+					| _ -> CheckFail
+					)
 
 		| _ ->
 			(* complicated pattern -> stop abstraction *)
@@ -379,17 +440,17 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 
 
 (* fold the pointsto into a existing list segment using the unfolded version of the slseg *)
-let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_triples flag =
+let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples flag =
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded slseg *)
-	let rec get_indeces triples =
-		match triples with
+	let rec get_indeces quadruples =
+		match quadruples with
 		| [] -> [],[]
-		| (a,b,_)::rest -> 
+		| (a,b,_,_)::rest -> 
 			match get_indeces rest with
 			| a1,a2 -> (a::a1,b::a2)
 	in
-	let tmp1,tmp2=get_indeces res_triples in
+	let tmp1,tmp2=get_indeces res_quadruples in
 	(* new_i2 :: tmp2 must contain all inceces from (List.length form.sigma)-1 to (List.length unfolded_form.sigma)-2 *)
 	if not (List.sort compare (new_i2 :: tmp2) = range ((List.length form.sigma)-1) (i_unfolded_slseg-1))
 	then raise (ErrorInAbstraction "BAD indeces")  (* AbstractionFail *)
@@ -407,10 +468,10 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_triples fla
 		else (List.nth unfolded_form.sigma i) :: get_new_sigma (i+1)
 	in
 	(* lambda may be overaproximated during the matches *)
-	let rec new_lambda_from_triples triples =
-		match triples with 
+	let rec new_lambda_from_quadruples quadruples =
+		match quadruples with 
 		| [] -> []
-		| (_,_,l)::rest -> l :: new_lambda_from_triples rest
+		| (_,_,l,_)::rest -> l :: new_lambda_from_quadruples rest
 	in
 	let rec get_fresh_var s confl=
  	   if (mem confl s)
@@ -420,9 +481,9 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_triples fla
 	let get_new_lambda=match (List.nth unfolded_form.sigma new_i1) with
 		| Hpointsto (a,l,b) ->(
 			match (find_vars_expr b) with
-			| _::[] -> Hpointsto (a,l,b) ::new_lambda_from_triples res_triples
+			| _::[] -> Hpointsto (a,l,b) ::new_lambda_from_quadruples res_quadruples
 			| _ -> Hpointsto (a,l,Exp.Var (get_fresh_var 0 (find_vars unfolded_form))) 
-				::new_lambda_from_triples res_triples (* change null/undef or equations for fresch variable *)
+				::new_lambda_from_quadruples res_quadruples (* change null/undef or equations for fresch variable *)
 			)
 		| _ -> raise (ErrorInAbstraction "Something bad happened, probably broken unfolding") (*[]*)
 	in
@@ -538,18 +599,18 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 	| _ -> AbstractionFail
 	
 
-(* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of triples of the type check_res,
-  each triple consist of two indeces and a spacial predicated, which should be placed into the lambda *)
-let fold_pointsto form i1 i2 res_triples =
+(* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of quadruples of the type check_res,
+  each quadruple consist of two indeces, a spacial predicated (which should be placed into the lambda) and flag whether it is a backlink *)
+let fold_pointsto form i1 i2 res_quadruples =
 	(* first, get only the first two elements from the triples  and store it into the tmp1, and tmp2*)
-	let rec get_indeces triples =
-		match triples with
+	let rec get_indeces quadruples =
+		match quadruples with
 		| [] -> [],[]
-		| (a,b,_)::rest -> 
+		| (a,b,_,_)::rest -> 
 			match get_indeces rest with
 			| a1,a2 -> (a::a1,b::a2)
 	in
-	let tmp1,tmp2=get_indeces res_triples in
+	let tmp1,tmp2=get_indeces res_quadruples in
 	let neighbours= [i1;i2] @ tmp1 @ tmp2 in
 	let mem l x =
     		let eq y= (x=y) in
@@ -562,13 +623,13 @@ let fold_pointsto form i1 i2 res_triples =
 		else (List.nth form.sigma i) :: get_new_sigma (i+1)
 	in
 	(* lambda may be overaproximated during the matches *)
-	let rec new_lambda_from_triples triples =
-		match triples with 
+	let rec new_lambda_from_quadruples quadruples =
+		match quadruples with 
 		| [] -> []
-		| (_,_,l)::rest -> l :: new_lambda_from_triples rest
+		| (_,_,l,_)::rest -> l :: new_lambda_from_quadruples rest
 	in
 	let get_new_lambda=
-		(List.nth form.sigma i1):: new_lambda_from_triples res_triples
+		(List.nth form.sigma i1):: new_lambda_from_quadruples res_quadruples
 	in
 	(* get the parameters of the list segment *)
 	let p1 = match (List.nth form.sigma i1) with
