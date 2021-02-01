@@ -124,14 +124,14 @@ let rec match_pointsto_from_two_blocks ctx solv z3_names form l1 l2 =
 		| MatchOK a -> MatchOK ((i1,i2) :: a)
 
 
-(* Check that for variables v1 and v2 there exists a tuple (base1,base2) in block_bases s.t.
+(* Check that for variables v1 and v2 there exists a triple (base1,base2,_) in block_bases s.t.
    (1) form -> base(base1) = base(v1) /\ base(base2) = base(v2)
    (2) SAT: form /\ v1-base(v1) = v2 - base(v2)
    *)
 let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 	match block_bases with
 	| [] -> false
-	| (b1,b2)::rest ->
+	| (b1,b2,_)::rest ->
 		let var1=expr_to_solver_only_exp ctx z3_names (Exp.Var v1) in
 		let var2=expr_to_solver_only_exp ctx z3_names (Exp.Var v2) in
 		(* form -> base(base1) = base(v1) /\ base(base2) = base(v2) *)
@@ -152,25 +152,26 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		else check_block_bases ctx solv z3_names form v1 v2 rest
 
 (* check that v1 and v2 are back links in Dlseg with the use of block bases --->
-   1) there exists (b1,b2) in block bases such that base(v2)=base(b1)
-   2) forall (b1,b2) in block bases (base(v1)!=base(b1) /\ base(v1)!=base(v2)) is SAT
+   1) there exists (b1,b2,1) in block bases such that base(v2)=base(b1)
+   2) forall (b1,b2,_) in block bases (base(v1)!=base(b1) /\ base(v1)!=base(v2)) is SAT
 *)
 let rec check_backlink ctx solv z3_names form v2 block_bases =
 	match block_bases with 
 	| [] -> false,[]
-	| (b1,b2)::rest ->
+	| (b1,b2, flag)::rest ->
 		let query_backlink=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
 			(Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [v2]));
 			)
 		] in
-		match (check_backlink ctx solv z3_names form  v2 rest) with
-		| false,base_list ->
+		match flag,(check_backlink ctx solv z3_names form  v2 rest) with
+		| 1,(false,base_list) ->
 			(if ((Solver.check solv query_backlink)=UNSATISFIABLE) 
-			then true,[b1;b2]@base_list
+			then true,[b2]@base_list
 			else false,[b1;b2]@base_list
 			)
-		| true,base_list ->  true,[b1;b2]@base_list (* backlink found, no need to query the solver *)
+		| _,(false,base_list) ->  false,[b1;b2]@base_list (* backlink found, no need to query the solver *)
+		| _,(true,base_list) ->  true,[b1;b2]@base_list (* backlink found, no need to query the solver *)
 
 
 
@@ -258,7 +259,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		(match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 			| MatchFail -> CheckFail
 			| MatchOK matchres ->  
-				(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2)::block_bases) 0 gvars) with
+				(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2,0)::block_bases) 0 gvars) with
 					| CheckOK checked_matchres -> CheckOK  checked_matchres
 					| CheckFail -> CheckFail
 				)
@@ -294,7 +295,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda),0)]
 		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names form x1 x2 
-				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2 )::block_bases)) 
+				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0 )::block_bases)) 
 			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda),0)]
 			else CheckFail
 		
@@ -341,8 +342,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				if (Solver.check solv queryB)=SATISFIABLE then b1 else Undef
 			| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *)
 				if (check_block_bases ctx solv z3_names form x1 x2 
-				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2;
-				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2]@block_bases))
+				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0;
+				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2,0]@block_bases))
 				then b1 else exp_false
 			| _ -> exp_false	
 		in
@@ -352,8 +353,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				if (Solver.check solv queryD)=SATISFIABLE then d1 else Undef
 			| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *)
 				if (check_block_bases ctx solv z3_names form x1 x2 
-				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2;
-				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2]@block_bases))
+				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0;
+				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2,0]@block_bases))
 				then d1 else exp_false
 			| _ -> exp_false	
 		in
@@ -412,7 +413,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 				| CheckFail -> CheckFail
 				| CheckOK res_rec ->
 					(match (check_matched_pointsto ctx solv z3_names form rest 
-						((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2 )::block_bases) 
+						((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0 )::block_bases) 
 						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: (res @ res_rec))
@@ -429,7 +430,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			print_string "Checking backling simple\n"; flush stdout;
 			(match (check_backlink_simplified ctx solv z3_names form f2 block_bases),
 				(check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
-					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
+					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),2):: res )
 					| _ -> CheckFail
 					)
 
@@ -590,7 +591,7 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 		match match_pointsto_from_two_blocks ctx solv z3_names unfolded_form a1_block a2_block with
 		| MatchFail -> AbstractionFail 
 		| MatchOK matchres ->  
-			match (check_matched_pointsto ctx solv z3_names unfolded_form matchres [(a1,a2)] 1 gvars) with
+			match (check_matched_pointsto ctx solv z3_names unfolded_form matchres [(a1,a2,1)] 1 gvars) with
 			| CheckOK checked_matchres -> 
 				fold_pointsto_slseg form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
 
@@ -602,6 +603,21 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 (* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of quadruples of the type check_res,
   each quadruple consist of two indeces, a spacial predicated (which should be placed into the lambda) and flag whether it is a backlink *)
 let fold_pointsto form i1 i2 res_quadruples =
+	(* get backlink indeces y1 and y2 marked by 1 or 2 in the last item of a quadruple *)
+	let rec get_backlinks quadruples res =
+		match quadruples with
+		| [] -> res
+		| (y1,y2,_,i)::rest -> 
+			match i,res with
+			| 0,_ -> get_backlinks rest res
+			| _,(-1,-1) -> get_backlinks rest (y1,y2)
+			| _ -> (-2,-2) (* more then a single backlink *)
+	in
+	let y1,y2=get_backlinks res_quadruples (-1,-1) in
+	if y1=(-2) then AbstractionFail (* more then a single backlink *)
+	else
+	(
+	print_string ("Found backlink: "^(string_of_int y1)^" <-- "^(string_of_int y2)^"\n"); flush stdout;
 	(* first, get only the first two elements from the triples  and store it into the tmp1, and tmp2*)
 	let rec get_indeces quadruples =
 		match quadruples with
@@ -626,7 +642,7 @@ let fold_pointsto form i1 i2 res_quadruples =
 	let rec new_lambda_from_quadruples quadruples =
 		match quadruples with 
 		| [] -> []
-		| (_,_,l,_)::rest -> l :: new_lambda_from_quadruples rest
+		| (_,_,l,_)::rest -> l :: new_lambda_from_quadruples rest (* here we need to change a bit when the last item is 2 *)
 	in
 	let get_new_lambda=
 		(List.nth form.sigma i1):: new_lambda_from_quadruples res_quadruples
@@ -640,13 +656,32 @@ let fold_pointsto form i1 i2 res_quadruples =
 			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
 			| Slseg _ -> [],[]
 	in
-	match p1,p2,p2_lambda with (* we want only a single variable on the LHS of a pointsto *)
-	| [a],[b],[b_lambda] -> 
-		let lambda={param=[a;b_lambda]; 
-			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;b_lambda]) (find_vars form)))
+	let r1,r1_lambda = if y1<0 then [],[]
+		else
+		match (List.nth form.sigma y1) with
+			| Hpointsto (b,_,a) -> (find_vars_expr a), (find_vars_expr a)
+			| Slseg _ -> [],[]
+	in
+	let r2 = if y2<0 then []
+		else 
+		match (List.nth form.sigma y2) with
+			| Hpointsto (a,_,_) -> (find_vars_expr a)
+			| Slseg _ -> []
+	in
+	(*print_string ("### "^(string_of_int (List.nth r1_lambda 0))^"\n"); flush stdout;*)
+	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1 with (* we want only a single variable on the LHS of a pointsto *)
+	| [a],[d],[d_lambda],_,_,_,-1 -> 
+		let lambda={param=[a;d_lambda]; 
+			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)))
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var b, lambda)]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
+	| [a],[d],[d_lambda],[b],[c],[b_lambda],_ -> 
+		let lambda={param=[a;d_lambda;b_lambda]; 
+			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)))
+		} in
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
 	| _ -> AbstractionFail
+	)
 
 
 
@@ -699,7 +734,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 		| MatchFail -> AbstractionFail 
 		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
-			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2)] 1 pvars) with
+			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2,1)] 1 pvars) with
 			| CheckOK checked_matchres ->  
 				(fold_pointsto form i1 i2 checked_matchres) 
 			| CheckFail -> AbstractionFail

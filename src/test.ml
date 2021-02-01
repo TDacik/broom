@@ -176,7 +176,8 @@ let () =
 	    in
 	    {
    		 sigma = [ Hpointsto (Var 1, ptr_size, Var 10); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3);
-		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size2), ptr_size, Const (Ptr 0));
+		 	(*Hpointsto (BinOp ( Pplus, Var 1, ptr_size2), ptr_size, Const (Ptr 0));*)
+		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size2), ptr_size, Var 40);
 		 	Dlseg (Var 3, Const (Ptr 0), Var 4,Const (Ptr 0),  lambda);
 			Hpointsto (Var 10, ptr_size, Var 20); Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11); 
 		 	Hpointsto (BinOp ( Pplus, Var 10, ptr_size2), ptr_size, Var 1);
