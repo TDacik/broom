@@ -694,19 +694,25 @@ let fold_pointsto form i1 i2 res_quadruples =
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
 			| _ -> [],[]
 	in
+	let dll_dir=1 in
 	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
 	(*print_string ("### "^(string_of_int (List.nth r1_lambda 0))^"\n"); flush stdout;*)
-	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest) with (* we want only a single variable on the LHS of a pointsto *)
-	| [a],[d],[d_lambda],_,_,_,-1,_ -> 
+	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
+	| [a],[d],[d_lambda],_,_,_,-1,_,1 -> 
 		let lambda={param=[a;d_lambda]; 
 			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)))
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
-	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true -> 
+	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
 		let lambda={param=[a;d_lambda;b_lambda]; 
 			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)))
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
+	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
+		let lambda={param=[a;b_lambda;d_lambda]; 
+			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)))
+		} in
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, lambda)]}
 	| _ -> AbstractionFail
 	)
 

@@ -226,8 +226,8 @@ let () =
 	| Bok (x1,x2,_) ->
 		print_with_lambda x1; print_string "************\n";
 		print_with_lambda x2; *)
-	 print_with_lambda form7;
-	 let res=Abstraction.try_abstraction_to_lseg solv form7 2 6 [1] in
+	 print_with_lambda form6;
+	 let res=Abstraction.try_abstraction_to_lseg solv form6 0 4 [1] in
 	 match res with
 	 | AbstractionApply x -> print_with_lambda x
 	(*let res=Abstraction.lseg_abstaction solv form6 [1] in
