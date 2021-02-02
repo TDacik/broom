@@ -8,6 +8,11 @@ open Z3wrapper
 *)
 
 exception ErrorInAbstraction of string
+exception IllegalArgumentException of string
+
+let to_hpointsto_unsafe hpred = match hpred with
+  | Slseg _ | Dlseg _ -> raise (IllegalArgumentException "Received list instead of points-to assertion")
+  | Hpointsto (a,l,b) -> (a,l,b)
 
 type res =
 | AbstractionApply of Formula.t
@@ -603,6 +608,17 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 (* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of quadruples of the type check_res,
   each quadruple consist of two indeces, a spacial predicated (which should be placed into the lambda) and flag whether it is a backlink *)
 let fold_pointsto form i1 i2 res_quadruples =
+	  let mem lst x =
+	    let eq y= (x=y) in
+	    List.exists eq lst
+	  in
+	let rec get_fresh_var seed confl=
+	    if (mem confl seed)
+	    then get_fresh_var (seed+1) confl
+	    else seed
+	  in
+	let fresh_backlink_var=get_fresh_var 1 (find_vars form) in
+
 	(* get backlink indeces y1 and y2 marked by 1 or 2 in the last item of a quadruple *)
 	let rec get_backlinks quadruples res =
 		match quadruples with
@@ -641,41 +657,52 @@ let fold_pointsto form i1 i2 res_quadruples =
 	(* lambda may be overaproximated during the matches *)
 	let rec new_lambda_from_quadruples quadruples =
 		match quadruples with 
-		| [] -> []
-		| (_,_,l,_)::rest -> l :: new_lambda_from_quadruples rest (* here we need to change a bit when the last item is 2 *)
+		| [] -> [],-1
+		| (_,index,l,2)::rest -> 
+			let (_,_,c)=to_hpointsto_unsafe(List.nth form.sigma index) in
+			let (a,b,_)=to_hpointsto_unsafe(l) in
+				let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
+				let new_l,_=new_lambda_from_quadruples rest in
+				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var
+		| (_,_,l,_)::rest -> 
+			let new_l,new_backlink_var=new_lambda_from_quadruples rest in
+			(l :: new_l), new_backlink_var
 	in
-	let get_new_lambda=
-		(List.nth form.sigma i1):: new_lambda_from_quadruples res_quadruples
+	let get_new_lambda,dll_backlink=
+		let new_l,new_back_link_var= new_lambda_from_quadruples res_quadruples in
+		(List.nth form.sigma i1):: new_l, new_back_link_var
 	in
 	(* get the parameters of the list segment *)
 	let p1 = match (List.nth form.sigma i1) with
 			| Hpointsto (a,_,_) -> (find_vars_expr a)
-			| Slseg _ -> []
+			| _ -> []
 	in
 	let p2,p2_lambda = match (List.nth form.sigma i2) with
 			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
-			| Slseg _ -> [],[]
+			| _ -> [],[]
 	in
 	let r1,r1_lambda = if y1<0 then [],[]
 		else
-		match (List.nth form.sigma y1) with
-			| Hpointsto (b,_,a) -> (find_vars_expr a), (find_vars_expr a)
-			| Slseg _ -> [],[]
+		match (List.nth form.sigma y1),dll_backlink with
+			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a)
+			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l]
+			| _ -> [],[]
 	in
-	let r2 = if y2<0 then []
+	let r2,r2_dest = if y2<0 then [],[]
 		else 
 		match (List.nth form.sigma y2) with
-			| Hpointsto (a,_,_) -> (find_vars_expr a)
-			| Slseg _ -> []
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
+			| _ -> [],[]
 	in
+	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
 	(*print_string ("### "^(string_of_int (List.nth r1_lambda 0))^"\n"); flush stdout;*)
-	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1 with (* we want only a single variable on the LHS of a pointsto *)
-	| [a],[d],[d_lambda],_,_,_,-1 -> 
+	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest) with (* we want only a single variable on the LHS of a pointsto *)
+	| [a],[d],[d_lambda],_,_,_,-1,_ -> 
 		let lambda={param=[a;d_lambda]; 
 			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)))
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
-	| [a],[d],[d_lambda],[b],[c],[b_lambda],_ -> 
+	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true -> 
 		let lambda={param=[a;d_lambda;b_lambda]; 
 			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)))
 		} in

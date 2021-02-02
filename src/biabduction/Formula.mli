@@ -141,6 +141,10 @@ val subformula_only : Exp.t list -> t -> (Exp.t list * t)
     by computing a transitive closure *)
 val get_equiv_vars : Exp.variable list -> pi -> Exp.variable list
 
+
+(** [substitute_expr new_expr old_expr expr] *)
+val substitute_expr : ?fix_stack:bool -> Exp.t -> Exp.t -> Exp.t -> Exp.t
+
 (** [substitute_vars new_var old_var form] *)
 val substitute_vars : ?fix_stack:bool -> Exp.variable -> Exp.variable -> t -> t
 

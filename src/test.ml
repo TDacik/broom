@@ -182,9 +182,40 @@ let () =
 			Hpointsto (Var 10, ptr_size, Var 20); Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11); 
 		 	Hpointsto (BinOp ( Pplus, Var 10, ptr_size2), ptr_size, Var 1);
 		 	Dlseg (Var 11, Const (Ptr 0), Var 12,Const (Ptr 0),  lambda);
+			Hpointsto (Var 40, ptr_size, Var 41);
 			];
-		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 32)));
-		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 32)));
+		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+		 BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 32)));
+		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
+		 BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 32)));
+		 BinOp ( Peq, Var 40, UnOp ( Base, Var 40));
+		 ]
+
+	    }
+	 in
+	 let form7=
+	    let lambda= {param=[1;2;3] ;form={
+	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); 
+		Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ]; 
+		pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));] }}
+	    in
+	    {
+   		 sigma = [ Hpointsto (Var 1, ptr_size, Var 40); 
+		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3);
+		 	(*Hpointsto (BinOp ( Pplus, Var 1, ptr_size2), ptr_size, Const (Ptr 0));*)
+		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size2), ptr_size, Var 10);
+		 	Dlseg (Var 3, Const (Ptr 0), Var 4,Const (Ptr 0),  lambda);
+			Hpointsto (Var 10, ptr_size, Var 1); 
+			Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11); 
+		 	Hpointsto (BinOp ( Pplus, Var 10, ptr_size2), ptr_size, Var 20);
+		 	Dlseg (Var 11, Const (Ptr 0), Var 12,Const (Ptr 0),  lambda);
+			Hpointsto (Var 40, ptr_size, Var 41);
+			];
+		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+		 BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 32)));
+		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
+		 BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 32)));
+		 BinOp ( Peq, Var 40, UnOp ( Base, Var 40));
 		 ]
 
 	    }
@@ -195,10 +226,8 @@ let () =
 	| Bok (x1,x2,_) ->
 		print_with_lambda x1; print_string "************\n";
 		print_with_lambda x2; *)
-	 print_with_lambda form6;
-	 let x=Z3.Solver.check solv.solv (formula_to_solver solv.ctx form6) in
-	 if (x=SATISFIABLE) then print_string "CheckOK" else print_string "CheckFail";
-	 let res=Abstraction.try_abstraction_to_lseg solv form6 0 4 [1] in
+	 print_with_lambda form7;
+	 let res=Abstraction.try_abstraction_to_lseg solv form7 2 6 [1] in
 	 match res with
 	 | AbstractionApply x -> print_with_lambda x
 	(*let res=Abstraction.lseg_abstaction solv form6 [1] in
