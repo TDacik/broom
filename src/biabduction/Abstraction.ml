@@ -684,8 +684,8 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	let r1,r1_lambda,r1_z3 = if y1<0 then [],[],(Boolean.mk_false ctx)
 		else
 		match (List.nth form.sigma y1),dll_backlink with
-			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a)
-			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l],(expr_to_solver_only_exp ctx z3_names a)
+			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
+			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l],(expr_to_solver_only_exp ctx z3_names b)
 			| _ -> [],[],(Boolean.mk_false ctx)
 	in
 	let r2,r2_dest = if y2<0 then [],[]
