@@ -683,12 +683,12 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
 			| _ -> [],[]
 	in
-	let r1,r1_lambda,r1_z3 = if y1<0 then [],[],(Boolean.mk_false ctx)
+	let r1,r1_lambda,r1_z3 = if y1<0 then [],[], (Boolean.mk_false ctx)
 		else
 		match (List.nth form.sigma y1),dll_backlink with
 			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
 			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l],(expr_to_solver_only_exp ctx z3_names b)
-			| _ -> [],[],(Boolean.mk_false ctx)
+			| _ -> [],[], (Boolean.mk_false ctx) 
 	in
 	let r2,r2_dest = if y2<0 then [],[]
 		else 
@@ -697,12 +697,11 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 			| _ -> [],[]
 	in
 	(* check direction of the dll folding *)
-	let query=[
-				BitVector.mk_slt ctx p1_z3 r1_z3
-			] in
+	let query= [ BitVector.mk_slt ctx p1_z3 r1_z3 ] in
 	let dll_dir=if y1<0 
 		then 1
-		else if (Solver.check solv query)=SATISFIABLE then 1 else 2
+		else 
+		if (Solver.check solv query)=SATISFIABLE then 1 else 2
 	in
 	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
 	(*print_string ("### "^(string_of_int (List.nth r1_lambda 0))^"\n"); flush stdout;*)
