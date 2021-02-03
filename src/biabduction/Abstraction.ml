@@ -607,7 +607,7 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 
 (* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of quadruples of the type check_res,
   each quadruple consist of two indeces, a spacial predicated (which should be placed into the lambda) and flag whether it is a backlink *)
-let fold_pointsto form i1 i2 res_quadruples =
+let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	  let mem lst x =
 	    let eq y= (x=y) in
 	    List.exists eq lst
@@ -673,20 +673,20 @@ let fold_pointsto form i1 i2 res_quadruples =
 		(List.nth form.sigma i1):: new_l, new_back_link_var
 	in
 	(* get the parameters of the list segment *)
-	let p1 = match (List.nth form.sigma i1) with
-			| Hpointsto (a,_,_) -> (find_vars_expr a)
-			| _ -> []
+	let p1,p1_z3 = match (List.nth form.sigma i1) with
+			| Hpointsto (a,_,_) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a)
+			| _ -> [],(Boolean.mk_false ctx)
 	in
 	let p2,p2_lambda = match (List.nth form.sigma i2) with
 			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
 			| _ -> [],[]
 	in
-	let r1,r1_lambda = if y1<0 then [],[]
+	let r1,r1_lambda,r1_z3 = if y1<0 then [],[],(Boolean.mk_false ctx)
 		else
 		match (List.nth form.sigma y1),dll_backlink with
-			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a)
-			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l]
-			| _ -> [],[]
+			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a)
+			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l],(expr_to_solver_only_exp ctx z3_names a)
+			| _ -> [],[],(Boolean.mk_false ctx)
 	in
 	let r2,r2_dest = if y2<0 then [],[]
 		else 
@@ -694,7 +694,14 @@ let fold_pointsto form i1 i2 res_quadruples =
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
 			| _ -> [],[]
 	in
-	let dll_dir=1 in
+	(* check direction of the dll folding *)
+	let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+				BitVector.mk_slt ctx p1_z3 r1_z3
+			] in
+	let dll_dir=if y1<0 
+		then 1
+		else if (Solver.check solv query)=SATISFIABLE then 1 else 2
+	in
 	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
 	(*print_string ("### "^(string_of_int (List.nth r1_lambda 0))^"\n"); flush stdout;*)
 	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
@@ -769,7 +776,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
 			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2,1)] 1 pvars) with
 			| CheckOK checked_matchres ->  
-				(fold_pointsto form i1 i2 checked_matchres) 
+				(fold_pointsto ctx solv z3_names form i1 i2 checked_matchres) 
 			| CheckFail -> AbstractionFail
 		)
 	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
