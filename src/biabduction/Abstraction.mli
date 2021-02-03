@@ -5,7 +5,7 @@ open Z3wrapper *)
 exception ErrorInAbstraction of string
 
 (** [lseg_abstaction solver form pvars] tries list abstraction on formula [form] - first tries the last added, at least 2 predicates in sigma *)
-val lseg_abstaction : Z3wrapper.solver ->
+val lseg_abstraction : Z3wrapper.solver ->
            Formula.t -> Formula.Exp.variable list -> Formula.t
 
 (* Temporaryli added *)

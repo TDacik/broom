@@ -4,7 +4,6 @@ open Z3wrapper
 
 (* TODO: 
    (1) siplify pure part inside lambda and in the main formula after folding (i.e. get rid of useless existentials)
-   (2) check that you are not folding global variables 
 *)
 
 exception ErrorInAbstraction of string
@@ -42,24 +41,24 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 		| Dlseg (a,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
 	in
 	(* form -> base(a1) = base(a2) *)
-	let query=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+	let query=[ 
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2])))
 	] in
 	let query_res=if (dir=2) then false else ((Solver.check solv query)=UNSATISFIABLE) in
 	(* form -> base(a1) = base(a2end) *)
 	let queryend=if a2end=ff then [ff] else
-		[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		[ 
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2end])))
 	] in
 	let queryend_res= if ((a2end=ff) || (dir=1)) then false else ((Solver.check solv queryend)=UNSATISFIABLE) in
 	(* form -> a1 != a2 *)
-	let query2= [  (Boolean.mk_and ctx (formula_to_solver ctx form));
+	let query2= [ 
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2)))
 	] in
 	let query2_res= if ((dir=2)||(include_a1=1)) then true else ((Solver.check solv query2)=UNSATISFIABLE) in
 	(* form -> a1 != a2end *)
 	let query2end=if a2end=ff then [ff] else
-		[  (Boolean.mk_and ctx (formula_to_solver ctx form));
+		[  
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2end)))
 	] in
 	let query2end_res= if (include_a1=1 || a2end=ff || dir=1) then true else ((Solver.check solv query2end)=UNSATISFIABLE) in
@@ -85,13 +84,13 @@ let check_eq_dist_from_base ctx solv z3_names form i1 i2 =
 	if ((a1=ff) || (a2=ff)) then false
 	else
 	(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-	let query1 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+	let query1 = [ 
 		Boolean.mk_eq ctx 
 			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 	] in
 	(* SAT l1=l2 *)
-	let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+	let query2 = [
 		Boolean.mk_eq ctx l1 l2
 	] in
 
@@ -140,14 +139,14 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		let var1=expr_to_solver_only_exp ctx z3_names (Exp.Var v1) in
 		let var2=expr_to_solver_only_exp ctx z3_names (Exp.Var v2) in
 		(* form -> base(base1) = base(v1) /\ base(base2) = base(v2) *)
-		let query_blocks=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query_blocks=[ 
 			(Boolean.mk_not ctx (Boolean.mk_and ctx [
 				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [var1]));
 				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b2]) (Expr.mk_app ctx z3_names.base [var2]))
 			]))
 		] in
 		(* SAT: form /\ v1-base(v1) = v2 - base(v2) *)
-		let query_dist = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query_dist = [
 				Boolean.mk_eq ctx 
 				(BitVector.mk_sub ctx  var1 (Expr.mk_app ctx z3_names.base [var1]) )
 				(BitVector.mk_sub ctx  var2 (Expr.mk_app ctx z3_names.base [var2]) )
@@ -164,7 +163,7 @@ let rec check_backlink ctx solv z3_names form v2 block_bases =
 	match block_bases with 
 	| [] -> false,[]
 	| (b1,b2, flag)::rest ->
-		let query_backlink=[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query_backlink=[ 
 			(Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [v2]));
 			)
@@ -188,7 +187,7 @@ let check_dlseg_from_block_bases ctx solv z3_names form v1 v2 block_bases =
 				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b]) (Expr.mk_app ctx z3_names.base [v1]));
 			)
 		in
-		let query_nomem = (formula_to_solver ctx form)@(List.map non_eq base_list) in
+		let query_nomem =(List.map non_eq base_list) in
 		if ((Solver.check solv query_nomem)=SATISFIABLE) then true else false
 
 (* This is called in the case that there is no allocated block before the DLL candidate *)
@@ -231,13 +230,13 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		let a1,l1 = (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l) in
 		let a2,l2 = (expr_to_solver_only_exp ctx z3_names aa),(expr_to_solver_only_exp ctx z3_names ll) in
 		(* form -> base(a1) != base(a2) /\ l1 = l2 *)
-		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query1 = [	
 			Boolean.mk_or ctx [
 			(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 			(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));]
 		] in
 		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-		let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query2 = [ 
 			Boolean.mk_eq ctx 
 			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
@@ -252,7 +251,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
 		let query3=if gvars=[] then []
 			else
-			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			[ 
 				Boolean.mk_and ctx (List.map (global_bases a1) gvars);
 				Boolean.mk_and ctx (List.map (global_bases a2) gvars);] 
 		in
@@ -275,11 +274,12 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] 0 in
 		let pt_refs_b1 = List.concat(List.map eq_base vars_b1) in 
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
-		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query=[
 				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
-		(* check entailment between l1 and l2 *)
-		let entailment_res=Abduction.check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
+		(* check entailment between l1 and l2
+		   we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
+		let entailment_res=Abduction.check_lambda_entailment (config_solver ()) l1 l2 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
@@ -287,7 +287,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
 		let query3=if gvars=[] then []
 			else
-			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			[ 
 				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a1)) gvars);
 				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a2)) gvars);] 
 		in
@@ -316,14 +316,15 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		let pt_refs_b2 = List.concat(List.map eq_base vars_b2) in
 		let pt_refs_d1 = List.concat(List.map eq_base vars_d1) in 
 		let pt_refs_d2 = List.concat(List.map eq_base vars_d2) in
-		let queryB=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let queryB=[
 				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
-		let queryD=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let queryD=[
 				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names d1) (expr_to_solver_only_exp ctx z3_names d2)
 			] in
 		(* check entailment between l1 and l2 *)
-		let entailment_res=Abduction.check_lambda_entailment {ctx;solv;z3_names} l1 l2 in
+		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
+		let entailment_res=Abduction.check_lambda_entailment (config_solver ()) l1 l2 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
@@ -331,7 +332,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) /\  base(g)!=base(c1) /\ base(g)!=base(c2)*)
 		let query3=if gvars=[] then []
 			else
-			[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+			[ 
 				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a1)) gvars);
 				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names a2)) gvars);
 				Boolean.mk_and ctx (List.map (global_bases (expr_to_solver_only_exp ctx z3_names c1)) gvars);
@@ -390,7 +391,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		let pt_refs_b2 = List.concat(List.map (eq_base 1) vars_b2) in
 		let pt_refs_b1_back = List.concat(List.map (eq_base 2) vars_b1) in 
 		let pt_refs_b2_back = List.concat(List.map (eq_base 2) vars_b2) in
-		let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query=[
 				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
 		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2, pt_refs_b1_back,pt_refs_b2_back  with
@@ -556,6 +557,7 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 				| _ -> raise (ErrorInAbstraction "Incompatible unfolding")
 			in
 			let e1,e2=if flag=0 then b1,a2 else endlist,a1 in
+			let solver2=config_solver () in (* use a fresh solver, the current one contains asserted form *)
 			let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx unfolded_form));
 				Boolean.mk_or ctx [
 					(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
@@ -568,8 +570,8 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 					(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 					(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 			] in
-			if not (((Solver.check solv query1)=UNSATISFIABLE)
-			&& ((Solver.check solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
+			if not (((Solver.check solver2.solv query1)=UNSATISFIABLE)
+			&& ((Solver.check solver2.solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
 			else  index
 
 		| _ -> find_new_i2 a1 l1 b1 (index+1)
@@ -695,7 +697,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 			| _ -> [],[]
 	in
 	(* check direction of the dll folding *)
-	let query=[(Boolean.mk_and ctx (formula_to_solver ctx form));
+	let query=[
 				BitVector.mk_slt ctx p1_z3 r1_z3
 			] in
 	let dll_dir=if y1<0 
@@ -738,7 +740,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 	in
 	let query_pvars middle=if pvars=[] then []
 		else
-		[ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		[ 
 			Boolean.mk_and ctx (List.map (global_bases middle) pvars) ] 
 	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
@@ -751,14 +753,14 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 				(expr_to_solver_only_exp ctx z3_names bb) in
 		(* First do a base check --- i.e. query1 + query2 *)
 		(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
-		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query1 = [	
 			Boolean.mk_or ctx [
 				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))]
 		] in
 		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-		let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query2 = [ 
 			Boolean.mk_eq ctx 
 				(BitVector.mk_sub ctx a1 (Expr.mk_app ctx z3_names.base [a1]) )
 				(BitVector.mk_sub ctx a2 (Expr.mk_app ctx z3_names.base [a2]) )
@@ -783,7 +785,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in
 		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> b1 = a2 *)
-		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query1 = [	
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx b1 a2))
 		] in
 		if (Solver.check solv query1)=SATISFIABLE 
@@ -795,7 +797,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			else (List.nth ll index) :: remove_i1_i2 ll (index+1) 
 		in
 			
-		(match (Abduction.check_lambda_entailment {ctx; solv; z3_names} l1 l2) with
+		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
+		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail
@@ -805,7 +808,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in
 		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> base(b1) = base(a2) *)
-		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query1 = [	
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
 		] in		
 		if (Solver.check solv query1)=SATISFIABLE 
@@ -819,7 +822,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in
 		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> base(b1) = base(a2) *)
-		let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx form));
+		let query1 = [	
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
 		] in		
 		if (Solver.check solv query1)=SATISFIABLE 
@@ -833,18 +836,18 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 
 (* try list abstraction - first tries the last added, at least 2 predicates in
 	sigma *)
-let rec lseg_abstaction solver form pvars =
+let rec lseg_abstraction_ll solver form pvars =
 	let rec f i j =
 		(* Printf.printf "%d,%d\n" i j; *)
 		let result = try_abstraction_to_lseg solver form i j pvars in
 		match result with
 		| AbstractionApply new_form ->
-			lseg_abstaction solver new_form pvars
+			lseg_abstraction_ll solver new_form pvars
 		| AbstractionFail -> (
 			let result_rev = try_abstraction_to_lseg solver form j i pvars in
 			match result_rev with
 			| AbstractionApply new_form ->
-				lseg_abstaction solver new_form pvars
+				lseg_abstraction_ll solver new_form pvars
 			| AbstractionFail -> (
 				match i,j with
 				| 1,_ -> form (* nothing change *)
@@ -857,6 +860,11 @@ let rec lseg_abstaction solver form pvars =
 	(* assert (n>1); *)
 	if (n<2) then form else f (n-1) (n-2) 
 
+let lseg_abstraction solver form pvars=
+	(* form is a common part of all SMT queries. Add it now to improve efficiency. *)
+	Solver.add solver.solv (formula_to_solver solver.ctx form);
+	let res=lseg_abstraction_ll solver form pvars in
+	Solver.reset solver.solv; res
 
 (***** Experiments *****)
 (* let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))

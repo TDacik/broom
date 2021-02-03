@@ -226,8 +226,11 @@ let () =
 	| Bok (x1,x2,_) ->
 		print_with_lambda x1; print_string "************\n";
 		print_with_lambda x2; *)
-	 print_with_lambda form7;
-	 let res=Abstraction.try_abstraction_to_lseg solv form7 2 6 [1] in
+	let form_to_process=form7 in
+	 print_with_lambda form_to_process;
+
+	Z3.Solver.add solv.solv (formula_to_solver solv.ctx form_to_process);
+	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 2 6 [1] in
 	 match res with
 	 | AbstractionApply x -> print_with_lambda x
 	(*let res=Abstraction.lseg_abstaction solv form6 [1] in

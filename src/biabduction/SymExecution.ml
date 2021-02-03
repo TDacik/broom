@@ -347,8 +347,8 @@ let try_abstraction_on_states solver fuid states =
     match states with
     | [] -> []
     | s::tl ->
-      let new_miss = Abstraction.lseg_abstaction solver s.miss pvars in
-      let new_curr = Abstraction.lseg_abstaction solver s.curr pvars in
+      let new_miss = Abstraction.lseg_abstraction solver s.miss pvars in
+      let new_curr = Abstraction.lseg_abstraction solver s.curr pvars in
       let abstract_state = {miss = new_miss; curr = new_curr; lvars=s.lvars} in
       (* TODO: update lvars *)
       abstract_state :: (try_abstraction tl)
