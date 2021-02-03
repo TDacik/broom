@@ -66,6 +66,8 @@
 
 - [ ] recursion
 
+- [ ] function pointers (callbacks)
+
 - [ ] functions with variable number of arguments
 
 - [ ] float type
