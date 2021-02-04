@@ -557,7 +557,7 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 				| _ -> raise (ErrorInAbstraction "Incompatible unfolding")
 			in
 			let e1,e2=if flag=0 then b1,a2 else endlist,a1 in
-			let solver2=config_solver () in (* use a fresh solver, the current one contains asserted form *)
+			let solver2=Z3.Solver.mk_solver ctx None in (* use a fresh solver, the current one contains asserted form *)
 			let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx unfolded_form));
 				Boolean.mk_or ctx [
 					(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
@@ -570,8 +570,8 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 					(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 					(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 			] in
-			if not (((Solver.check solver2.solv query1)=UNSATISFIABLE)
-			&& ((Solver.check solver2.solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
+			if not (((Solver.check solver2 query1)=UNSATISFIABLE)
+			&& ((Solver.check solver2 query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
 			else  index
 
 		| _ -> find_new_i2 a1 l1 b1 (index+1)
@@ -697,14 +697,13 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 			| _ -> [],[]
 	in
 	(* check direction of the dll folding *)
-	let query= [ BitVector.mk_slt ctx p1_z3 r1_z3 ] in
 	let dll_dir=if y1<0 
 		then 1
 		else 
+		let query= [ BitVector.mk_slt ctx p1_z3 r1_z3 ] in
 		if (Solver.check solv query)=SATISFIABLE then 1 else 2
 	in
 	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
-	(*print_string ("### "^(string_of_int (List.nth r1_lambda 0))^"\n"); flush stdout;*)
 	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
 	| [a],[d],[d_lambda],_,_,_,-1,_,1 -> 
 		let lambda={param=[a;d_lambda]; 
@@ -778,6 +777,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2,1)] 1 pvars) with
 			| CheckOK checked_matchres ->  
 				(fold_pointsto ctx solv z3_names form i1 i2 checked_matchres) 
+				
 			| CheckFail -> AbstractionFail
 		)
 	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
@@ -825,7 +825,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))
 		] in		
 		if (Solver.check solv query1)=SATISFIABLE 
-			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then AbstractionFail
+			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then  AbstractionFail
 		else
 		(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
 		try_add_slseg_to_pointsto ctx solv z3_names form i2 i1 pvars 1
@@ -837,7 +837,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 	sigma *)
 let rec lseg_abstraction_ll solver form pvars =
 	let rec f i j =
-		(* Printf.printf "%d,%d\n" i j; *)
+		(*Printf.printf "%d,%d\n" i j; *)
 		let result = try_abstraction_to_lseg solver form i j pvars in
 		match result with
 		| AbstractionApply new_form ->
