@@ -234,17 +234,33 @@ let () =
 
 	    }
 	 in
+	 let form9=
+	    let lambda= {param=[1;2;3] ;form={
+	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ]; 
+		pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));] }}
+	    in
+	    {
+   		 sigma = [ Hpointsto (Var 1, ptr_size, Var 10); 
+		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3) ;
+		 	Dlseg (Var 10, Var 1, Var 12,Const (Ptr 0),  lambda);
+			];
+		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+		 	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
+		 ]
+
+	    }
+	 in
 
 	(*let x=biabduction solv form3 form1 [10] in
 	match x with
 	| Bok (x1,x2,_) ->
 		print_with_lambda x1; print_string "************\n";
 		print_with_lambda x2; *)
-	let form_to_process=form8 in
+	let form_to_process=form9 in
 	 print_with_lambda form_to_process;
 
 	Z3.Solver.add solv.solv (formula_to_solver solv.ctx form_to_process);
-	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 0 1 [1] in
+	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 0 2 [1] in
 	 match res with
 	 | AbstractionApply x -> print_with_lambda x
 	(*let res=Abstraction.lseg_abstaction solv form6 [1] in

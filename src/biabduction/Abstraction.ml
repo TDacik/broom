@@ -449,7 +449,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 (* fold the pointsto into a existing list segment using the unfolded version of the slseg *)
 let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples flag =
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
-	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded slseg *)
+	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded lseg *)
 	let rec get_indeces quadruples =
 		match quadruples with
 		| [] -> [],[]
@@ -533,10 +533,17 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
   flag: 0: pointsto(x,y) * slseg(y,z)
         1: slseg(x,y) * pointsto(y,z)
 *)
-let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
+let try_add_lseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
+	Printf.printf ">>> %d,%d\n" i_pto i_slseg; 
 	let unfolded_form,_=unfold_predicate form i_slseg gvars 1 in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded slseg *)
 	let new_i1=if i_pto<i_slseg then i_pto else (i_pto-1) in
+	(* create a fresh solver --  the main one contains asserted "form" but we need to assert unfolded form *)
+	let solver2=Z3wrapper.config_solver () in
+	let ctx=solver2.ctx in
+	let solv=solver2.solv in
+	let z3_names=solver2.z3_names in
+	Solver.add solv (formula_to_solver ctx unfolded_form);	
 	(* serch for the index i2 in the unfolded_form,
 	   i2 is within the unfolded part of the formula, which 
 	   starts at index="(List.length form.sigma)-1"*)
@@ -554,24 +561,24 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 			let endlist = (* get the expression at the end of the unfolded list *)
 				match (List.nth unfolded_form.sigma  i_unfolded_slseg) with
 				| Slseg (_,b,_) -> (expr_to_solver_only_exp ctx z3_names b)
+				| Dlseg (_,_,_,b,_) -> (expr_to_solver_only_exp ctx z3_names b) (* !!! check *)
 				| _ -> raise (ErrorInAbstraction "Incompatible unfolding")
 			in
 			let e1,e2=if flag=0 then b1,a2 else endlist,a1 in
-			let solver2=Z3.Solver.mk_solver ctx None in (* use a fresh solver, the current one contains asserted form *)
-			let query1 = [	(Boolean.mk_and ctx (formula_to_solver ctx unfolded_form));
+			let query1 = [	
 				Boolean.mk_or ctx [
 					(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 					(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
 					(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [e1]) (Expr.mk_app ctx z3_names.base [e2])))]
 			] in
 			(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
-			let query2 = [ (Boolean.mk_and ctx (formula_to_solver ctx unfolded_form));
+			let query2 = [ 
 				Boolean.mk_eq ctx 
 					(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 					(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 			] in
-			if not (((Solver.check solver2 query1)=UNSATISFIABLE)
-			&& ((Solver.check solver2 query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
+			if not (((Solver.check solv query1)=UNSATISFIABLE)
+			&& ((Solver.check solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
 			else  index
 
 		| _ -> find_new_i2 a1 l1 b1 (index+1)
@@ -580,6 +587,8 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 	if not ((List.nth form.sigma i_pto)=(List.nth unfolded_form.sigma new_i1)) 
 	then raise (ErrorInAbstraction "This should not happen - Problem with unfolding") (*AbstractionFail*)
 	else
+	Formula.print unfolded_form;
+	Printf.printf ">>> %d, %d\n" new_i1 i_unfolded_slseg; 
 	match (List.nth unfolded_form.sigma new_i1) with
 	| Hpointsto (a,l,b) -> (
 		let a1,l1,b1= (expr_to_solver_only_exp ctx z3_names a), 
@@ -594,14 +603,16 @@ let try_add_slseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 		in
 		let a1_block=get_eq_base ctx solv z3_names unfolded_form a1 0 0 [new_i1;new_i2] 0 in
 		let a2_block=get_eq_base ctx solv z3_names unfolded_form a2 0 0 ([new_i1;new_i2]@a1_block) 0 in
+		Printf.printf ">>> %d, %d\n" (List.nth a1_block 0) (List.nth a2_block 0); 
 		(* FIRST: try to find possible mapping between particular points-to predicates is block of a1/a2 *)
 		match match_pointsto_from_two_blocks ctx solv z3_names unfolded_form a1_block a2_block with
-		| MatchFail -> AbstractionFail 
+		| MatchFail ->  AbstractionFail 
 		| MatchOK matchres ->  
 			match (check_matched_pointsto ctx solv z3_names unfolded_form matchres [(a1,a2,1)] 1 gvars) with
 			| CheckOK checked_matchres -> 
+				(print_string "OK\n"; flush stdout;
 				fold_pointsto_slseg form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
-
+				)
 			| CheckFail -> AbstractionFail
 	)
 	| _ -> AbstractionFail
@@ -830,7 +841,8 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			| _ -> AbstractionFail
 		)
 	)
-	| Hpointsto (_,_,b), Slseg (aa,_,_) -> (
+	| Hpointsto (_,_,b), Slseg (aa,_,_) 
+	| Hpointsto (_,_,b), Dlseg (aa,_,_,_,_) -> (
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in
 		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
 		(* form -> base(b1) = base(a2) *)
@@ -841,7 +853,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then AbstractionFail
 		else
 		(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
-		try_add_slseg_to_pointsto ctx solv z3_names form i1 i2 pvars 0
+		try_add_lseg_to_pointsto ctx solv z3_names form i1 i2 pvars 0
 
 	)
 	|  Slseg (_,b,_),Hpointsto (aa,_,_) -> (
@@ -855,7 +867,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			|| ((Solver.check solv (query_pvars a2))=UNSATISFIABLE) then  AbstractionFail
 		else
 		(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
-		try_add_slseg_to_pointsto ctx solv z3_names form i2 i1 pvars 1
+		try_add_lseg_to_pointsto ctx solv z3_names form i2 i1 pvars 1
 
 	)
 	| _ -> AbstractionFail 
