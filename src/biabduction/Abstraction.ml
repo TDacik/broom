@@ -803,6 +803,33 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			| _ -> AbstractionFail
 		)
 	)
+	| Dlseg(a,b,c,d,l1), Dlseg(aa,bb,cc,dd,l2) -> (
+		let d1= (expr_to_solver_only_exp ctx z3_names d) in
+		let c1= (expr_to_solver_only_exp ctx z3_names c) in
+		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
+		let b2= (expr_to_solver_only_exp ctx z3_names bb) in
+		(* form -> d1 = a2 /\ b2=c1 *)
+		let query1 = [	
+				(Boolean.mk_not ctx 
+				(Boolean.mk_and ctx [(Boolean.mk_eq ctx d1 a2);(Boolean.mk_eq ctx b2 c1); ])
+				)
+		] in
+		if (Solver.check solv query1)=SATISFIABLE 
+			|| ((Solver.check solv ((query_pvars a2)@(query_pvars c1)))=UNSATISFIABLE) then AbstractionFail
+		else
+		let rec remove_i1_i2 ll index=
+			if index=List.length ll then []
+			else if (index=i1) || (index=i2) then remove_i1_i2 ll (index+1)
+			else (List.nth ll index) :: remove_i1_i2 ll (index+1) 
+		in
+			
+		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
+		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) with
+			| 1 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l2) :: (remove_i1_i2 form.sigma 0)}
+			| 2 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l1) :: (remove_i1_i2 form.sigma 0)}
+			| _ -> AbstractionFail
+		)
+	)
 	| Hpointsto (_,_,b), Slseg (aa,_,_) -> (
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in
 		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
