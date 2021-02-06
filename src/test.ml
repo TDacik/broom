@@ -242,10 +242,14 @@ let () =
 	    {
    		 sigma = [ Hpointsto (Var 1, ptr_size, Var 10); 
 		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3) ;
-		 	Dlseg (Var 10, Var 1, Var 12,Const (Ptr 0),  lambda);
+		 	Dlseg (Var 10, Var 1, Var 12,Var 20,  lambda);
+			Hpointsto (Var 20, ptr_size, Var 21); 
+		 	Hpointsto (BinOp ( Pplus, Var 20, ptr_size), ptr_size, Var 12) ;
 			];
 		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
 		 	BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));
+			BinOp ( Peq, Var 20, UnOp ( Base, Var 20));
+		 	BinOp ( Peq, UnOp ( Len, Var 20), Const (Int (Int64.of_int 16)));
 		 ]
 
 	    }
@@ -260,7 +264,7 @@ let () =
 	 print_with_lambda form_to_process;
 
 	Z3.Solver.add solv.solv (formula_to_solver solv.ctx form_to_process);
-	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 0 2 [1] in
+	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 2 3 [1] in
 	 match res with
 	 | AbstractionApply x -> print_with_lambda x
 	(*let res=Abstraction.lseg_abstaction solv form6 [1] in
