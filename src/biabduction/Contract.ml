@@ -430,7 +430,7 @@ let contract_for_malloc dst size =
 let contract_for_free src =
 	let ef_src = operand_to_exformula src empty_exformula in
 	let (new_src, pvarmap, undef_src) = (match ef_src.root with
-		(* TODO: set src to UNDEF *)
+		(* TODO: set src to UNDEF? *)
 		(* | Exp.Var _ ->
 			let (src, pvm) = rewrite_root ef_src in
 			(src, pvm, [ Exp.BinOp ( Peq, src.root, Exp.Undef ) ]) *)
@@ -443,13 +443,13 @@ let contract_for_free src =
 	let freed_pi = Exp.UnOp (Freed, ef_src.root) in
 	let c1 = {lhs = {pi = base :: lhs.pi; sigma = sig_add :: lhs.sigma};
 		      rhs = {pi = freed_pi :: undef_src @ lhs.pi; sigma = lhs.sigma};
-		      cvars = ef_src.cnt_cvars;
+		      cvars = new_src.cnt_cvars;
 		      pvarmap = pvarmap;
 		      s = OK} in
 	let null_pi = Exp.BinOp ( Peq, ef_src.root, Exp.null) in
 	let c2 = {lhs = {pi = null_pi :: lhs.pi; sigma = lhs.sigma};
 		      rhs = Formula.empty;
-		      cvars = ef_src.cnt_cvars;
+		      cvars = new_src.cnt_cvars;
 		      pvarmap = pvarmap;
 		      s = OK} in
 	c1::c2::[]
