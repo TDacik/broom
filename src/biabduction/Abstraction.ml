@@ -432,13 +432,26 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 
 				)
 			)
-		| _,[x2],[],f2::_,[],[] -> 
+		| _,[x2],[],f2::_,[],[] -> (* Backlink of the Dlseg folding, where the backlink of the first segment does not points-to 
+						an alocated block *)
 			print_string "Checking backling simple\n"; flush stdout;
 			(match (check_backlink_simplified ctx solv z3_names form f2 block_bases),
 				(check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),2):: res )
 					| _ -> CheckFail
 					)
+		| _,[x2],[],f2::_,_,[] -> (* Used within  try_add_lseg_to_pointsto flag=2:
+						Dlseg(x,_,endlist,y) * Hpointsto (y,z) [1] * Hpointsto (y,endlist) [2] -> Dlseg(x,_,y,z). 
+						The Dlseg in by the try_add_lseg_to_pointsto function  unfolded into 
+						Dlseg(x,_,z,endlist) [3] * Hpointsto(endlist,y) [4] * Hpointsto(endlist,z) [5]
+						and Ptrefs_b2=[4,5] and Ptrefs_b1=[] and Ptrefs_b1_back [3] *) 
+			print_string "Checking backling simple\n"; flush stdout;
+			(match (check_backlink_simplified ctx solv z3_names form f2 block_bases),
+				(check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
+					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
+					| _ -> CheckFail
+					)
+
 
 		| _ ->
 			(* complicated pattern -> stop abstraction *)
@@ -448,6 +461,21 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 
 (* fold the pointsto into a existing list segment using the unfolded version of the slseg *)
 let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples flag =
+	(* get backlink indeces y1 and y2 marked by 1 or 2 in the last item of a quadruple *)
+	let rec get_backlinks quadruples res =
+		match quadruples with
+		| [] -> res
+		| (y1,y2,_,i)::rest -> 
+			match i,res with
+			| 0,_ -> get_backlinks rest res
+			| _,(-1,-1) -> get_backlinks rest (y1,y2)
+			| _ -> (-2,-2) (* more then a single backlink *)
+	in
+	let y1,y2=get_backlinks res_quadruples (-1,-1) in
+	if y1=(-2) then AbstractionFail (* more then a single backlink *)
+	else
+	(
+	print_string ("Found backlink: "^(string_of_int y1)^" <-- "^(string_of_int y2)^"\n"); flush stdout;
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded lseg *)
 	let rec get_indeces quadruples =
@@ -499,19 +527,21 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
 			| Slseg _ -> [],[]
 	in
-	let slseg_b,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
+	let slseg_d,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
 			| Hpointsto _ -> [],{param=[]; form=empty}
-			| Slseg (_,b,lambda) -> (find_vars_expr b),lambda
+			| Slseg (_,d,lambda) -> (find_vars_expr d),lambda
+			| Dlseg (_,_,_,d,lambda) -> (find_vars_expr d),lambda
 	in
-	let slseg_a_orig,slseg_b_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
+	let slseg_a_orig,slseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
 			| Hpointsto _ -> [],[],{param=[]; form=empty}
-			| Slseg (a,b,lambda) -> (find_vars_expr a),(find_vars_expr b),lambda
+			| Slseg (a,d,lambda) -> (find_vars_expr a),(find_vars_expr d),lambda
+			| Dlseg (a,_,_,d,lambda) -> (find_vars_expr a),(find_vars_expr d),lambda
 	in
 	(* this is a safety check that unfolding works correctly. In theory, it is not needed *)
-	if not ((slseg_b=slseg_b_orig) && (lambda=lambda_orig) ) then raise (ErrorInAbstraction "Abstraction: Something bad with unfolding") (*AbstractionFail*)
+	if not ((slseg_d=slseg_d_orig) && (lambda=lambda_orig) ) then raise (ErrorInAbstraction "Abstraction: Something bad with unfolding") (*AbstractionFail*)
 	else
 	let p1,p2,p1_lambda,p2_lambda=
-		if flag=0 then pto_a,slseg_b,pto_a,slseg_a_orig 
+		if flag=0 then pto_a,slseg_d,pto_a,slseg_a_orig 
 		else slseg_a_orig,pto_b,pto_a,pto_b
 	in
 	match p1,p2,p1_lambda,p2_lambda with
@@ -521,7 +551,7 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		} in
 		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var b, lambda)]}
 	| _ -> AbstractionFail
-
+	)
 
 
 (* check that the pointsto (and its neighbourhood) is compatible with lambda in the slseg 
@@ -623,14 +653,14 @@ let try_add_lseg_to_pointsto ctx solv z3_names form i_pto i_slseg gvars flag=
 		Printf.printf ">>> %d, %d\n" (List.nth a1_block 0) (List.nth a2_block 0); 
 		(* FIRST: try to find possible mapping between particular points-to predicates is block of a1/a2 *)
 		match match_pointsto_from_two_blocks ctx solv z3_names unfolded_form a1_block a2_block with
-		| MatchFail ->  AbstractionFail 
+		| MatchFail ->  AbstractionFail
 		| MatchOK matchres ->  
 			match (check_matched_pointsto ctx solv z3_names unfolded_form matchres [(a1,a2,1)] 1 gvars) with
 			| CheckOK checked_matchres -> 
 				(print_string "OK\n"; flush stdout;
 				fold_pointsto_slseg form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
 				)
-			| CheckFail -> AbstractionFail
+			| CheckFail -> (print_string "$$$FAIL2\n"; flush stdout; AbstractionFail)
 	)
 	| _ -> AbstractionFail
 	
