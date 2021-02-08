@@ -342,7 +342,8 @@ let contract_for_binop code dst src1 src2 =
 		| CL_BINOP_TRUTH_XOR -> [BinOp ( Pxor, ef_src1.root, ef_src2.root)]
 		| CL_BINOP_PLUS | CL_BINOP_POINTER_PLUS ->
 			[BinOp ( Pplus, ef_src1.root, ef_src2.root)]
-		| CL_BINOP_MINUS -> [BinOp ( Pminus, ef_src1.root, ef_src2.root)]
+		| CL_BINOP_MINUS | CL_BINOP_POINTER_MINUS ->
+			[BinOp ( Pminus, ef_src1.root, ef_src2.root)]
 		| CL_BINOP_MULT -> [BinOp ( Pmult, ef_src1.root, ef_src2.root)]
 		| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV ->
 			[BinOp ( Pdiv, ef_src1.root, ef_src2.root)]
@@ -366,6 +367,8 @@ let contract_for_binop code dst src1 src2 =
 					 UnOp (Base, new_dst.root),
 					 UnOp (Len, new_dst.root))
 				 ) *) ]
+			| CL_BINOP_POINTER_MINUS ->
+				[ assign; Exp.BinOp ( Peq, (UnOp (Base, ef_src1.root)), (UnOp (Base, ef_src2.root)) )]
 			| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV | CL_BINOP_TRUNC_MOD ->
 				[ assign; Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
 			| _ -> [assign]

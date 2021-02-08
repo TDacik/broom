@@ -170,6 +170,7 @@ let binary_insn_to_string code dst src1 src2 =
 		| CL_BINOP_MIN -> "min"
 		| CL_BINOP_MAX -> "max"
 		| CL_BINOP_POINTER_PLUS -> "[ptr]+"
+		| CL_BINOP_POINTER_MINUS -> "[ptr]-"
 		| CL_BINOP_BIT_AND -> "&"
 		| CL_BINOP_BIT_IOR -> "|"
 		| CL_BINOP_BIT_XOR -> "^"
