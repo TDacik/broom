@@ -18,7 +18,15 @@ NCPU="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
 MAKE="make -j${NCPU} -s"
 
 export GCC_HOST="${GCC_HOST:-/usr/bin/gcc}"
-
+if test "/" != "${GCC_HOST:0:1}"; then
+    if echo "$GCC_HOST" | grep / >/dev/null; then
+        # assume a relative path to GCC_HOST
+        GCC_HOST="$(realpath "$GCC_HOST")"
+    else
+        # assume an executable in $PATH
+        GCC_HOST="$(command -v "$GCC_HOST")"
+    fi
+fi
 # check GCC_HOST
 test -x "$GCC_HOST" || die "GCC_HOST is not an executable file: $GCC_HOST"
 
