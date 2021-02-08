@@ -270,8 +270,8 @@ let rec args_to_exformula args ef =
 
 (* CREATING CONTRACTS *)
 
-(* replace dst, return new dst and pvarmap for contract *)
-let rewrite_dst dst =
+(* replace root in dst, return dst with new root and pvarmap for contract *)
+let rewrite_root dst =
 	match dst.root with
 	| Exp.Var puid -> let cuid = dst.cnt_cvars + 1 in
 		({f = dst.f; cnt_cvars = cuid; root = Exp.CVar cuid}, [(puid, cuid)])
@@ -323,7 +323,7 @@ let contract_for_binop code dst src1 src2 =
 	let ef_src1 = operand_to_exformula src1 {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
 	let ef_src2 = operand_to_exformula src2 {f=ef_src1.f; cnt_cvars=ef_src1.cnt_cvars; root=Undef} in
 	let lhs = ef_src2.f in
-	let (new_dst, pvarmap) = rewrite_dst {f=ef_src2.f; cnt_cvars=ef_src2.cnt_cvars; root=ef_dst.root} in
+	let (new_dst, pvarmap) = rewrite_root {f=ef_src2.f; cnt_cvars=ef_src2.cnt_cvars; root=ef_dst.root} in
 	let bin_exp = ( match code with
 		| CL_BINOP_EQ -> [Exp.BinOp ( Peq, ef_src1.root, ef_src2.root);
 			BinOp ( Pneq, ef_src1.root, ef_src2.root)]
@@ -361,20 +361,20 @@ let contract_for_binop code dst src1 src2 =
 	match bin_exp with
 	| [_] ->
 		let pi_add = ( match code with
-			| CL_BINOP_POINTER_PLUS -> [ assign(* ; Exp.BinOp ( Plesseq,
+			| CL_BINOP_POINTER_PLUS -> [ (* Exp.BinOp ( Plesseq,
 				 new_dst.root,
 				 BinOp ( Pplus,
 					 UnOp (Base, new_dst.root),
 					 UnOp (Len, new_dst.root))
 				 ) *) ]
 			| CL_BINOP_POINTER_MINUS ->
-				[ assign; Exp.BinOp ( Peq, (UnOp (Base, ef_src1.root)), (UnOp (Base, ef_src2.root)) )]
+				[ Exp.BinOp ( Peq, (UnOp (Base, ef_src1.root)), (UnOp (Base, ef_src2.root)) )]
 			| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV | CL_BINOP_TRUNC_MOD ->
-				[ assign; Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
-			| _ -> [assign]
+				[ Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
+			| _ -> []
 		) in
-		let rhs = {pi = pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
-		[{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}]
+		let rhs = {pi = [assign] @ pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
+		[{lhs = {pi = pi_add @ lhs.pi; sigma = lhs.sigma}; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}]
 	| e1::e2::[] ->
 		let lhs1 = {pi = e1::lhs.pi; sigma = lhs.sigma} in
 		let rhs1 = {pi = assign::e1::new_dst.f.pi; sigma = new_dst.f.sigma} in
@@ -390,7 +390,7 @@ let contract_for_unop code dst src =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_src = operand_to_exformula src {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
 	let lhs = ef_src.f in
-	let (new_dst, pvarmap) = rewrite_dst {f=ef_src.f; cnt_cvars=ef_src.cnt_cvars; root=ef_dst.root} in
+	let (new_dst, pvarmap) = rewrite_root {f=ef_src.f; cnt_cvars=ef_src.cnt_cvars; root=ef_dst.root} in
 	let un_exp = ( match code with
 		| CL_UNOP_ASSIGN -> ef_src.root
 		| CL_UNOP_BIT_NOT -> Exp.UnOp ( BVnot, ef_src.root)
@@ -413,38 +413,44 @@ let contract_for_unop code dst src =
 let contract_for_malloc dst size =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_size = operand_to_exformula size {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
-	let lhs = ef_size.f in
-	let (new_dst, pvarmap) = rewrite_dst {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
+	let (new_dst, pvarmap) = rewrite_root {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
 	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), ef_size.root) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
 	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
 	let sig_add = Hpointsto (new_dst.root, ef_size.root, Undef) in
+	let lhs = { pi= size :: ef_size.f.pi ; sigma = ef_size.f.sigma} in
 	let rhs =
 		{pi = len :: base :: size :: new_dst.f.pi;
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
-(* PRE: base(src)=src POS: freed(src)
+(* PRE: base(src)=src POS: freed(src) & src'=UNDEF
    PRE: src=NULL      POS:
 *)
 let contract_for_free src =
 	let ef_src = operand_to_exformula src empty_exformula in
-	let lhs = ef_src.f in
+	let (new_src, pvarmap, undef_src) = (match ef_src.root with
+		(* TODO: set src to UNDEF *)
+		(* | Exp.Var _ ->
+			let (src, pvm) = rewrite_root ef_src in
+			(src, pvm, [ Exp.BinOp ( Peq, src.root, Exp.Undef ) ]) *)
+		| _ -> (ef_src, [], [])) in
+	let lhs = new_src.f in
 	(* let len = Exp.BinOp ( Peq, (UnOp (Len, ef_src.root)), Undef) in *)
 	let sig_add = Hpointsto (ef_src.root, Exp.one, Undef) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, ef_src.root)), ef_src.root) in
 	(* let not_freed_pi = Exp.UnOp ( Pnot, (UnOp (Freed, ef_src.root))) in *)
 	let freed_pi = Exp.UnOp (Freed, ef_src.root) in
 	let c1 = {lhs = {pi = base :: lhs.pi; sigma = sig_add :: lhs.sigma};
-		      rhs = {pi = freed_pi :: lhs.pi; sigma = lhs.sigma};
+		      rhs = {pi = freed_pi :: undef_src @ lhs.pi; sigma = lhs.sigma};
 		      cvars = ef_src.cnt_cvars;
-		      pvarmap = [];
+		      pvarmap = pvarmap;
 		      s = OK} in
 	let null_pi = Exp.BinOp ( Peq, ef_src.root, Exp.null) in
 	let c2 = {lhs = {pi = null_pi :: lhs.pi; sigma = lhs.sigma};
 		      rhs = Formula.empty;
 		      cvars = ef_src.cnt_cvars;
-		      pvarmap = [];
+		      pvarmap = pvarmap;
 		      s = OK} in
 	c1::c2::[]
 
@@ -459,7 +465,7 @@ let contract_for_alloca dst size =
 	let ef_dst = operand_to_exformula dst empty_exformula in
 	let ef_size = operand_to_exformula size {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
 	let lhs = ef_size.f in
-	let (new_dst, pvarmap) = rewrite_dst {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
+	let (new_dst, pvarmap) = rewrite_root {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
 	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), ef_size.root) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
 	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
@@ -490,7 +496,7 @@ let contract_for_clobber var =
 		let sig_add = Hpointsto (CVar cvar, size_exp, ef_var.root) in
 		let stack = Exp.BinOp ( Stack, CVar cvar, ef_var.root) in
 		let base = Exp.BinOp ( Peq, (UnOp (Base, CVar cvar)), CVar cvar) in
-		let (new_var, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=cvar; root=ef_var.root} in
+		let (new_var, pvarmap) = rewrite_root {f=Formula.empty; cnt_cvars=cvar; root=ef_var.root} in
 		let rhs_pi = Exp.UnOp (Invalid, CVar cvar) in
 		{lhs = {pi = stack :: base :: ef_var.f.pi; sigma = sig_add :: ef_var.f.sigma};
 			rhs = {pi = [rhs_pi]; sigma = []};
@@ -514,7 +520,7 @@ let contract_nondet dst =
 	| _ ->
 		let ef_dst = operand_to_exformula dst empty_exformula in
 		let lhs = ef_dst.f in
-		let (new_dst, pvarmap) = rewrite_dst ef_dst in
+		let (new_dst, pvarmap) = rewrite_root ef_dst in
 		let assign = Exp.BinOp ( Peq, new_dst.root, Undef) in
 		let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
 		{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}::[]
@@ -570,7 +576,7 @@ let contract_for_called_fnc dst args fuid c =
 	missing/frame - lvars na cvars
 	new LHS (frame + lhs) *)
 
-	let (new_dst, pvarmap) = rewrite_dst {f=Formula.empty; cnt_cvars=ef_args.cnt_cvars; root=ef_dst.root} in
+	let (new_dst, pvarmap) = rewrite_root {f=Formula.empty; cnt_cvars=ef_args.cnt_cvars; root=ef_dst.root} in
 	let dst_rhs = substitute_vars_cvars new_dst.root (Exp.ret) c.rhs in
 	let new_rhs = substitute_anchors (roots_rev @ gvars_exp) (orig_args @ used_gvars) dst_rhs in
 	{
