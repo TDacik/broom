@@ -195,8 +195,9 @@ let check_backlink_simplified ctx solv z3_names form i2 block_bases =
 	match (List.nth form.sigma i2) with
 	| Hpointsto (aa,_,_) ->
 		let a2 = (expr_to_solver_only_exp ctx z3_names aa) in
-		match (check_backlink ctx solv z3_names form a2 block_bases) with
+		(match (check_backlink ctx solv z3_names form a2 block_bases) with
 			| (x,_) -> x
+		)
 	| _ -> false 
 	
 
@@ -474,8 +475,8 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 	let y1,y2=get_backlinks res_quadruples (-1,-1) in
 	if y1=(-2) then AbstractionFail (* more then a single backlink *)
 	else
-	(
-	print_string ("Found backlink: "^(string_of_int y1)^" <-- "^(string_of_int y2)^"\n"); flush stdout;
+	( 
+	print_string ("Found backlink: "^(string_of_int y1)^" <-- "^(string_of_int y2)^"\n"); flush stdout; 
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded lseg *)
 	let rec get_indeces quadruples =
@@ -486,8 +487,14 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 			| a1,a2 -> (a::a1,b::a2)
 	in
 	let tmp1,tmp2=get_indeces res_quadruples in
-	(* new_i2 :: tmp2 must contain all inceces from (List.length form.sigma)-1 to (List.length unfolded_form.sigma)-2 *)
-	if not (List.sort compare (new_i2 :: tmp2) = range ((List.length form.sigma)-1) (i_unfolded_slseg-1))
+	(* new_i2 :: tmp2 (resp. new_i1 :: tmp1) must contain all inceces from (List.length form.sigma)-1 to (List.length unfolded_form.sigma)-2 *)
+	let indeces_to_check=
+		match flag with
+		| 0 |1 -> (new_i2 :: tmp2) (* the indeces of unfolded part of the predicate are new_i2:: tmp2 *)
+		| 2 ->  (new_i1 :: tmp1) (* flag 2 --> the unfolded DLL has indeces new_i1 :: tmp1 *)
+		| _ -> raise (ErrorInAbstraction "BAD flag")
+	in
+	if not (List.sort compare indeces_to_check = range ((List.length form.sigma)-1) (i_unfolded_slseg-1))
 	then raise (ErrorInAbstraction "BAD indeces")  (* AbstractionFail *)
 	else
 	let mem l x =
@@ -503,55 +510,85 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		else (List.nth unfolded_form.sigma i) :: get_new_sigma (i+1)
 	in
 	(* lambda may be overaproximated during the matches *)
-	let rec new_lambda_from_quadruples quadruples =
-		match quadruples with 
-		| [] -> []
-		| (_,_,l,_)::rest -> l :: new_lambda_from_quadruples rest
-	in
 	let rec get_fresh_var s confl=
  	   if (mem confl s)
 	    then get_fresh_var (s+1) confl
 	    else s
 	in
-	let get_new_lambda=match (List.nth unfolded_form.sigma new_i1) with
+	let fresh_backlink_var=get_fresh_var 1 (find_vars unfolded_form) in	
+	let rec new_lambda_from_quadruples quadruples =
+		match quadruples with 
+		| [] -> [],-1
+		| (_,index,l,2)::rest -> 
+			let (_,_,c)=to_hpointsto_unsafe(List.nth unfolded_form.sigma index) in
+			let (a,b,_)=to_hpointsto_unsafe(l) in
+				let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
+				let new_l,_=new_lambda_from_quadruples rest in
+				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var
+		| (_,_,l,_)::rest -> 
+			let new_l,new_backlink_var=new_lambda_from_quadruples rest in
+			(l :: new_l), new_backlink_var
+	in
+	let get_new_lambda,dll_backlink=
+		let new_l,new_back_link_var= new_lambda_from_quadruples res_quadruples in
+		match (List.nth unfolded_form.sigma new_i1) with
 		| Hpointsto (a,l,b) ->(
 			match (find_vars_expr b) with
-			| _::[] -> Hpointsto (a,l,b) ::new_lambda_from_quadruples res_quadruples
-			| _ -> Hpointsto (a,l,Exp.Var (get_fresh_var 0 (find_vars unfolded_form))) 
-				::new_lambda_from_quadruples res_quadruples (* change null/undef or equations for fresch variable *)
+			| _::[] -> (Hpointsto (a,l,b) ::new_l),new_back_link_var
+			| _ -> (Hpointsto (a,l,Exp.Var (get_fresh_var (new_back_link_var+1) (find_vars unfolded_form))) 
+				::new_l), new_back_link_var (* change null/undef or equations for fresch variable *)
 			)
 		| _ -> raise (ErrorInAbstraction "Something bad happened, probably broken unfolding") (*[]*)
 	in
 	(* get the parameters of the list segment *)
 	let pto_a,pto_b = match (List.nth unfolded_form.sigma new_i1) with
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
-			| Slseg _ -> [],[]
+			| _ -> raise (ErrorInAbstraction "Expecting pointsto")
 	in
-	let slseg_d,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
-			| Hpointsto _ -> [],{param=[]; form=empty}
+	let pto_a2,pto_b2 = match (List.nth unfolded_form.sigma new_i2) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
+			| _ -> raise (ErrorInAbstraction "Expecting pointsto")
+	in
+	let pto_back_b,dll_backlink = if y1<0 then [],[]
+		else match (List.nth unfolded_form.sigma y1),dll_backlink with
+			| Hpointsto (_,_,b),-1 -> (find_vars_expr b),(find_vars_expr b)
+			|  Hpointsto (_,_,b),back_l -> (find_vars_expr b), [back_l]
+			| _ -> raise (ErrorInAbstraction "Expecting pointsto")
+	in
+	let lseg_d,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
+			| Hpointsto _ -> raise (ErrorInAbstraction "Points-to can not be on this place")
 			| Slseg (_,d,lambda) -> (find_vars_expr d),lambda
 			| Dlseg (_,_,_,d,lambda) -> (find_vars_expr d),lambda
 	in
-	let slseg_a_orig,slseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
-			| Hpointsto _ -> [],[],{param=[]; form=empty}
-			| Slseg (a,d,lambda) -> (find_vars_expr a),(find_vars_expr d),lambda
-			| Dlseg (a,_,_,d,lambda) -> (find_vars_expr a),(find_vars_expr d),lambda
+	let lseg_a_orig,lseg_b_orig,lseg_c_orig,lseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
+			| Hpointsto _ -> raise (ErrorInAbstraction "Points-to can not be on this place");
+			| Slseg (a,d,lambda) -> (find_vars_expr a),[],[],(find_vars_expr d),lambda
+			| Dlseg (a,b,c,d,lambda) -> (find_vars_expr a),(find_vars_expr b),(find_vars_expr c),(find_vars_expr d),lambda
 	in
-	(* this is a safety check that unfolding works correctly. In theory, it is not needed *)
-	if not ((slseg_d=slseg_d_orig) && (lambda=lambda_orig) ) then raise (ErrorInAbstraction "Abstraction: Something bad with unfolding") (*AbstractionFail*)
+	(* this is a safety check that unfolding works correctly. *)
+	if not (((lseg_d=lseg_d_orig)||flag=2) && (lambda=lambda_orig) ) 
+	then raise (ErrorInAbstraction "Abstraction: Something bad with unfolding") (*AbstractionFail*)
 	else
-	let p1,p2,p1_lambda,p2_lambda=
-		if flag=0 then pto_a,slseg_d,pto_a,slseg_a_orig 
-		else slseg_a_orig,pto_b,pto_a,pto_b
+	let p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda=
+		match flag with
+		| 0 -> pto_a,pto_back_b,lseg_c_orig,lseg_d,pto_a,lseg_a_orig,dll_backlink
+		| 1 -> lseg_a_orig,[],[],pto_b,pto_a,pto_b,[]
+		| 2 -> lseg_a_orig,lseg_b_orig,pto_a2,pto_b2,pto_a,pto_a2,dll_backlink
 	in
-	match p1,p2,p1_lambda,p2_lambda with
-	| [a],[b],[a_lambda],[b_lambda] ->
+	match p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda,y1 with
+	| [a],_,_,[d],[a_lambda],[b_lambda],_,-1 -> (*Slseg*)
 		let lambda={param=[a_lambda;b_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var b, lambda)]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
+	| [a],[b],[c],[d],[a_lambda],[b_lambda],[c_lambda],_ -> (*Dlseg*)
+		let lambda={param=[a_lambda;b_lambda;c_lambda]; 
+			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda;c_lambda]) (find_vars unfolded_form)))
+		} in
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
 	| _ -> AbstractionFail
 	)
+	
 
 
 (* check that the pointsto (and its neighbourhood) is compatible with lambda in the slseg 
