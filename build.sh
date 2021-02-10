@@ -30,6 +30,21 @@ fi
 # check GCC_HOST
 test -x "$GCC_HOST" || die "GCC_HOST is not an executable file: $GCC_HOST"
 
+# try to run GCC_HOST
+"$GCC_HOST" --version || die "unable to run gcc: $GCC_HOST --version"
+
+CHANGE=false
+if [ `uname` = Darwin ] && [ -z "$CXX" ]; then
+	# no CXX compiler on macos, try substitue gcc for g++
+	base_gcc="${GCC_HOST##*/}"
+	gxx="${GCC_HOST%/*}/${base_gcc/gcc/g++}"
+	if [ "$GCC_HOST" != "$gxx" ] && [ -x "$gxx" ]; then
+		export CC="$GCC_HOST"
+		export CXX="$gxx"
+		CHANGE=true
+	fi
+fi
+
 # check code-listener source code
 [ "$(ls -A code-listener)" ] \
     || die "Missing code-listener source code"
@@ -42,6 +57,11 @@ $MAKE distclean \
 
 status_update "Trying to build JSON dumper"
 $MAKE -C json
+
+if $CHANGE; then
+	export CC=""
+	export CXX=""
+fi
 
 status_update "Checking whether JSON dumper works"
 $MAKE -C json check \
