@@ -2,7 +2,7 @@ module FExp = Formula.Exp
 open Formula
 open Z3wrapper
 
-exception Conflict_between_freed_and_slseg
+exception Conflict_between_freed_and_lseg
 
 let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list invalid_list =
     let rec check_eq_bases a base_list =
@@ -21,8 +21,12 @@ let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list
         else Hpointsto (a,b,c) ::(cut_spatial rest base_list )
       | Slseg (a,b,c) :: rest ->
         if (check_eq_bases a base_list)
-        then raise Conflict_between_freed_and_slseg
+        then raise Conflict_between_freed_and_lseg
         else Slseg (a,b,c) ::(cut_spatial rest base_list )
+      | Dlseg (a,b,c,d,l) :: rest ->
+        if ((check_eq_bases a base_list) || (check_eq_bases c base_list))
+        then raise Conflict_between_freed_and_lseg
+        else Dlseg (a,b,c,d,l) ::(cut_spatial rest base_list )
     in
     (* cat all "Stack(x,_)" predicates, where base(x) is part of base_list
        if replaced is true, add Invalid(x) *)
