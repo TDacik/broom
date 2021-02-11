@@ -243,12 +243,11 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
 		] in
 		if not (((Solver.check solv query1)=UNSATISFIABLE)
-			&& ((Solver.check solv query2)=SATISFIABLE)) then (print_string "XXX\n"; CheckFail)
+			&& ((Solver.check solv query2)=SATISFIABLE)) then  CheckFail
 		else
 		if (check_dlseg_from_block_bases ctx solv z3_names form a1 a2 block_bases)
-		then (print_string "Backlink discovered\n"; flush stdout; DlsegBackLink)
+		then DlsegBackLink
 		else
-		(print_string "Backlink not discovered\n"; flush stdout; 
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
 		let query3=if gvars=[] then []
 			else
@@ -269,7 +268,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 					| CheckFail  -> CheckFail
 					| DlsegBackLink -> raise (ErrorInAbstraction "DllBackling is not expected here")
 				)
-		))
+		)
 	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
@@ -376,7 +375,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 	match pairs_of_pto with
 	| [] -> CheckOK []
 	| (i1,i2)::rest ->
-		print_string (">>> "^(string_of_int i1)^":"^(string_of_int i2)^"\n");
+		(*print_string (">>> "^(string_of_int i1)^":"^(string_of_int i2)^"\n");*)
 		(* Slseg can not present here *)
 		let a1,s1,b1 = to_hpointsto_unsafe (List.nth form.sigma i1) in
 		let a2,_,b2 =  to_hpointsto_unsafe (List.nth form.sigma i2) in
@@ -434,7 +433,6 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			)
 		| _,[_],[],f2::_,[],[] -> (* Backlink of the Dlseg folding, where the backlink of the first segment does not points-to 
 						an alocated block *)
-			print_string "Checking backling simple\n"; flush stdout;
 			(match (check_backlink_simplified ctx solv z3_names form f2 block_bases),
 				(check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),2):: res )
@@ -445,7 +443,6 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 						The Dlseg in by the try_add_lseg_to_pointsto function  unfolded into 
 						Dlseg(x,_,z,endlist) [3] * Hpointsto(endlist,y) [4] * Hpointsto(endlist,z) [5]
 						and Ptrefs_b2=[4,5] and Ptrefs_b1=[] and Ptrefs_b1_back [3] *) 
-			print_string "Checking backling simple\n"; flush stdout;
 			(match (check_backlink_simplified ctx solv z3_names form f2 block_bases),
 				(check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 					| true, CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
@@ -471,11 +468,9 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 			| _,(-1,-1) -> get_backlinks rest (y1,y2)
 			| _ -> (-2,-2) (* more then a single backlink *)
 	in
-	let y1,y2=get_backlinks res_quadruples (-1,-1) in
+	let y1,_=get_backlinks res_quadruples (-1,-1) in
 	if y1=(-2) then AbstractionFail (* more then a single backlink *)
 	else
-	( 
-	print_string ("Found backlink: "^(string_of_int y1)^" <-- "^(string_of_int y2)^"\n"); flush stdout; 
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
 	let i_unfolded_slseg=(List.length unfolded_form.sigma)-1 in (* index of the partially unfolded lseg *)
 	let rec get_indeces quadruples =
@@ -587,7 +582,6 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		} in
 		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
 	| _ -> AbstractionFail
-	)
 	
 
 
@@ -618,7 +612,6 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 	   i2 is within the unfolded part of the formula, which 
 	   starts at index="(List.length form.sigma)-1"*)
 	let rec find_new_i2 a1 l1 b1 index =
-		Printf.printf "### %d\n" index;
 		if index=(List.length unfolded_form.sigma) then -1
 		else
 		match (List.nth unfolded_form.sigma index) with
@@ -665,7 +658,6 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 	if not ((List.nth form.sigma i_pto)=(List.nth unfolded_form.sigma new_i1)) 
 	then raise (ErrorInAbstraction "This should not happen - Problem with unfolding") (*AbstractionFail*)
 	else
-	Formula.print unfolded_form;
 	match (List.nth unfolded_form.sigma new_i1) with
 	| Hpointsto (a,l,b) -> (
 		let a1,l1,b1= (expr_to_solver_only_exp ctx z3_names a), 
@@ -692,10 +684,8 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 		| MatchOK matchres ->  
 			match (check_matched_pointsto ctx solv z3_names unfolded_form matchres [(a1,a2,1)] 1 gvars) with
 			| CheckOK checked_matchres -> 
-				(print_string "OK\n"; flush stdout;
 				fold_pointsto_slseg form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
-				)
-			| CheckFail -> (print_string "$$$FAIL2\n"; flush stdout; AbstractionFail)
+			| CheckFail ->  AbstractionFail
 			| DlsegBackLink -> raise (ErrorInAbstraction "DllBackLink is not expected here")
 	)
 	| _ -> AbstractionFail
@@ -728,8 +718,6 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	let y1,y2=get_backlinks res_quadruples (-1,-1) in
 	if y1=(-2) then AbstractionFail (* more then a single backlink *)
 	else
-	(
-	print_string ("Found backlink: "^(string_of_int y1)^" <-- "^(string_of_int y2)^"\n"); flush stdout;
 	(* first, get only the first two elements from the triples  and store it into the tmp1, and tmp2*)
 	let rec get_indeces quadruples =
 		match quadruples with
@@ -815,7 +803,6 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, lambda)]}
 	| _ -> AbstractionFail
-	)
 
 
 

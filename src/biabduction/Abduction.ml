@@ -1096,7 +1096,8 @@ and entailment solver form1 form2 evars=
   (* get fresh names for the evars to avoid conflicts in the entailment query *)
   let form1_s=Formula.simplify form1 evars in
   let form2_s=Formula.simplify form2 evars in
-  (*print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
+  (*
+  print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
   Formula.print_with_lambda form1_s;
   print_string "FORM2: ";
   Formula.print_with_lambda form2_s;
@@ -1113,7 +1114,7 @@ and entailment solver form1 form2 evars=
   let res=
   	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
   in
-  if res then print_endline "ENT VALID" else print_endline "ENT INVALID";
+  if res then print_endline "ENT VALID" else print_endline "ENT INVALID"; flush stdout;
   res
 
 (****************************************************)
