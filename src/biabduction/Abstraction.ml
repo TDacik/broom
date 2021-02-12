@@ -230,14 +230,13 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 	| Hpointsto (a,l,_), Hpointsto (aa,ll,_) ->
 		let a1,l1 = (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names l) in
 		let a2,l2 = (expr_to_solver_only_exp ctx z3_names aa),(expr_to_solver_only_exp ctx z3_names ll) in
-		(* form -> base(a1) != base(a2) /\ l1 = l2 *)
+		(* form ->  l1 = l2 *)
 		let query1 = [	
-			Boolean.mk_or ctx [
-			(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
-			(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));]
+			(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
 		] in
-		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
+		(* SAT: form /\ base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ 
+			Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 			Boolean.mk_eq ctx 
 			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
@@ -831,15 +830,15 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 				(expr_to_solver_only_exp ctx z3_names ll),
 				(expr_to_solver_only_exp ctx z3_names bb) in
 		(* First do a base check --- i.e. query1 + query2 *)
-		(* form -> base(a1) != base(a2) /\ l1 = l2 /\ base(b1) = base(a2) *)
+		(* form -> l1 = l2 /\ base(b1) = base(a2) *)
 		let query1 = [	
 			Boolean.mk_or ctx [
-				(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
 				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))]
 		] in
-		(* SAT: form /\ a1-base(a1) = a2 - base(a2) *)
+		(* SAT: form /\  base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ 
+			Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 			Boolean.mk_eq ctx 
 				(BitVector.mk_sub ctx a1 (Expr.mk_app ctx z3_names.base [a1]) )
 				(BitVector.mk_sub ctx a2 (Expr.mk_app ctx z3_names.base [a2]) )

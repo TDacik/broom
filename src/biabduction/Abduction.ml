@@ -1167,7 +1167,8 @@ let rec biabduction solver form1 form2 pvars =
   | SatFail, _ ->
     prerr_endline "SAT fail (biabduction)"; BFail  
   | Finish (missing,frame), Fail ->
-    print_endline "Finish true"; Bok ( missing,frame, [])
+    print_endline "Finish true"; 
+    Bok ( missing,frame, [])
   | _, Apply (f1,f2,missing,n_lvars) ->
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail

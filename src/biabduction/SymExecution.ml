@@ -22,7 +22,7 @@ let apply_contract solver state c pvars =
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
     (* prune useless constrains in miss.pi *)
-    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.curr)) miss.pi in
+    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
     let current= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
     (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
