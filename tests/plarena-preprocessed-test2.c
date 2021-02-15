@@ -211,6 +211,8 @@ void *PL_ArenaGrow(PLArenaPool * pool, void *p, PRUint32 size, PRUint32 incr)
 }*/
 
 // "free" all allocated blocks in all arenas, memset to pattern
+// biabductor note: looping, no abstraction?
+/*
 void PL_ClearArenaPool(PLArenaPool * pool, PRInt32 pattern)
 {
     PLArena *a;
@@ -219,10 +221,10 @@ void PL_ClearArenaPool(PLArenaPool * pool, PRInt32 pattern)
         a->avail = a->base;
         memset((void *) (a)->avail, (pattern), (a)->limit - (a)->avail);
     }
-}
+}*/
 
 // free all next arenas from given arena
-/*
+// biabductor note: looping, no abstraction?
 static void FreeArenaList(PLArenaPool * pool, PLArena * head)
 {
     PLArena *a = head->next;
@@ -240,10 +242,9 @@ static void FreeArenaList(PLArenaPool * pool, PLArena * head)
     } while (a);
 
     pool->current = head;
-}*/
+}
 
 // RELEASE (after MARK)
-/*
 void PL_ArenaRelease(PLArenaPool * pool, char *mark)
 {
     PLArena *a;
@@ -254,7 +255,7 @@ void PL_ArenaRelease(PLArenaPool * pool, char *mark)
             return;
         }
     }
-}*/
+}
 
 // free all arenas in pool
 /*

@@ -43,3 +43,4 @@ val entailment : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
     -> bool
 
 val check_lambda_entailment : Z3wrapper.solver -> Formula.lambda -> Formula.lambda -> int
+

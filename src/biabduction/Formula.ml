@@ -172,7 +172,7 @@ and lambda = {
 and heap_pred =
   | Hpointsto of Exp.t * Exp.t * Exp.t (* source, size_of_field, destination *)
   | Slseg of Exp.t * Exp.t * lambda    (* source, destination, lambda *)
-  (* todo *)
+  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
 
 (* spatial part *)
 and sigma = heap_pred list
@@ -209,6 +209,15 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
       ("Slseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
         Exp.to_string ~lvars:lvars b ^", "^
+        lambda_id^") "),
+      "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
+        (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
+    | Dlseg (a,b,c,d,lambda) ->
+      let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
+      ("Dlseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
+        Exp.to_string ~lvars:lvars b ^", "^
+	Exp.to_string ~lvars:lvars c ^", "^
+	Exp.to_string ~lvars:lvars d ^", "^
         lambda_id^") "),
       "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
         (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
@@ -303,6 +312,12 @@ let rec find_vars_sigma sigma =
   | Slseg (a,b,_)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
+  | Dlseg (a,b,c,d,_)::rest ->
+    CL.Util.list_join_unique (find_vars_expr a)
+    (CL.Util.list_join_unique (find_vars_expr b) 
+    (CL.Util.list_join_unique (find_vars_expr c)
+    (CL.Util.list_join_unique (find_vars_expr d)
+    (find_vars_sigma rest))))
 
 (* This function provides a list of all variables used in the formula form *)
 let find_vars form =
@@ -356,6 +371,18 @@ let rec subsigma vars sigma =
     then
       let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l)::subtl)
+    else
+      (tl_vars,subtl)
+  | Dlseg (a,b,c,d,l)::tl ->
+    let (a_vars,a_found) = find_expr_contains_vars vars a in
+    let (b_vars,_) = find_expr_contains_vars vars b in
+    let (c_vars,c_found) = find_expr_contains_vars vars a in
+    let (d_vars,_) = find_expr_contains_vars vars b in
+    let (tl_vars,subtl) = subsigma vars tl in
+    if (a_found)||(c_found) (* must be reach from source pointer *)
+    then
+      let new_vars = CL.Util.list_diff (a_vars @ b_vars @ c_vars @ d_vars) vars in
+      (CL.Util.list_join_unique new_vars tl_vars, Dlseg (a,b,c,d,l)::subtl)
     else
       (tl_vars,subtl)
 
@@ -429,6 +456,12 @@ let rec substitute_sigma var1 var2 sigma =
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       Slseg (a_new,b_new,l) :: substitute_sigma var1 var2 rest
+    | Dlseg (a,b,c,d,l) ::rest ->
+      let a_new = substitute_expr var1 var2 a in
+      let b_new = substitute_expr var1 var2 b in
+      let c_new = substitute_expr var1 var2 c in
+      let d_new = substitute_expr var1 var2 d in
+      Dlseg (a_new,b_new,c_new,d_new,l) :: substitute_sigma var1 var2 rest
 
 
 let rec substitute_pi ?(fix_stack=false) var1 var2 pi =
@@ -482,6 +515,13 @@ let rec substitute2_sigma ignore var1 var2 sigma =
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       Slseg (a_new,b_new,l) :: substitute2_sigma ignore var1 var2 rest
+    | Dlseg (a,b,c,d,l) ::rest ->
+      let a_new = substitute_expr var1 var2 a in
+      let b_new = substitute_expr var1 var2 b in
+      let c_new = substitute_expr var1 var2 c in
+      let d_new = substitute_expr var1 var2 d in
+      Dlseg (a_new,b_new,c_new,d_new,l) :: substitute2_sigma ignore var1 var2 rest
+
 
 
 let rec substitute2_pi ?(fix_addr=false) var1 var2 pi =
@@ -656,22 +696,25 @@ let rec diffbase_ll sigma x =
       let base_x=Exp.UnOp (Base, x) in
       let base_a=Exp.UnOp (Base, a) in
       Exp.BinOp (Pneq,base_a,base_x) :: diffbase_ll rest x
-    | Slseg _ -> diffbase_ll rest x
+    | Slseg _ | Dlseg _ -> diffbase_ll rest x
 
 (* for the Slseg(x,_,_) predicate given by the index pnum
-   and for each Hpointsto(y,_,_) create base(x) != base(y) *)
-let diffbase form pnum =
-  match (List.nth form.sigma pnum) with
-  | Hpointsto _ -> []
-  | Slseg (x,_,_) ->
+   and for each Hpointsto(y,_,_) create base(x) != base(y) 
+   *)
+let diffbase form pnum dir =
+  match (List.nth form.sigma pnum),dir with
+  | Slseg (x,_,_),1 | Dlseg(x,_,_,_,_),1 | Dlseg (_,_,x,_,_),2 ->
     let nequiv a b = not (a=b) in
     let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
     let sigma= remove pnum form.sigma in
     diffbase_ll sigma x
+  | _ -> []
 
 (* The predicate pnum is removed from form.sigma, unfolded once and all the new stuff is added to the end of the list form.sigma,
-   !!! The function Abstraction.try_add_slseg_to_pointsto relies on the fact, that the unfolded stuff is added to the end *)
-let unfold_predicate form pnum conflicts =
+   !!! The function Abstraction.try_add_slseg_to_pointsto relies on the fact, that the unfolded stuff is added to the end 
+
+  dir (in case of Dlseg): 1 - from begining, 2 - from end. *)
+let unfold_predicate form pnum conflicts dir =
   let confl=CL.Util.list_join_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in
   let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
@@ -686,7 +729,6 @@ let unfold_predicate form pnum conflicts =
   in
   let nomem lst x = not (mem lst x) in
   match (List.nth form.sigma pnum) with
-  | Hpointsto _ -> form,[]
   | Slseg (a,b,lambda) ->
     let confl1=confl @ (find_vars lambda.form) in
     let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
@@ -697,8 +739,34 @@ let unfold_predicate form pnum conflicts =
     let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
     let res_form=simplify
       {sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda)];
-       pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum) }
+       pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum 1) }
       ([new_a;new_b]@added_vars) in
     (* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)
     let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
     res_form, new_lvars
+  | Dlseg (a,b,c,d,lambda) ->
+    let confl1=confl @ (find_vars lambda.form) in
+    let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
+    let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
+    let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
+    let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
+    let new_c = (get_fresh_var (new_b + 1) ([new_a;new_b] @ confl1 @ added_vars)) in
+    let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
+    let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
+    let l_form4 = substitute new_c [(List.nth lambda.param 2)] l_form3 in
+    let res_form=
+    	if dir=1 
+	then simplify
+      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (Var new_b,Var new_a,c,d,lambda)];
+       		pi=form.pi @ l_form4.pi @ [Exp.BinOp (Peq,a,Var new_a);Exp.BinOp (Peq,b,Var new_c)] @ (diffbase form pnum 1) }
+      		([new_a;new_b;new_c]@added_vars) 
+	else simplify
+      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (a,b,Var new_c,Var new_a,lambda)];
+       		pi=form.pi @ l_form4.pi @ [Exp.BinOp (Peq,c,Var new_a);Exp.BinOp (Peq,d,Var new_b)] @ (diffbase form pnum 2) }
+      		([new_a;new_b;new_c]@added_vars)
+		
+	in
+    (* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)
+    let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
+    res_form, new_lvars
+  | _ -> form,[] (* wrong parameters => no unfolding *)

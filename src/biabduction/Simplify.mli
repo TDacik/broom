@@ -1,7 +1,7 @@
 module FExp = Formula.Exp
 
 (** Raise in case of ... *)
-exception Conflict_between_freed_and_slseg
+exception Conflict_between_freed_and_lseg
 
 (** Raise in case of ... *)
 exception RemovedSpatialPartFromMiss

@@ -22,7 +22,7 @@ let apply_contract solver state c pvars =
   | BFail -> CAppFail
   | Bok  (miss, fr, l_vars) ->
     (* prune useless constrains in miss.pi *)
-    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.curr)) miss.pi in
+    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
     let current= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
     (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
@@ -347,8 +347,8 @@ let try_abstraction_on_states solver fuid states =
     match states with
     | [] -> []
     | s::tl ->
-      let new_miss = Abstraction.lseg_abstaction solver s.miss pvars in
-      let new_curr = Abstraction.lseg_abstaction solver s.curr pvars in
+      let new_miss = Abstraction.lseg_abstraction solver s.miss pvars in
+      let new_curr = Abstraction.lseg_abstraction solver s.curr pvars in
       let abstract_state = {miss = new_miss; curr = new_curr; lvars=s.lvars} in
       (* TODO: update lvars *)
       abstract_state :: (try_abstraction tl)

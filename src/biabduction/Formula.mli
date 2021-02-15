@@ -91,6 +91,7 @@ and lambda = {
 and heap_pred =
   | Hpointsto of Exp.t * Exp.t * Exp.t (** source, size_of_field, destination *)
   | Slseg of Exp.t * Exp.t * lambda    (** source, destination, lambda *)
+  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
 
 and sigma = heap_pred list
 
@@ -139,6 +140,10 @@ val subformula_only : Exp.t list -> t -> (Exp.t list * t)
 (** [get_equiv_vars a pi] get all variables equivalent with [a] from pure part
     by computing a transitive closure *)
 val get_equiv_vars : Exp.variable list -> pi -> Exp.variable list
+
+
+(** [substitute_expr new_expr old_expr expr] *)
+val substitute_expr : ?fix_stack:bool -> Exp.t -> Exp.t -> Exp.t -> Exp.t
 
 (** [substitute_vars new_var old_var form] *)
 val substitute_vars : ?fix_stack:bool -> Exp.variable -> Exp.variable -> t -> t
@@ -191,4 +196,4 @@ val rename_ex_variables : t -> Exp.variable list -> Exp.variable list -> t * Exp
 
 (** {3 Unfold predicate} *)
 
-val unfold_predicate : t -> int -> Exp.variable list -> t * Exp.variable list
+val unfold_predicate : t -> int -> Exp.variable list -> int -> t * Exp.variable list
