@@ -160,7 +160,7 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
   let ff = Boolean.mk_false ctx in
   let rhs,rhs2=match (List.nth form2.sigma i2) with
 	  | Hpointsto (_,_,_) ->  ff,ff
-	  | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
+	  | Slseg (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names a)
 	  | Dlseg (a,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
   in
   if (rhs==ff) then false
