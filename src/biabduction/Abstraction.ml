@@ -788,17 +788,21 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
 	| [a],[d],[d_lambda],_,_,_,-1,_,1 -> 
 		let lambda={param=[a;d_lambda]; 
-			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)))
+			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)) [d_lambda])
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
 		let lambda={param=[a;d_lambda;b_lambda]; 
-			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)))
+			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
+						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
+						[d_lambda;b_lambda])
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
 		let lambda={param=[a;b_lambda;d_lambda]; 
-			form=(simplify  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)))
+			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
+					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
+					[d_lambda;b_lambda])
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, lambda)]}
 	| _ -> AbstractionFail

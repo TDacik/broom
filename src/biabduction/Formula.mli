@@ -171,21 +171,26 @@ val remove_redundant_eq : pi -> pi
     variables *)
 val remove_equiv_vars : Exp.variable list -> Exp.variable list -> t -> t
 
-(** [remove_useless_conjuncts form evars] removes usless conjuncts from pure
+(** [remove_useless_conjuncts form evars exclude_from_refs] removes usless conjuncts from pure
     part of [form] - a conjunct is useless iff
       1a) contains vars only from [evars] only
       1b) it is of the form exp1 != exp2 and evars are not togather with
           referenced ars in exp1/2
           i.e. r1 != e1 (r1 referenced, e1 existential) => not needed FIXME!
       2) there is no transitive reference from spatial part or program variables
-    [form] expect satisfiable formula only *)
-val remove_useless_conjuncts : t -> Exp.variable list -> t
+    [form] expect satisfiable formula only 
+    [exclude_from_refs] is a set of variables, which are considered not referenced by sigma *)
+val remove_useless_conjuncts : t -> Exp.variable list -> Exp.variable list -> t
 
 (** [simplify form evars] is global simplify function, [evars] is a list of Ex.
     q. variables, which can be renamed/removed/etc...
     [form] - expect satisfiable formula only *)
 val simplify : t -> Exp.variable list -> t
 
+(* [simplify_lambda form evars lambda_refs] this is used in the lambda creation. 
+   --- Everything related only to the referenced variables (lambda_refs) is removed from pi. 
+   --- lambda_refs can not be removed (resp. renamed) from sigma *)
+val simplify_lambda : t -> Exp.variable list -> Exp.variable list -> t
 
 (** {3 Rename conflicting logical variables} *)
 

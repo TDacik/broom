@@ -631,15 +631,16 @@ let get_referenced_conjuncts pi referenced_vars =
   get_referenced_conjuncts_rec referenced_vars
 
 (* expect satisfiable formula only *)
-let remove_useless_conjuncts form evars =
-  let mem x =
+let remove_useless_conjuncts form evars exclude_from_refs=
+  let mem to_filter x =
       let eq y= (x=y) in
-      not (List.exists eq evars )
+      not (List.exists eq to_filter )
   in
   let vars=find_vars form in
-  let gvars=List.filter mem vars in
+  let gvars=List.filter (mem evars) vars in
   let ref_vars=CL.Util.list_join_unique (find_vars_sigma form.sigma)  gvars in
-  let new_pi=get_referenced_conjuncts form.pi ref_vars in
+  let ref_vars_filtered=List.filter (mem exclude_from_refs) ref_vars in
+  let new_pi=get_referenced_conjuncts form.pi ref_vars_filtered in
   {sigma=form.sigma; pi=new_pi}
 
 (* now we have everything for global simplify function,
@@ -653,8 +654,22 @@ let simplify form evars=
   let vars = find_vars form in
   let gvars = List.filter mem vars in
   let form1 = remove_equiv_vars gvars evars form in
-  remove_useless_conjuncts form1 evars
+  remove_useless_conjuncts form1 evars []
 
+(* this is used in the lambda creation. 
+   --- Everything related only to the referenced variables (lambda_refs) is removed from pi. 
+   --- they can not be removed from sigma 
+   ---> they are treated as gvars in remove_equiv_vars and 
+        as nonreferenced_vars in remove_useless conjuncts *)
+let simplify_lambda form evars lambda_refs=
+  let mem x =
+    let eq y= (x=y) in
+    not (List.exists eq evars )
+  in
+  let vars = find_vars form in
+  let gvars = List.filter mem vars in
+  let form1 = remove_equiv_vars gvars evars form in
+  remove_useless_conjuncts form1 evars lambda_refs
 
 (*** RENAME CONFLICTING LOGICAL VARIABLES ***)
 (* The existentially quantified variables are renamed to avoid conflicts

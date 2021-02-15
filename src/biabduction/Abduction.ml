@@ -615,8 +615,7 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
   if (List.length form1.sigma)>0 then -1
   else
   (
-
-  print_endline (lvariables_to_string evars);
+  (*print_endline (lvariables_to_string evars);*)
   (* First all Slseg(a,b,_) are replaced by a=b 
      and Dlseg(a,b,c,d,_) are prelaced by a=d and b=c --- i.e. empty lists *)
   let rec remove_lseg_form2 f2 =
@@ -1065,6 +1064,10 @@ and check_lambda_entailment solver lambda1 lambda2 =
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
 	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
+	print_string "LAMBDA entailment:\n";
+	Formula.print  lambda1_new;
+	Formula.print lambda2_new;
+	flush stdout;
 	match (entailment solver lambda1_new lambda2_new variables), 
 		(entailment solver lambda2_new lambda1_new variables)
 	with
