@@ -1,6 +1,5 @@
 (* * * * * * * * * * * * * * * main * * * * * * * * * * * * * * *)
 
-
 let () =
 	let fnc_tbl = Biabd.SpecTable.create in
 	let rec exec tbl fncs =
@@ -11,6 +10,3 @@ let () =
 	exec fnc_tbl CL.Util.stor.fncs;
 	print_endline "===============================================";
 	Biabd.SpecTable.print fnc_tbl
-
-
-
