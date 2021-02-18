@@ -1129,13 +1129,24 @@ type sat_test_res =
 | NoFinish
 | SatFail
 
+
+let rec prune_freed_invalid pi=
+  	match pi with
+	| [] -> []
+	| Formula.Exp.UnOp (Freed,_)::rest | Formula.Exp.UnOp (Invalid,_)::rest ->  prune_freed_invalid rest
+        | first::rest -> first :: (prune_freed_invalid rest)
+
 let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
   if (Solver.check solv query)=UNSATISFIABLE then SatFail
   else
   if (List.length form2.sigma)>0 then NoFinish
   (* FINISH TRUE, return MISSING pure part (form2.pi) and FRAME (form1) *)
-  else Finish ({pi=form1.pi@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
+  (* All the equalities between variables from form1.pi should be added to the missing part, because 
+     form1.pi is considered as axiom within each biabduction query. But these axioms may be missing in the MISS part of the state.
+     The exception is freed(x) and invalid(x), because a spatial predicate with x can be part of the MISS.
+    *) 
+  else Finish ({pi=(prune_freed_invalid form1.pi)@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
 
 (* main biabduction function *)
 (* The result is:  "missing, frame, added_lvars" *)

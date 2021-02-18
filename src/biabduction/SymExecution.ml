@@ -132,7 +132,11 @@ let post_contract_application state solver pvarmap pvars =
      ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
   then  CAppOk final_state
   else 
-  (prerr_endline "SAT Fail (Contract application)"; CAppFail)
+  ( print_string "------------CURR:\n";
+  Formula.print final_state.curr;
+  print_string "MISS:\n";
+  Formula.print final_state.miss;
+  prerr_endline "SAT Fail (Contract application)"; CAppFail)
 
 (* Do
    1) rename conflicting contract variables
