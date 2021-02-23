@@ -1187,18 +1187,13 @@ let rec biabduction solver form1 form2 pvars =
      The conflicts may be removed by application of a match rule.
      The Finish true is aplied only if Match-onstack can not be applied
    *) 
-  Solver.push solver.solv; 
-  Solver.add solver.solv [Boolean.mk_and solver.ctx (formula_to_solver solver.ctx form1)];
   match (test_sat solver form1 form2),(try_rules rules_onstack) with
   | SatFail, _ ->
-    Solver.pop  solver.solv 1;
     prerr_endline "SAT fail (biabduction)"; BFail  
   | Finish (missing,frame), Fail ->
-    Solver.pop  solver.solv 1;
     print_endline "Finish true"; 
     Bok ( missing,frame, [])
   | _, Apply (f1,f2,missing,n_lvars) ->
-    Solver.pop  solver.solv 1;
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
@@ -1223,13 +1218,11 @@ let rec biabduction solver form1 form2 pvars =
   ] in
   match try_rules rules with
   | Apply (f1,f2,missing,n_lvars) ->
-    Solver.pop  solver.solv 1;
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
   | Fail ->
-    Solver.pop  solver.solv 1;
     raise NoApplicableRule
 
 
