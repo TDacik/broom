@@ -116,6 +116,7 @@ let try_learn_pointsto solver form1 form2 level _ =
   | _ ->  [Boolean.mk_and ctx (formula_to_solver ctx form1); 
   	(Boolean.mk_and ctx (formula_to_solver ctx form2))]
   in
+  Solver.push solver.solv;
   Solver.add solver.solv common_part;
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
@@ -133,14 +134,14 @@ let try_learn_pointsto solver form1 form2 level _ =
       sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
   in
   match (get_index 0) with
-  | (-1,-1) -> Solver.reset solver.solv; Fail
-  | (-3,i2) -> Solver.reset solver.solv; 
+  | (-1,-1) -> Solver.pop solver.solv 1; Fail
+  | (-3,i2) -> Solver.pop solver.solv 1; 
     (* learn with level 3 *)
     Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i2 form2),
       {sigma=[List.nth form2.sigma i2]; pi=[]},
       [])
-  | (i1,i2) -> Solver.reset solver.solv;
+  | (i1,i2) -> Solver.pop solver.solv 1;
     (* learn with level 1 *)
     let (y1,_,_) = to_hpointsto_unsafe (List.nth form1.sigma i1) in
     let (y2,_,_) = to_hpointsto_unsafe (List.nth form2.sigma i2) in
@@ -220,6 +221,7 @@ let try_learn_slseg solver form1 form2 level _=
           (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
   | _ -> []
   in
+  Solver.push solver.solv;
   Solver.add solver.solv common_part;
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
@@ -236,8 +238,8 @@ let try_learn_slseg solver form1 form2 level _=
       sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
   in
   match (get_index 0) with
-  | -1 -> Solver.reset solver.solv; Fail
-  | i -> Solver.reset solver.solv; Apply ( { sigma=form1.sigma; pi = form1.pi},
+  | -1 -> Solver.pop solver.solv 1; Fail
+  | i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i form2),
       {sigma=[List.nth form2.sigma i]; pi=[]},
       [])
@@ -407,9 +409,10 @@ let find_split solver form1 form2 level =
           (Boolean.mk_and ctx (formula_to_solver ctx form2))]
   | _ -> []
   in
+  Solver.push solver.solv;
   Solver.add solver.solv common_part;
   let res= find_split_ll solver form1 0 form2 level in
-  Solver.reset solver.solv; res
+  Solver.pop solver.solv 1; res
 
 
 
@@ -683,34 +686,24 @@ let check_match_onstack {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i
   else
   match level with
   | 1 ->
-  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_src rhs_src);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_src rhs_src);]
 	in
   	(Solver.check solv query1)=UNSATISFIABLE
   | 2 ->
-  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);]
 	in
 	(lhs_dest=rhs_dest) &&((Solver.check solv query2)=SATISFIABLE)
   | 3 ->
-  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1))]
+  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);]
 	in
   	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
 		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
 	in
 	((Solver.check solv query1)=UNSATISFIABLE) &&((Solver.check solv query2)=SATISFIABLE)
   | 4 ->
-  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);]
 	in
-  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);
-        	(Boolean.mk_and ctx (formula_to_solver ctx form1));
-		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
+  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);]
 	in
 	((Solver.check solv query1)=UNSATISFIABLE) &&((Solver.check solv query2)=SATISFIABLE)
          
@@ -733,14 +726,25 @@ let rec find_match_onstack_ll solver form1 i1 form2 level  =
     | x -> (i1,x)
 
 let find_match_onstack solver form1 form2 level =
-  find_match_onstack_ll solver form1 0 form2 level 
+  let ctx=solver.ctx in 
+  let common_part=match level with
+  | 3 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
+  | 1 | 2 | 4 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
+          (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
+  | _ -> []
+  in
+  Solver.push solver.solv;
+  Solver.add solver.solv common_part;
+  let res=find_match_onstack_ll solver form1 0 form2 level in
+  Solver.pop solver.solv 1; res
+
 
 (* try to mathc stack and static predicates *)
 let try_match_onstack solver form1 form2 level _  =
   let m=find_match_onstack solver form1 form2 level in
   match m with
   | (-1,-1) -> Fail
-  | (i1,i2) -> print_endline ("Match onstack Apply "^(string_of_int i1)^" "^(string_of_int i2)) ;
+  | (i1,i2) -> (*print_endline ("Match onstack Apply "^(string_of_int i1)^" "^(string_of_int i2)) ;*)
 	let nequiv a b = not (a=b) in
 	let remove k form =
 	    { sigma=form.sigma;
@@ -918,9 +922,10 @@ let find_match solver form1 form2 level =
           (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
   | _ -> []
   in
+  Solver.push solver.solv;
   Solver.add solver.solv common_part;
   let res=find_match_ll solver form1 0 form2 level in
-  Solver.reset solver.solv; res
+  Solver.pop solver.solv 1; res
 
 
 
@@ -1181,14 +1186,19 @@ let rec biabduction solver form1 form2 pvars =
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
      The conflicts may be removed by application of a match rule.
      The Finish true is aplied only if Match-onstack can not be applied
-   *)
+   *) 
+  Solver.push solver.solv; 
+  Solver.add solver.solv [Boolean.mk_and solver.ctx (formula_to_solver solver.ctx form1)];
   match (test_sat solver form1 form2),(try_rules rules_onstack) with
   | SatFail, _ ->
+    Solver.pop  solver.solv 1;
     prerr_endline "SAT fail (biabduction)"; BFail  
   | Finish (missing,frame), Fail ->
+    Solver.pop  solver.solv 1;
     print_endline "Finish true"; 
     Bok ( missing,frame, [])
   | _, Apply (f1,f2,missing,n_lvars) ->
+    Solver.pop  solver.solv 1;
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
@@ -1213,11 +1223,13 @@ let rec biabduction solver form1 form2 pvars =
   ] in
   match try_rules rules with
   | Apply (f1,f2,missing,n_lvars) ->
+    Solver.pop  solver.solv 1;
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
     | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
     )
   | Fail ->
+    Solver.pop  solver.solv 1;
     raise NoApplicableRule
 
 
