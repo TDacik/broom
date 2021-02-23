@@ -1130,11 +1130,14 @@ type sat_test_res =
 | SatFail
 
 
-let rec prune_freed_invalid pi=
+let rec prune_pure_form1 pi=
   	match pi with
 	| [] -> []
-	| Formula.Exp.UnOp (Freed,_)::rest | Formula.Exp.UnOp (Invalid,_)::rest ->  prune_freed_invalid rest
-        | first::rest -> first :: (prune_freed_invalid rest)
+	| Formula.Exp.UnOp (Freed,_)::rest | Formula.Exp.UnOp (Invalid,_)::rest 
+	| Formula.Exp.BinOp (Stack,_,_)::rest | Formula.Exp.BinOp (Static,_,_)::rest 
+	| Formula.Exp.BinOp (_,UnOp(Base,_),_)::rest | Formula.Exp.BinOp (_,_,UnOp(Base,_))::rest 
+	| Formula.Exp.BinOp (_,UnOp(Len,_),_)::rest | Formula.Exp.BinOp (_,_,UnOp(Len,_))::rest ->  prune_pure_form1 rest
+        | first::rest -> first :: (prune_pure_form1 rest)
 
 let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
@@ -1142,11 +1145,13 @@ let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   else
   if (List.length form2.sigma)>0 then NoFinish
   (* FINISH TRUE, return MISSING pure part (form2.pi) and FRAME (form1) *)
-  (* All the equalities between variables from form1.pi should be added to the missing part, because 
+  (* All the equalities/disequalities/distances between variables from form1.pi should be added to the missing part, because 
      form1.pi is considered as axiom within each biabduction query. But these axioms may be missing in the MISS part of the state.
-     The exception is freed(x) and invalid(x), because a spatial predicate with x can be part of the MISS.
+     The axioms freed(x) and invalid(x) from form1.pi are dropped, because a spatial predicate with x can be part of the MISS.
+     The axioms base(x)[=,>,>=]y and len(x)[=,>,>=] from form1.pi are also droped, because they are not needed --- this is only 
+     an optimization cutting useless conjuncts from MISS.
     *) 
-  else Finish ({pi=(prune_freed_invalid form1.pi)@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
+  else Finish ({pi=(prune_pure_form1 form1.pi)@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
 
 (* main biabduction function *)
 (* The result is:  "missing, frame, added_lvars" *)

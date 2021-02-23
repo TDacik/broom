@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#define TEST
 
 struct sll_item {
     struct sll_item *next;
