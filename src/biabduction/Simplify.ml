@@ -28,17 +28,17 @@ let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list
         then raise Conflict_between_freed_and_lseg
         else Dlseg (a,b,c,d,l) ::(cut_spatial rest base_list )
     in
-    (* cat all "Stack(x,_)" predicates, where base(x) is part of base_list
+    (* cat all "Stack(x)" predicates, where base(x) is part of base_list
        if replaced is true, add Invalid(x) *)
     let rec cut_pure pure base_list =
       match pure with
       | [] -> []
-      | FExp.BinOp (Stack,a,b) :: rest -> (
+      | FExp.UnOp (Stack,a) :: rest -> (
           if (check_eq_bases a base_list)
           then (if replaced
             then FExp.UnOp (Invalid,a) ::(cut_pure rest base_list)
             else (cut_pure rest base_list) )
-          else FExp.BinOp (Stack,a,b) ::(cut_pure rest base_list)
+          else FExp.UnOp (Stack,a) ::(cut_pure rest base_list)
       )
       | first::rest -> first :: (cut_pure rest base_list)
     in
@@ -82,27 +82,13 @@ let remove_stack ?(replaced=false) solver form =
   let get_stack pure =
     let get_base exp =
       match exp with
-      | FExp.BinOp (Stack,a,_) -> Some a
+      | FExp.UnOp (Stack,a) -> Some a
       | _ -> None
     in
     List.filter_map get_base pure
   in
   let invalid_list = get_stack form.pi in
   let form_z3 = formula_to_solver solver.ctx form in
-  cut_freed_and_invalid_parts ~replaced solver form_z3 form [] invalid_list
-
-(* because abduction doing something weird, when is used only remove_stack *)
-let remove_stack2 ?(replaced=false) solver form lvars =
-  let get_stack pure =
-    let get_base exp =
-      match exp with
-      | FExp.BinOp (Stack,Var a,Var b) when List.mem a lvars && List.mem b lvars -> Some (Exp.Var a)
-      | _ -> None
-    in
-    List.filter_map get_base pure
-  in
-  let invalid_list = get_stack form.pi in
-  let form_z3=formula_to_solver solver.ctx form in
   cut_freed_and_invalid_parts ~replaced solver form_z3 form [] invalid_list
 
 (*  [subformula solver vars form] returns
@@ -120,8 +106,8 @@ let rec subformula solver vars f =
     let get_ignore pure =
       let get_base exp =
         match exp with
-        | FExp.BinOp (Stack,a,_) -> Some a
-        | BinOp (Static,a,_) -> Some a
+        | FExp.UnOp (Stack,a) -> Some a
+        | UnOp (Static,a) -> Some a
         | _ -> None
       in
       List.filter_map get_base pure

@@ -17,6 +17,8 @@ module Exp : sig
     and unop =
         Base
       | Len
+      | Stack    (** stack allocation *)
+      | Static   (** static storage *)
       | Freed    (** for heap allocation *)
       | Invalid  (** for stack allocation *)
       | BVnot    (** bitwise, in C: ~ *)
@@ -25,9 +27,7 @@ module Exp : sig
 
     (* aritmetic operation *)
     and binop =
-        Stack    (** stack allocation Stack(ptr,obj): ptr-(_)->obj *)
-      | Static   (** static storage Static(ptr,obj): ptr-(_)->obj *)
-      | Peq      (** equality *)
+        Peq      (** equality *)
       | Pneq     (** nonequality *)
       | Pless    (** less then *)
       | Plesseq  (** less or equal then *)
@@ -143,21 +143,13 @@ val get_equiv_vars : Exp.variable list -> pi -> Exp.variable list
 
 
 (** [substitute_expr new_expr old_expr expr] *)
-val substitute_expr : ?fix_stack:bool -> Exp.t -> Exp.t -> Exp.t -> Exp.t
+val substitute_expr : Exp.t -> Exp.t -> Exp.t -> Exp.t
 
 (** [substitute_vars new_var old_var form] *)
-val substitute_vars : ?fix_stack:bool -> Exp.variable -> Exp.variable -> t -> t
+val substitute_vars : Exp.variable -> Exp.variable -> t -> t
 
 (** [substitute_vars_cvars new_var old_var form] same as above, but vars should be Var/CVar *)
-val substitute_vars_cvars : ?fix_stack:bool -> Exp.t -> Exp.t -> t -> t
-
-(** [substitute2_vars new_var old_var form] very EXPERIMENTAL version of
-    substitute_vars *)
-val substitute2_vars : ?fix_addr:bool -> Exp.variable -> Exp.variable -> t -> t
-
-(** [substitute2_vars_cvars new_var old_var form] same as above, but vars
-    should be Var/CVar *)
-val substitute2_vars_cvars : ?fix_addr:bool -> Exp.t -> Exp.t -> t -> t
+val substitute_vars_cvars : Exp.t -> Exp.t -> t -> t
 
 (** [substitute var eqvarlist form] *)
 val substitute : Exp.variable -> Exp.variable list -> t -> t
@@ -173,10 +165,7 @@ val remove_equiv_vars : Exp.variable list -> Exp.variable list -> t -> t
 
 (** [remove_useless_conjuncts form evars exclude_from_refs] removes usless conjuncts from pure
     part of [form] - a conjunct is useless iff
-      1a) contains vars only from [evars] only
-      1b) it is of the form exp1 != exp2 and evars are not togather with
-          referenced ars in exp1/2
-          i.e. r1 != e1 (r1 referenced, e1 existential) => not needed FIXME!
+      1) contains vars only from [evars] only
       2) there is no transitive reference from spatial part or program variables
     [form] expect satisfiable formula only 
     [exclude_from_refs] is a set of variables, which are considered not referenced by sigma *)
@@ -187,9 +176,11 @@ val remove_useless_conjuncts : t -> Exp.variable list -> Exp.variable list -> t
     [form] - expect satisfiable formula only *)
 val simplify : t -> Exp.variable list -> t
 
-(* [simplify_lambda form evars lambda_refs] this is used in the lambda creation. 
-   --- Everything related only to the referenced variables (lambda_refs) is removed from pi. 
-   --- lambda_refs can not be removed (resp. renamed) from sigma *)
+(** [simplify_lambda form evars lambda_refs] this is used in the lambda
+    creation.
+    - Everything related only to the referenced variables (lambda_refs) is
+      removed from pi.
+    - lambda_refs can not be removed (resp. renamed) from sigma *)
 val simplify_lambda : t -> Exp.variable list -> Exp.variable list -> t
 
 (** {3 Rename conflicting logical variables} *)
