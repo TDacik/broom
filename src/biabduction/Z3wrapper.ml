@@ -128,6 +128,18 @@ let rec expr_to_solver ctx func expr =
       		(Expr.mk_app ctx func.base [exp1]), exists1
       | Len ->  let exp1,exists1=(expr_to_solver ctx func a) in
       		(Expr.mk_app ctx func.len [exp1]), exists1
+      | Stack -> let exp1,exists1=(expr_to_solver ctx func a) in
+        (Boolean.mk_and ctx [
+          (Expr.mk_app ctx func.onstack [exp1]);
+          (Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]);
+          (Boolean.mk_not ctx (Expr.mk_app ctx func.static [(Expr.mk_app ctx func.base [exp1])]));
+        ]), exists1
+      |  Static -> let exp1,exists1=(expr_to_solver ctx func a) in
+         (Boolean.mk_and ctx [
+           (Expr.mk_app ctx func.static [exp1]);
+           (Expr.mk_app ctx func.static [(Expr.mk_app ctx func.base [exp1])]);
+           (Boolean.mk_not ctx (Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]));
+         ]), exists1
       | Freed -> let exp1,exists1=(expr_to_solver ctx func a) in
       		(Boolean.mk_and ctx [ 
       		(Boolean.mk_not ctx (Expr.mk_app ctx func.alloc [exp1]));
@@ -152,18 +164,6 @@ let rec expr_to_solver ctx func expr =
     )
   | Exp.BinOp (op,a,b) ->
     ( match op with
-      | Stack  -> let exp1,exists1=(expr_to_solver ctx func a) in
-      		(Boolean.mk_and ctx [
-			(Expr.mk_app ctx func.onstack [exp1]);
-			(Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]);
-			(Boolean.mk_not ctx (Expr.mk_app ctx func.static [(Expr.mk_app ctx func.base [exp1])]));
-		]), exists1
-      |  Static -> let exp1,exists1=(expr_to_solver ctx func a) in
-      		(Boolean.mk_and ctx [
-			(Expr.mk_app ctx func.static [exp1]);
-			(Expr.mk_app ctx func.static [(Expr.mk_app ctx func.base [exp1])]);
-			(Boolean.mk_not ctx (Expr.mk_app ctx func.onstack [(Expr.mk_app ctx func.base [exp1])]));
-		]), exists1
       | Peq -> let exp1,exists1=(expr_to_solver ctx func a) in
       		let exp2,exists2=(expr_to_solver ctx func b) in
       		(boolexpr_to_solver ctx Boolean.mk_eq exp1 exp2), (exists1@exists2)

@@ -674,129 +674,6 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
     else 0
     )
 
-(******************************************************************************)
-(**** MATCH Stack and Static pure predicates ****)
-(* Find pair of points-to for match. Return (-1,-1) if unposibble *)
-
-let check_match_onstack {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level= 
-  let ff = Boolean.mk_false ctx in
-  let lhs_src,lhs_dest, lhs_flag =
-    match (List.nth form1.pi i1) with
-    | Exp.BinOp (op,a,b) ->
-    	(match op with 
-	| Stack -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b), 0 
-	| Static -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b), 1
-	| _ -> ff,ff,3
-	)
-    | _ -> ff,ff,3
-  in
-  let rhs_src,rhs_dest, rhs_flag =
-    match (List.nth form2.pi i2) with
-    | Exp.BinOp (op,a,b) ->
-    	(match op with 
-	| Stack ->  (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b),0
-	| Static -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b),1
-	| _ -> ff,ff,4
-	)
-    | _ -> ff,ff,4
-  in
-  (*if (lhs_src=ff)||(rhs_src=ff) *)
-  if not (lhs_flag=rhs_flag) 
-  then false
-  else
-  match level with
-  | 1 ->
-  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_src rhs_src);]
-	in
-  	(Solver.check solv query1)=UNSATISFIABLE
-  | 2 ->
-  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);]
-	in
-	(lhs_dest=rhs_dest) &&((Solver.check solv query2)=SATISFIABLE)
-  | 3 ->
-  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);]
-	in
-  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);
-		(Boolean.mk_and ctx (formula_to_solver ctx form2))]
-	in
-	((Solver.check solv query1)=UNSATISFIABLE) &&((Solver.check solv query2)=SATISFIABLE)
-  | 4 ->
-  	let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_dest rhs_dest);]
-	in
-  	let query2 = [(Boolean.mk_eq ctx lhs_src rhs_src);]
-	in
-	((Solver.check solv query1)=UNSATISFIABLE) &&((Solver.check solv query2)=SATISFIABLE)
-         
-  | _ -> false
-
-
-let rec find_match_onstack_ll solver form1 i1 form2 level  =
-  let rec try_with_rhs i2 =
-    if (List.length form2.pi) <= i2
-    then -1
-    else (if (check_match_onstack solver form1 i1 form2 i2 level)
-      then i2
-      else (try_with_rhs (i2+1)))
-  in
-  if (List.length form1.pi) <= i1
-  then (-1,-1)
-  else
-    match (try_with_rhs 0) with
-    | -1 -> (find_match_onstack_ll solver form1 (i1+1) form2 level)
-    | x -> (i1,x)
-
-let find_match_onstack solver form1 form2 level =
-  let ctx=solver.ctx in 
-  let common_part=match level with
-  | 3 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
-  | 1 | 2 | 4 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
-  | _ -> []
-  in
-  Solver.push solver.solv;
-  Solver.add solver.solv common_part;
-  let res=find_match_onstack_ll solver form1 0 form2 level in
-  Solver.pop solver.solv 1; res
-
-
-(* try to mathc stack and static predicates *)
-let try_match_onstack solver form1 form2 level _  =
-  let m=find_match_onstack solver form1 form2 level in
-  match m with
-  | (-1,-1) -> Fail
-  | (i1,i2) -> (*print_endline ("Match onstack Apply "^(string_of_int i1)^" "^(string_of_int i2)) ;*)
-	let nequiv a b = not (a=b) in
-	let remove k form =
-	    { sigma=form.sigma;
-	      pi=List.filter (nequiv (List.nth form.pi k)) form.pi }
-	in
-	let f1,f2=(remove i1 form1), (remove i2 form2) in
-	let x1,y1 =
-	    match (List.nth form1.pi i1) with
-	    | Exp.BinOp (_,a,b) -> a,b
-	    | _ -> raise (TempExceptionBeforeApiCleanup "try_match_onstack:1")
-	in
-	let x2,y2 =
-	    match (List.nth form2.pi i2) with
-	    | Exp.BinOp (_,a,b) -> a,b
-	    | _ -> raise (TempExceptionBeforeApiCleanup "try_match_onstack:2")
-	in
-
-	let x_eq=[(Exp.BinOp ( Peq, x1,x2))] in
-        let y_eq=[(Exp.BinOp ( Peq, y1,y2))] in
-      	match level with
-	| 2 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ f1.pi},
-          f2,
-          {sigma=[]; pi=x_eq},
-          [], NoRecord)
-      	| 1 | 4 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
-          f2,
-          {sigma=[]; pi=x_eq @ y_eq },
-          [], NoRecord)
-      	| _ ->  raise (TempExceptionBeforeApiCleanup "try_match_onstack:3")
-
-
-  
 
 (******************************************************************************)
 (**** MATCH rules ****)
@@ -1089,10 +966,9 @@ and check_lambda_entailment solver lambda1 lambda2 =
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
 	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
-	print_string "LAMBDA entailment:\n";
-	Formula.print  lambda1_new;
+	print_endline "LAMBDA entailment:";
+	Formula.print lambda1_new;
 	Formula.print lambda2_new;
-	flush stdout;
 	match (entailment solver lambda1_new lambda2_new variables), 
 		(entailment solver lambda2_new lambda1_new variables)
 	with
@@ -1159,7 +1035,7 @@ let rec prune_pure_form1 pi=
   	match pi with
 	| [] -> []
 	| Formula.Exp.UnOp (Freed,_)::rest | Formula.Exp.UnOp (Invalid,_)::rest 
-	| Formula.Exp.BinOp (Stack,_,_)::rest | Formula.Exp.BinOp (Static,_,_)::rest 
+	| Formula.Exp.UnOp (Stack,_)::rest | Formula.Exp.UnOp (Static,_)::rest 
 	| Formula.Exp.BinOp (_,UnOp(Base,_),_)::rest | Formula.Exp.BinOp (_,_,UnOp(Base,_))::rest 
 	| Formula.Exp.BinOp (_,UnOp(Len,_),_)::rest | Formula.Exp.BinOp (_,_,UnOp(Len,_))::rest ->  prune_pure_form1 rest
         | first::rest -> first :: (prune_pure_form1 rest)
@@ -1198,33 +1074,22 @@ let rec biabduction solver form1 form2 pvars  =
       )
     | [] -> Fail
   in
-  let rules_onstack=[
-    (try_match_onstack,1,"Match-Stack/Static-1");
-    (try_match_onstack,2,"Match-Stack/Static-2");
-  ] in
   (* First test SAT of form1 and form2.
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
      The conflicts may be removed by application of a match rule.
-     The Finish true is aplied only if Match-onstack can not be applied
    *) 
   (* Adding form1 into the solver is only a performance optimization. Its removal has no impact on correctness. *)
   Solver.push solver.solv;
   Solver.add solver.solv [Boolean.mk_and solver.ctx (formula_to_solver solver.ctx form1)];
-  match (test_sat solver form1 form2),(try_rules rules_onstack) with
-  | SatFail, _ ->
+  match (test_sat solver form1 form2) with
+  | SatFail ->
     Solver.pop  solver.solv 1;
     prerr_endline "SAT fail (biabduction)"; BFail  
-  | Finish (missing,frame), Fail ->
+  | Finish (missing,frame) ->
     Solver.pop  solver.solv 1;
     print_endline "Finish true"; 
     Bok ( missing,frame, [], [])
-  | _, Apply (f1,f2,missing,n_lvars,_) ->
-    Solver.pop  solver.solv 1;
-    (match biabduction solver f1 f2 pvars with
-    | BFail -> BFail
-    | Bok (miss,fr,l_vars,split_rec)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars,split_rec)
-    )
-  | NoFinish, Fail ->
+  | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
   let rules=[

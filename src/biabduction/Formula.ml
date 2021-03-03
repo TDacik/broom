@@ -18,6 +18,8 @@ module Exp = struct (*$< Exp *)
     and unop =
         Base
       | Len
+      | Stack    (** stack allocation *)
+      | Static   (** static storage *)
       | Freed    (** for heap allocation *)
       | Invalid  (** for stack allocation *)
       | BVnot    (** bitwise, in C: ~ *)
@@ -26,8 +28,6 @@ module Exp = struct (*$< Exp *)
 
     (* aritmetic operation *)
     and binop =
-        Stack    (** stack allocation Stack(ptr,obj): ptr-(_)->obj *)
-      | Static   (** static storage Static(ptr,obj): ptr-(_)->obj *)
       | Peq      (** equality *)
       | Pneq     (** nonequality *)
       | Pless    (** less then *)
@@ -89,6 +89,8 @@ let unop_to_string o =
   match o with
   | Base -> "base"
   | Len -> "len"
+  | Stack -> "stack"
+  | Static -> "static"
   | Freed -> "freed"
   | Invalid -> "invalid"
   | BVnot -> "~"
@@ -116,7 +118,6 @@ let binop_to_string o =
   | BVrshift -> ">>"
   | BVlrotate -> "lrotate"
   | BVrrotate -> "rrotate"
-  | _ -> assert false
 
 let rec to_string ?lvars:(lvars=[]) e =
   match e with
@@ -124,14 +125,9 @@ let rec to_string ?lvars:(lvars=[]) e =
   | CVar a -> cvariable_to_string a
   | Const a -> const_to_string a
   | UnOp (op,a) -> unop_to_string op ^ "(" ^ to_string ~lvars:lvars a ^ ")"
-  | BinOp (op,a,b) -> (
-    match op with
-    | Stack ->
-      "stack(" ^ to_string ~lvars:lvars a ^", "^ to_string ~lvars:lvars b ^ ")"
-    | Static ->
-      "static(" ^ to_string ~lvars:lvars a ^", "^ to_string ~lvars:lvars b ^ ")"
-    | _ -> "(" ^ to_string ~lvars:lvars a ^ binop_to_string op ^
-    to_string ~lvars:lvars b ^ ")" )
+  | BinOp (op,a,b) ->
+    "(" ^ to_string ~lvars:lvars a ^ binop_to_string op ^
+    to_string ~lvars:lvars b ^ ")"
   | Void -> "Void"
   | Undef -> "Undef"
 
@@ -430,8 +426,7 @@ let get_equiv_vars a pi =
   in
   get_eq_vars a
 
-(* Stack(a,b) - changing value of b doesn't mean changing pointer on b *)
-let rec substitute_expr ?(fix_stack=false) var1 var2 expr =
+let rec substitute_expr var1 var2 expr =
   match expr with
   | Exp.Var _ when expr=var2 -> var1
   | Var a -> Exp.Var a
@@ -439,8 +434,7 @@ let rec substitute_expr ?(fix_stack=false) var1 var2 expr =
   | CVar a -> CVar a
   | Const a -> Const a
   | UnOp (op,a) -> UnOp (op, substitute_expr var1 var2 a)
-  | BinOp (Stack,a,b) when fix_stack && b=var2 -> BinOp(Stack,a,b)
-  | BinOp (op,a,b) -> BinOp (op, substitute_expr ~fix_stack var1 var2 a, substitute_expr ~fix_stack var1 var2 b)
+  | BinOp (op,a,b) -> BinOp (op, substitute_expr var1 var2 a, substitute_expr var1 var2 b)
   | Void -> Void
   | Undef -> Undef
 
@@ -464,88 +458,20 @@ let rec substitute_sigma var1 var2 sigma =
       Dlseg (a_new,b_new,c_new,d_new,l) :: substitute_sigma var1 var2 rest
 
 
-let rec substitute_pi ?(fix_stack=false) var1 var2 pi =
+let rec substitute_pi var1 var2 pi =
   match pi with
-  | expr::rest -> (substitute_expr ~fix_stack var1 var2 expr) :: (substitute_pi ~fix_stack var1 var2 rest)
+  | expr::rest -> (substitute_expr var1 var2 expr) :: (substitute_pi var1 var2 rest)
   |  [] -> []
 
 
-let substitute_vars_cvars ?(fix_stack=false) var1 var2 form =
-  let pi_out = substitute_pi ~fix_stack var1 var2 form.pi in
+let substitute_vars_cvars var1 var2 form =
+  let pi_out = substitute_pi var1 var2 form.pi in
   let sigma_out = substitute_sigma var1 var2 form.sigma in
   {sigma = sigma_out; pi = pi_out}
 
 
-let substitute_vars ?(fix_stack=false) var1 var2 form =
-  substitute_vars_cvars ~fix_stack (Var var1) (Var var2) form
-
-(* experimental version ***************************************************)
-
-(* Stack(a,b) - changing value of b doesn't mean changing pointer on b *)
-let rec substitute2_expr ?(fix_addr=false) var1 var2 expr =
-  match expr with
-  | Exp.Var _ when expr=var2 -> [],var1
-  | Var a -> [],Exp.Var a
-  | CVar _ when expr=var2 -> [],var1
-  | CVar a -> [],CVar a
-  | Const a -> [],Const a
-  | UnOp (op,a) ->
-    let ign,a2 = substitute2_expr ~fix_addr var1 var2 a in
-    ign, UnOp (op, a2)
-  | BinOp (Stack,a,b) when fix_addr && b=var2 -> [a],BinOp(Stack,a,b)
-  | BinOp (Static,a,b) when fix_addr && b=var2 -> [a],BinOp(Static,a,b)
-  | BinOp (op,a,b) ->
-    let ign_a,a2 = substitute2_expr ~fix_addr var1 var2 a in
-    let ign_b,b2 = substitute2_expr ~fix_addr var1 var2 b in
-    (CL.Util.list_join_unique ign_a ign_b), BinOp (op, a2, b2)
-  | Void -> [],Void
-  | Undef -> [],Undef
-
-let rec substitute2_sigma ignore var1 var2 sigma =
-  match sigma with
-    | [] -> []
-    | Hpointsto (Var a,l,b) ::rest when List.mem a ignore ->
-      Hpointsto (Var a,l,b) :: substitute2_sigma ignore var1 var2 rest
-    | Hpointsto (a,l,b) ::rest ->
-      let a_new = substitute_expr var1 var2 a in
-      let b_new = substitute_expr var1 var2 b in
-      let l_new = substitute_expr var1 var2 l in
-      Hpointsto (a_new,l_new,b_new):: substitute2_sigma ignore var1 var2 rest
-    | Slseg (a,b,l) ::rest ->
-      let a_new = substitute_expr var1 var2 a in
-      let b_new = substitute_expr var1 var2 b in
-      Slseg (a_new,b_new,l) :: substitute2_sigma ignore var1 var2 rest
-    | Dlseg (a,b,c,d,l) ::rest ->
-      let a_new = substitute_expr var1 var2 a in
-      let b_new = substitute_expr var1 var2 b in
-      let c_new = substitute_expr var1 var2 c in
-      let d_new = substitute_expr var1 var2 d in
-      Dlseg (a_new,b_new,c_new,d_new,l) :: substitute2_sigma ignore var1 var2 rest
-
-
-
-let rec substitute2_pi ?(fix_addr=false) var1 var2 pi =
-  match pi with
-  | expr::rest ->
-    let ign_expr,expr2 = substitute2_expr ~fix_addr var1 var2 expr in
-    let ign_rest,rest2 = substitute2_pi ~fix_addr var1 var2 rest in
-    (CL.Util.list_join_unique ign_expr ign_rest), (expr2 :: rest2)
-  | [] -> [],[]
-
-(* CVars are not ignored *)
-let substitute2_vars_cvars ?(fix_addr=false) var1 var2 form =
-  let (ignore,pi_out) = substitute2_pi ~fix_addr var1 var2 form.pi in
-  let ignore_uids = Exp.get_list_uids ignore in
-  let all_ignore = ignore_uids @ get_equiv_vars ignore_uids pi_out in
-  (* print_endline (lvariables_to_string all_ignore); *)
-  let sigma_out = substitute2_sigma all_ignore var1 var2 form.sigma in
-  {sigma = sigma_out; pi = pi_out}
-
-
-let substitute2_vars ?(fix_addr=false) var1 var2 form =
-  substitute2_vars_cvars ~fix_addr (Var var1) (Var var2) form
-
-(* experimental version - end *********************************************)
+let substitute_vars var1 var2 form =
+  substitute_vars_cvars (Var var1) (Var var2) form
 
 let rec substitute var1 eqvarlist form =
   match eqvarlist with

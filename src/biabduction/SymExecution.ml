@@ -137,10 +137,10 @@ let rec post_contract_application_vars state pvarmap seed pvars=
   | [] -> state
   | (a,b)::rest ->
       let new_var=get_fresh_var seed conflicts in
-      let tmp_curr=substitute2_vars ~fix_addr:true new_var a state.curr in
-      let new_curr=substitute2_vars ~fix_addr:true a b tmp_curr in
-      let tmp_miss=substitute2_vars ~fix_addr:true new_var a state.miss in
-      let new_miss=substitute2_vars ~fix_addr:true a b tmp_miss in
+      let tmp_curr=substitute_vars new_var a state.curr in
+      let new_curr=substitute_vars a b tmp_curr in
+      let tmp_miss=substitute_vars new_var a state.miss in
+      let new_miss=substitute_vars a b tmp_miss in
       let new_lvars=
         let eq y= not (b=y) in
         List.filter eq state.lvars
@@ -165,7 +165,7 @@ let post_contract_application state solver pvarmap pvars =
   in
   let new_lvars=List.filter (notmem pvars) vars in
   let final_state={
-    miss=(Simplify.remove_stack2 solver step1.miss step1.lvars);
+    miss=step1.miss;
     curr=(Simplify.remove_freed_and_invalid_parts solver step1.curr);
     lvars=new_lvars} in
   (* check that both parts of the resulting state are satisfiable *)
@@ -232,7 +232,7 @@ let rec add_gvars_moves gvars c =
   match gvars with
   | [] -> c
   | gvar::tl -> let new_cvar = c.Contract.cvars + 1 in
-    let new_rhs = substitute2_vars_cvars ~fix_addr:true (CVar new_cvar) (Var gvar) c.rhs in
+    let new_rhs = substitute_vars_cvars (CVar new_cvar) (Var gvar) c.rhs in
     let new_c = if (new_rhs = c.rhs) then c
     else {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap; s = c.s} in
 	(add_gvars_moves tl new_c)
@@ -309,7 +309,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid ins
   let get_contract s =
       let removed_vars = tmp_vars @ s.lvars in
       let nostack_s = {
-        miss = Simplify.remove_stack solver s.miss;
+        miss = s.miss;
         curr = Simplify.remove_stack ~replaced:true solver s.curr;
         lvars = removed_vars} in
       try
@@ -487,8 +487,9 @@ and exec_insns tbl bb_tbl states insns =
       exec_insns tbl bb_tbl s tl
   )
 
-let exec_zeroinitializer fuid s (uid, var) =
-  let assign exp =
+(* FIXME: assert for non-pointer static variables *)
+let exec_zeroinitializer _(* fuid *) s _(* (uid, var) *) =
+  (* let assign exp =
     let pi_add = Exp.BinOp (Peq, Var uid, exp) in
     {miss = s.miss;
     curr = {pi=pi_add::s.curr.pi; sigma=s.curr.sigma};
@@ -509,7 +510,7 @@ let exec_zeroinitializer fuid s (uid, var) =
     curr = {pi=s.curr.pi @ stor; sigma=sig_add::s.curr.sigma};
     lvars = fresh_var::s.lvars}
   | TypeFnc _ -> assert false
-  | _ -> s
+  | _ -> *) s
 
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &

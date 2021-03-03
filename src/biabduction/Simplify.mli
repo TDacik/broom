@@ -16,12 +16,6 @@ val remove_freed_and_invalid_parts : Z3wrapper.solver -> Formula.t -> Formula.t
     stack predicates are replaced with invalid predicates *)
 val remove_stack : ?replaced:bool -> Z3wrapper.solver -> Formula.t -> Formula.t
 
-(** [remove_stack2 ?(replaced=false) solver form lvars] does same as
-    remove_stack expect only for non-program variables [lvars]; because
-    abduction doing something weird, when is used only remove_stack *)
-val remove_stack2 : ?replaced:bool -> Z3wrapper.solver -> Formula.t ->
-                    FExp.variable list -> Formula.t
-
 (* SIMPLIFY *)
 
 (** [formula solver fixed_vars form] is global simplify function for formula,

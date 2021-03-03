@@ -60,15 +60,11 @@ let get_storage_with_size ptr var =
 		in
 		match variable.code with
 		| VAR_GL -> let size, pi = get_pi () in
-			size, Exp.BinOp (Static, ptr, var)::pi
+			size, Exp.UnOp (Static, ptr)::pi
 		| VAR_LC | VAR_FNC_ARG -> let size, pi = get_pi () in
-			size, BinOp (Stack, ptr, var)::pi
+			size, UnOp (Stack, ptr)::pi
 		| _ -> Exp.zero,[])
 	| _ -> Exp.zero,[]
-
-let get_storage ptr var =
-	let _,pi = get_storage_with_size ptr var in
-	pi
 
 let constant_to_exformula data accs ef =
 	if (accs != []) then assert false;
@@ -113,20 +109,14 @@ and variable_to_exformula end_typ var accs ef =
 		(* C -()-> <var> *)
 		| Ref ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			let ptr_size = CL.Util.get_type_size ac.acc_typ in
-			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in
-			let (pi_add, sig_add, dbg_add) = (
-				if ef.cnt_cvars = cvars_ptr then (* points-to exists *)
-					([], [], "Ref2, ")
-				else
-					get_storage ptr var,
-					[ Hpointsto (ptr, exp_ptr_size, var) ], "Ref1, "
-				) in
+			(* let ptr_size = CL.Util.get_type_size ac.acc_typ in
+			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in *)
+			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
 			let (dbg, ef_new) = var_to_exformula ptr tl
-				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
+				{f={sigma = new_sigma; pi = ef.f.pi};
 				cnt_cvars=cvars_ptr;
 				root=ptr} in
-			(dbg_add ^ dbg, ef_new)
+			("Ref" ^ dbg, ef_new)
 
 		(* <var> -()-> C *)
 		| Deref ->
@@ -144,46 +134,40 @@ and variable_to_exformula end_typ var accs ef =
 		(* from: C1 -()-> <var>
 		   to: C2-(size_C)->C & C2 = C1 + (idx * size_C) & base(C2)=base(C1)*)
 		| DerefArray idx ->
-		assert (idx.accessor = []);
-		let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-		let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
-			(* object on stack or static storage *)
-			then (get_storage ptr var), "Array1"
-			else [], "Array2") in
+			assert (idx.accessor = []);
+			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
+			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
 
-		(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
-		let cvar_elm = cvars_ptr + 1 in
-		let cvar_last = cvar_elm + 1 in
-		let op_idx = operand_to_exformula idx empty_exformula in
-		let elm_typ = CL.Util.get_type_array ac.acc_typ in
-		let dbg_typ, ptr_size_elm = get_pointsto_size elm_typ in
-		let exp_ptr_size_elm = Exp.Const (Int (Int64.of_int ptr_size_elm)) in
-		let field = (if op_idx.root = Exp.zero (* need to use = insted of == *)
-		then
-			Exp.BinOp ( Peq, CVar cvar_elm, ptr)
-		else
-			Exp.BinOp (
-				Peq, CVar cvar_elm, BinOp (
-					Pplus, ptr, BinOp (
-						Pmult, op_idx.root, exp_ptr_size_elm))) ) in
-		let pi_add = [ field;
-		BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, ptr))) ] in
-		let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
-		let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
-			{f={sigma = new_sigma @ sig_add;
-				pi = ef.f.pi @ stor @ pi_add};
-			cnt_cvars=cvar_last;
-			root=(CVar cvar_last)} in
-		(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)
+			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
+			let cvar_elm = cvars_ptr + 1 in
+			let cvar_last = cvar_elm + 1 in
+			let op_idx = operand_to_exformula idx empty_exformula in
+			let elm_typ = CL.Util.get_type_array ac.acc_typ in
+			let dbg_typ, ptr_size_elm = get_pointsto_size elm_typ in
+			let exp_ptr_size_elm = Exp.Const (Int (Int64.of_int ptr_size_elm)) in
+			let field = (if op_idx.root = Exp.zero (* need to use = insted of == *)
+			then
+				Exp.BinOp ( Peq, CVar cvar_elm, ptr)
+			else
+				Exp.BinOp (
+					Peq, CVar cvar_elm, BinOp (
+						Pplus, ptr, BinOp (
+							Pmult, op_idx.root, exp_ptr_size_elm))) ) in
+			let pi_add = [ field;
+			BinOp ( Peq, (UnOp (Base, CVar cvar_elm)), (UnOp (Base, ptr))) ] in
+			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
+			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
+				{f={sigma = new_sigma @ sig_add;
+					pi = ef.f.pi @ pi_add};
+				cnt_cvars=cvar_last;
+				root=(CVar cvar_last)} in
+			("Array" ^ dbg_typ ^ ", " ^ dbg, ef_new)
 
 		(* from: C1 -()-> <var>
 		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
 		| Item _ ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
-				(* object on stack or static storage *)
-				then (get_storage ptr var), "Record acc1"
-				else [], "Record acc2") in
+			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_ptr + 1 in
@@ -200,19 +184,16 @@ and variable_to_exformula end_typ var accs ef =
 			let exp_ptr_size_itm = Exp.Const (Int (Int64.of_int ptr_size_itm)) in
 			let sig_add = [ Hpointsto (CVar cvar_itm, exp_ptr_size_itm, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
-				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
+				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
-			(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)
+			("Record acc" ^ dbg_typ ^ ", " ^ dbg, ef_new)
 
 		(* from: C1 -(1)-> <var>
 		   to: C2 -(1)-> C & C2 = C1 + off *)
 		| Offset off ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			let stor, dbg_add = (if ef.cnt_cvars != cvars_ptr
-				(* object on stack or static storage *)
-				then (get_storage ptr var), "Offset1"
-				else [], "Offset2") in
+			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
 			let const_off = Exp.Const (Int (Int64.of_int off)) in
@@ -224,10 +205,10 @@ and variable_to_exformula end_typ var accs ef =
 			let exp_ptr_size_elm = Exp.Const (Int (Int64.of_int ptr_size_elm)) in
 			let sig_add = [ Hpointsto (CVar cvar_elm, exp_ptr_size_elm, CVar cvar_last) ] in
 			let (dbg, ef_new) = var_to_exformula (CVar cvar_last) tl
-				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ stor @ pi_add};
+				{f={sigma = new_sigma @ sig_add; pi = ef.f.pi @ pi_add};
 				cnt_cvars=cvar_last;
 				root=(CVar cvar_last)} in
-			(dbg_add ^ dbg_typ ^ ", " ^ dbg, ef_new)
+			("Offset" ^ dbg_typ ^ ", " ^ dbg, ef_new)
 		)
   in
   var_to_exformula var accs ef
@@ -457,7 +438,7 @@ let contract_for_free src =
 
 (*
    if size<0 or unsuccesful alloc : undefined behavior
-   else         len(dst)=size & base(dst)=dst & stack(dst,undef) &
+   else         len(dst)=size & base(dst)=dst & stack(dst) &
                 dst-(size)->undef
    allowd create object of size 0
 *)
@@ -469,15 +450,15 @@ let contract_for_alloca dst size =
 	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), ef_size.root) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
 	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
-	let stack = Exp.BinOp ( Stack, new_dst.root, Undef) in
+	let stack = Exp.UnOp ( Stack, new_dst.root) in
 	let sig_add = Hpointsto (new_dst.root, ef_size.root, Undef) in
 	let rhs =
 		{pi = len :: base :: size :: stack :: new_dst.f.pi;
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
-(* PRE: var-(size)->c1 & stack(var,c1) & base(var)=var POS: invalid(var)
-   PRE: c1-(size)->var & stack(c1,var) & base(c1)=c1   POS: invalid(c1)
+(* PRE: var-(size)->c1 & stack(var) & base(var)=var  POS: invalid(var)
+   TODO: PRE: c1-(size)->var & stack(c1,var) & base(c1)=c1   POS: invalid(c1)
 *)
 let contract_for_clobber var =
 	let var_uid = ( match var.data with
@@ -485,7 +466,7 @@ let contract_for_clobber var =
 		| _ -> assert false) in (* must by variable *)
 	let ef_var = operand_to_exformula var empty_exformula in
 	match ef_var.root with
-	| Var uid ->
+	(* | Var uid ->
 		assert (uid = var_uid);
 		let variable = CL.Util.get_var var_uid in
 		let size = CL.Util.get_type_size variable.typ in
@@ -502,10 +483,10 @@ let contract_for_clobber var =
 			rhs = {pi = [rhs_pi]; sigma = []};
 			cvars = new_var.cnt_cvars;
 			pvarmap = pvarmap;
-			s = OK}
+			s = OK} *)
 	| CVar _ ->
-		let stack = Exp.BinOp ( Stack, ef_var.root, Var var_uid) in
-		let base = Exp.BinOp ( Peq, (UnOp (Base, ef_var.root)), ef_var.root) in
+		let stack = Exp.UnOp ( Stack, Var var_uid) in
+		let base = Exp.BinOp ( Peq, (UnOp (Base, Var var_uid)), Var var_uid) in
 		let rhs_pi = Exp.UnOp (Invalid, Var var_uid) in
 		{lhs = {pi = stack :: base :: ef_var.f.pi; sigma = ef_var.f.sigma};
 			rhs = {pi = [rhs_pi]; sigma = []};
