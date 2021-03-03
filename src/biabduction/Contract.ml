@@ -495,6 +495,36 @@ let contract_for_clobber var =
 			s = OK}
 	| _ -> assert false
 
+(* dst = memcpy(dstm, srcm, size)
+   PRE: dstm-size->l1 * srcm-size->l2 & 0<=size & size<=len(dstm) &
+        size<=len(srcm)
+   POST: dstm-size->l2 * srcm-size->l2 & dst=dstm & 0<=size & size<=len(dstm) &
+         size<=len(srcm) *)
+let contract_for_memcpy dst dstm srcm size =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_dstm = operand_to_exformula dstm {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let ef_srcm = operand_to_exformula srcm {f=ef_dstm.f; cnt_cvars=ef_dstm.cnt_cvars; root=Undef} in
+	let ef_size = operand_to_exformula size {f=ef_srcm.f; cnt_cvars=ef_srcm.cnt_cvars; root=Undef} in
+	let (new_dst, pvarmap, assign) = (match dst.data with
+	| OpVoid -> (ef_size,[],[])
+	| _ -> let (dst_l, pvarmap_l) = rewrite_root {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
+		(dst_l, pvarmap_l, [Exp.BinOp ( Peq, dst_l.root, ef_dstm.root)]) ) in
+	let len1 = Exp.BinOp ( Plesseq, ef_size.root, (UnOp (Len, ef_dstm.root))) in
+	let len2 = Exp.BinOp ( Plesseq, ef_size.root, (UnOp (Len, ef_srcm.root))) in
+	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let cvar_dst = new_dst.cnt_cvars + 1 in
+	let cvar_src = cvar_dst + 1 in
+	let sig_dstm = Hpointsto (ef_dstm.root, ef_size.root, CVar cvar_dst) in
+	let sig_srcm = Hpointsto (ef_srcm.root, ef_size.root, CVar cvar_src) in
+	let sig_dstm_rhs = Hpointsto (ef_dstm.root, ef_size.root, CVar cvar_src) in
+	let lhs = {
+		pi= size :: len1 :: len2 :: ef_size.f.pi ;
+		sigma = sig_dstm :: sig_srcm :: ef_size.f.sigma } in
+	let rhs =
+		{pi = size :: len1 :: len2 :: assign @ new_dst.f.pi;
+		sigma = sig_dstm_rhs :: sig_srcm :: new_dst.f.sigma} in
+	{lhs = lhs; rhs = rhs; cvars = cvar_src; pvarmap = pvarmap; s = OK}
+
 let contract_nondet dst =
 	match dst.data with
 	| OpVoid -> []
@@ -516,6 +546,10 @@ let contract_for_builtin dst called args =
 	| "free", src::[] -> contract_for_free src
 	| "alloca", size::[] -> (contract_for_alloca dst size)::[]
 	| "__builtin_alloca", size::[] -> (contract_for_alloca dst size)::[]
+	| "memcpy", dstm::srcm::size::[] ->
+		(contract_for_memcpy dst dstm srcm size)::[]
+	| "__builtin___memcpy_chk", dstm::srcm::size::_::[] -> (* gcc *)
+		(contract_for_memcpy dst dstm srcm size)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
 	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
