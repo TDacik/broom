@@ -19,8 +19,12 @@ exception NoApplicableRule
     form1 * form2 * M * added_local_vars
     or Fail
 **)
+type split_record =
+  | Record of Formula.heap_pred * Formula.t * Formula.pi
+  | NoRecord
+
 type res =
-  | Apply of Formula.t * Formula.t * Formula.t * variable list
+  | Apply of Formula.t * Formula.t * Formula.t * variable list * split_record
   | Fail
 
 let to_slseg_unsafe hpred = match hpred with
@@ -140,7 +144,8 @@ let try_learn_pointsto solver form1 form2 level _ =
     Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i2 form2),
       {sigma=[List.nth form2.sigma i2]; pi=[]},
-      [])
+      [],
+      NoRecord)
   | (i1,i2) -> Solver.pop solver.solv 1;
     (* learn with level 1 *)
     let (y1,_,_) = to_hpointsto_unsafe (List.nth form1.sigma i1) in
@@ -149,7 +154,8 @@ let try_learn_pointsto solver form1 form2 level _ =
     Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
       (remove i2 form2),
       {sigma=[List.nth form2.sigma i2]; pi=[]},
-      [])
+      [],
+      NoRecord)
 
 (**** LEARN - Slseg ****)
 (* check whether we can apply learn on the form2.sigma[i2].
@@ -242,7 +248,8 @@ let try_learn_slseg solver form1 form2 level _=
   | i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i form2),
       {sigma=[List.nth form2.sigma i]; pi=[]},
-      [])
+      [],
+      NoRecord)
 
 (************************************************************)
 (******* SPLIT rules ******)
@@ -520,7 +527,8 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       Apply (  {sigma=sigma1_new@ (remove i1 form1).sigma; pi=form1.pi @ new_pi},
         form2,
         {sigma=[]; pi=new_pi},
-        new_lvars)
+        new_lvars,
+	NoRecord)
 
     | 2 ->   (* split right *)
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
@@ -560,39 +568,50 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
       let ptr_last_var = get_fresh_var (size_last_var+1) ([size_first_var; size_last_var]@variables) in
       let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
-      (* The RHS of the splitted points to can be null or undef *)
-      let split_dest=
+      (* The RHS of the splitted points to can be 
+         -- null 
+	 -- undef: we add a fresh variable for each piece 
+	    we need to get a name of each particular part in the "recorded splits" *)
+      let split_dest1,split_dest2,split_dest3,dest_vars=
         let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y2, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form2))
         ] in
         if (Solver.check solv query_null)=UNSATISFIABLE
-        then Exp.zero
-        else Exp.Undef
+        then Exp.zero,Exp.zero,Exp.zero,[]
+        else (
+		let v1=get_fresh_var (ptr_last_var+1) ([size_first_var; size_last_var;ptr_last_var]@variables) in
+		let v2=get_fresh_var (v1+1) ([size_first_var; size_last_var;ptr_last_var;v1]@variables) in
+		let v3=get_fresh_var (v2+1) ([size_first_var; size_last_var;ptr_last_var;v1;v2]@variables) in
+		Exp.Var v1,Exp.Var v2, Exp.Var v3,[v1;v2;v3]
+	)
       in
-      let sigma2_new,pi_tmp1,pi_tmp2,new_lvars= (* compute the splitted part of sigma *)
+      let sigma2_new,pi_tmp1,pi_tmp2,new_lvars,deltas= (* compute the splitted part of sigma *)
         if size_first=(Exp.zero) then
-          [ Hpointsto (x1,s1,split_dest);
-            Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
+          [ Hpointsto (x1,s1,split_dest2);
+            Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest3)],
            [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2));
 	   ptr_last_eq; size_last_eq],
            [ Exp.BinOp(Pless,s1,s2) ],
-	   [ptr_last_var; size_last_var]
+	   [ptr_last_var; size_last_var]@dest_vars,
+	   [Exp.zero;s1]
         else if  size_last=(Exp.zero) then
-          [Hpointsto (x2,Exp.Var size_first_var,split_dest);
-           Hpointsto (x1,s1,split_dest)],
+          [Hpointsto (x2,Exp.Var size_first_var,split_dest1);
+           Hpointsto (x1,s1,split_dest2)],
            [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
              BinOp ( Plesseq, s2, UnOp ( Len, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
 	    size_first_eq],
            [Exp.BinOp(Pless,s1,s2) ],
-	   [ size_first_var]
-        else [Hpointsto (x2,Exp.Var size_first_var,split_dest);
-          Hpointsto (x1,s1,split_dest);
-          Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
+	   [ size_first_var]@dest_vars,
+	   [Exp.zero;size_first]
+        else [Hpointsto (x2,Exp.Var size_first_var,split_dest1);
+          Hpointsto (x1,s1,split_dest2);
+          Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest3)],
           [BinOp ( Plesseq, s2, UnOp ( Len, x2)); BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
 	  ptr_last_eq; size_last_eq; size_first_eq ],
           [Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ],
-	  [size_first_var;ptr_last_var;size_last_var ]
+	  [size_first_var;ptr_last_var;size_last_var ]@dest_vars,
+	  [Exp.zero;size_first;BinOp(Pplus,size_first,s1)]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
@@ -602,7 +621,8 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       Apply ({sigma=form1.sigma; pi=form1.pi @ new_pi},
         {sigma=sigma2_new@ (remove i2 form2).sigma; pi=form2.pi},
         {sigma=[]; pi=new_pi},
-        new_lvars)
+        new_lvars,
+	Record (List.nth form2.sigma i2, {sigma=sigma2_new; pi=new_pi}, deltas  ))
     | _ -> raise (TempExceptionBeforeApiCleanup "try_split")
 
 (******************************************************************************)
@@ -768,11 +788,11 @@ let try_match_onstack solver form1 form2 level _  =
 	| 2 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq},
-          [])
+          [], NoRecord)
       	| 1 | 4 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq @ y_eq },
-          [])
+          [], NoRecord)
       	| _ ->  raise (TempExceptionBeforeApiCleanup "try_match_onstack:3")
 
 
@@ -1027,15 +1047,15 @@ and try_match solver form1 form2 level pvars  =
       | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ dll_eq @ f1.pi},
           f2,
           {sigma=[]; pi=dll_eq},
-          added_lvars)
+          added_lvars,NoRecord)
       | 0 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq @ dll_eq},
-          added_lvars)
+          added_lvars,NoRecord)
       | _ ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ size_eq @ f1.pi},
           f2,
           {sigma=[]; pi=x_eq @ dll_eq @ size_eq},
-          added_lvars)
+          added_lvars,NoRecord)
 
 
 
@@ -1091,10 +1111,10 @@ and entailment_ll solver form1 form2 evars=
   | 1 -> true
   | -1 ->
      (match (try_match solver form1 form2 1 []),(try_match solver form1 form2 2 []) with
-     | Apply (f1,f2,_,_),_ ->
+     | Apply (f1,f2,_,_,_),_ ->
   		print_string "Match, "; flush stdout;
   		(entailment_ll solver f1 f2 evars)
-     | Fail,Apply (f1,f2,_,_) ->
+     | Fail,Apply (f1,f2,_,_,_) ->
   		print_string "Match2, "; flush stdout;
   		(entailment_ll solver f1 f2 evars)
      | Fail,Fail -> false)
@@ -1159,20 +1179,20 @@ let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   else Finish ({pi=(prune_pure_form1 form1.pi)@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
 
 (* main biabduction function *)
-(* The result is:  "missing, frame, added_lvars" *)
+(* The result is:  "missing, frame, added_lvars, recorded split-rights" *)
 type abduction_res =
-| Bok of Formula.t * Formula.t * variable list
+| Bok of Formula.t * Formula.t * variable list * split_record list
 | BFail
 
-let rec biabduction solver form1 form2 pvars =
+let rec biabduction solver form1 form2 pvars  =
   (* try the rules till an applicable if founded *)
   let rec try_rules todo=
     match todo with
     | (func_name,rule_arg,rule_name) :: rest ->
       (match (func_name solver form1 form2 rule_arg pvars) with
-      | Apply (f1,f2,missing,n_lvars) ->
+      | Apply (f1,f2,missing,n_lvars,split_rec) ->
         print_string (rule_name ^", "); flush stdout;
-        Apply (f1,f2,missing,n_lvars)
+        Apply (f1,f2,missing,n_lvars,split_rec)
       | Fail ->
         try_rules rest
       )
@@ -1187,7 +1207,7 @@ let rec biabduction solver form1 form2 pvars =
      The conflicts may be removed by application of a match rule.
      The Finish true is aplied only if Match-onstack can not be applied
    *) 
-  (* Adding form1 into the solver is only an performance optimization. Its removal has no impact on correctness. *)
+  (* Adding form1 into the solver is only a performance optimization. Its removal has no impact on correctness. *)
   Solver.push solver.solv;
   Solver.add solver.solv [Boolean.mk_and solver.ctx (formula_to_solver solver.ctx form1)];
   match (test_sat solver form1 form2),(try_rules rules_onstack) with
@@ -1197,12 +1217,12 @@ let rec biabduction solver form1 form2 pvars =
   | Finish (missing,frame), Fail ->
     Solver.pop  solver.solv 1;
     print_endline "Finish true"; 
-    Bok ( missing,frame, [])
-  | _, Apply (f1,f2,missing,n_lvars) ->
+    Bok ( missing,frame, [], [])
+  | _, Apply (f1,f2,missing,n_lvars,_) ->
     Solver.pop  solver.solv 1;
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
-    | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
+    | Bok (miss,fr,l_vars,split_rec)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars,split_rec)
     )
   | NoFinish, Fail ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
@@ -1223,11 +1243,17 @@ let rec biabduction solver form1 form2 pvars =
     (try_split,4,"Split4");
   ] in
   match try_rules rules with
-  | Apply (f1,f2,missing,n_lvars) ->
+  | Apply (f1,f2,missing,n_lvars,rule_split_rec) ->
     Solver.pop  solver.solv 1;
+    let split_rec_to_add=
+    	match rule_split_rec with
+    	| Record _ -> [rule_split_rec ]
+    	| NoRecord -> []
+    in
     (match biabduction solver f1 f2 pvars with
     | BFail -> BFail
-    | Bok (miss,fr,l_vars)-> Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars)
+    | Bok (miss,fr,l_vars,split_rec)-> 
+    	Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars, split_rec_to_add@split_rec)
     )
   | Fail ->
     Solver.pop  solver.solv 1;

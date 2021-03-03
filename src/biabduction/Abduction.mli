@@ -1,16 +1,13 @@
 type variable = Formula.Exp.variable
 
-(** result of the rule application
-    form1 * form2 * M * added_local_vars
-    or Fail
-**)
-type res =
-  | Apply of Formula.t * Formula.t * Formula.t * variable list
-  | Fail
+type split_record =
+  | Record of Formula.heap_pred * Formula.t * Formula.pi
+  | NoRecord
 
-(** The result is:  "missing, frame, added_lvars" *)
+
+(** The result is:  "missing, frame, added_lvars, recorded split-rights" *)
 type abduction_res =
-  | Bok of Formula.t * Formula.t * variable list
+  | Bok of Formula.t * Formula.t * variable list * split_record list
   | BFail
 
 (** Raise in case of ... *)

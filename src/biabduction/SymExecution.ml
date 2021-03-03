@@ -13,18 +13,61 @@ type contract_app_res =
    * we assume that contract variables are not used within the state s,
    * only the program variables may appear in both contract and state, they are used as anchors
 *)
+exception Split_contract_RHS
+
 let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
 	let query= (Boolean.mk_not ctx (expr_to_solver_only_exp ctx z3_names expr)) :: form_z3 in
 	(Solver.check solv query)=SATISFIABLE
 
+let rec split_pointsto_with_eq_dest rhs dest deltas split_items=
+	match rhs with
+	| [] -> []
+	| Hpointsto (a,l,b)::rest ->
+		(if b=dest 
+		then 
+			let rec create_new_pointsto split_items deltas=
+				match split_items,deltas with
+				| [],[] -> []
+				| Hpointsto (_,l1,b1):: items_rest,delta::deltas_rest ->
+					if delta=Exp.zero 
+					then Hpointsto (a,l1,b1) :: (create_new_pointsto items_rest deltas_rest)
+					else Hpointsto (Exp.BinOp(Pplus,a,delta),l1,b1) :: (create_new_pointsto items_rest deltas_rest)
+				| _ -> raise Split_contract_RHS
+			in
+			(create_new_pointsto split_items deltas) @(split_pointsto_with_eq_dest rest dest deltas split_items) 
+		
+		else (Hpointsto (a,l,b) :: (split_pointsto_with_eq_dest rest dest deltas split_items))
+		)
+	| first::rest -> first :: (split_pointsto_with_eq_dest rest dest deltas split_items)
+
+let rec split_contract_rhs rhs rec_splits =
+	match rec_splits with
+	| [] -> rhs
+	| Abduction.NoRecord :: rest ->  split_contract_rhs rhs rest
+	| Record (a,b,deltas)::rest ->
+		let eq x=(x=a) in
+		let neq a = not (eq a) in
+		if List.exists eq rhs.sigma 
+		then 
+		     let dest=match a with
+		     		| Hpointsto (_,_,b) -> b
+				| _ -> raise Split_contract_RHS
+		     in
+		     let new_rhs1=(List.filter neq rhs.sigma) in
+		     let new_rhs2=split_pointsto_with_eq_dest new_rhs1 dest deltas b.sigma in
+		     split_contract_rhs {sigma=new_rhs2@b.sigma; pi=rhs.pi@b.pi} rest
+		else split_contract_rhs rhs rest
+
+
 let apply_contract solver state c pvars =
   match (Abduction.biabduction solver state.curr c.Contract.lhs pvars) with
   | BFail -> CAppFail
-  | Bok  (miss, fr, l_vars) ->
+  | Bok  (miss, fr, l_vars,rec_splits) ->
     (* prune useless constrains in miss.pi *)
     let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
-    let current= {pi=fr.pi @ c.rhs.pi; sigma= fr.sigma @ c.rhs.sigma } in
+    let splited_rhs=split_contract_rhs c.rhs rec_splits in
+    let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in
     (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
        The post_contract_application function takes care about it. *)
     CAppOk {miss=missing; curr=current; lvars=(state.lvars @ l_vars)  }
