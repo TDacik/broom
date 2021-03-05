@@ -42,9 +42,11 @@ let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list
       )
       | first::rest -> first :: (cut_pure rest base_list)
     in
-
-    {sigma=(cut_spatial form.sigma (freed_list @ invalid_list));
-     pi=(cut_pure form.pi invalid_list)}
+    Z3.Solver.push solver.solv;
+    Z3.Solver.add solver.solv form_z3;
+    let res={sigma=(cut_spatial form.sigma (freed_list @ invalid_list));
+          pi=(cut_pure form.pi invalid_list)} in
+    Z3.Solver.pop solver.solv 1; res
 
 (* freed are on heap / invalid are on stack *)
 let remove_freed_and_invalid_parts solver form =

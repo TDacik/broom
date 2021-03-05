@@ -11,6 +11,7 @@ int main() {
 	p->data = 3;
 	p->next = p;
 	struct sll_node *q = alloca(sizeof(struct sll_node));
-	memcpy(q, p, sizeof(*p));
+	int c = sizeof(*p);
+	memcpy(q, p, c);
 	return q->data;
 }
