@@ -610,7 +610,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
           [BinOp ( Plesseq, s2, UnOp ( Len, x2)); 
 	  	BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
 		Exp.BinOp(Peq,Exp.UnOp(Base,x2),Exp.UnOp(Base,Exp.Var ptr_last_var));
-	  	ptr_last_eq; size_last_eq; size_first_eq] 
+	  	ptr_last_eq; size_last_eq; size_first_eq], 
           [Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ],
 	  [size_first_var;ptr_last_var;size_last_var ]@dest_vars,
 	  [Exp.zero;size_first;BinOp(Pplus,size_first,s1)]
