@@ -496,8 +496,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
           [ Hpointsto (x1,s2,split_dest);
             Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
            [ Exp.BinOp(Peq,x1,x2) ;
-             BinOp ( Plesseq, s1, UnOp ( Len, x1));
-             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, Exp.Var ptr_last_var));
+             BinOp ( Plesseq, s1, UnOp ( Len, x1)); 
 	     ptr_last_eq; size_last_eq],
            [ Exp.BinOp(Pless,s2,s1) ],
 	   [ptr_last_var;size_last_var]
@@ -506,7 +505,6 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
            Hpointsto (x2,s2,split_dest)],
            [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
              BinOp ( Plesseq, s1, UnOp ( Len, x1));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
 	    size_first_eq],
            [Exp.BinOp(Pless,s2,s1) ],
 	   [size_first_var]
@@ -514,8 +512,6 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
           Hpointsto (x2,s2,split_dest);
           Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
           [BinOp ( Plesseq, s1, UnOp ( Len, x1));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last));
 	    size_first_eq; ptr_last_eq; size_last_eq],
           [Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ],
 	  [size_first_var;ptr_last_var;size_last_var]
