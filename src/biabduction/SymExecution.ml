@@ -29,18 +29,15 @@ let rec split_pointsto_with_eq_dest rhs dest deltas split_items=
 				match split_items,deltas with
 				| [],[] -> [],[]
 				| Hpointsto (_,l1,b1):: items_rest,delta::deltas_rest ->
-					let current_base_eq,new_base=
-						if base=Exp.zero 
-						then [],a
-						else [(Exp.BinOp(Peq,Exp.UnOp(Base,base),Exp.UnOp(Base,a)))],base
-					in
-					let npto,nbaseeq= create_new_pointsto items_rest deltas_rest new_base in
+					let npto,nbaseeq=create_new_pointsto items_rest deltas_rest base in
 					if delta=Exp.zero 
-					then (Hpointsto (a,l1,b1) :: npto), current_base_eq @ nbaseeq
-					else (Hpointsto (Exp.BinOp(Pplus,a,delta),l1,b1) :: npto), current_base_eq @ nbaseeq
+					then (Hpointsto (a,l1,b1) :: npto), nbaseeq
+					else 
+						(Hpointsto (Exp.BinOp(Pplus,a,delta),l1,b1) :: npto), 
+						(Exp.BinOp(Peq,Exp.UnOp(Base,base),Exp.UnOp(Base,Exp.BinOp(Pplus,a,delta)))) :: nbaseeq
 				| _ -> raise Split_contract_RHS
 			in
-			let new_pointsto,baseeq=create_new_pointsto split_items deltas Exp.zero in
+			let new_pointsto,baseeq=create_new_pointsto split_items deltas a in
 			let rec_pointsto,rec_baseeq=split_pointsto_with_eq_dest rest dest deltas split_items in
 			new_pointsto @ rec_pointsto, baseeq @ rec_baseeq
 		
