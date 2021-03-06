@@ -21,24 +21,36 @@ let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
 
 let rec split_pointsto_with_eq_dest rhs dest deltas split_items=
 	match rhs with
-	| [] -> []
+	| [] -> [],[]
 	| Hpointsto (a,l,b)::rest ->
 		(if b=dest 
 		then 
-			let rec create_new_pointsto split_items deltas=
+			let rec create_new_pointsto split_items deltas base=
 				match split_items,deltas with
-				| [],[] -> []
+				| [],[] -> [],[]
 				| Hpointsto (_,l1,b1):: items_rest,delta::deltas_rest ->
+					let current_base_eq,new_base=
+						if base=Exp.zero 
+						then [],a
+						else [(Exp.BinOp(Peq,Exp.UnOp(Base,base),Exp.UnOp(Base,a)))],base
+					in
+					let npto,nbaseeq= create_new_pointsto items_rest deltas_rest new_base in
 					if delta=Exp.zero 
-					then Hpointsto (a,l1,b1) :: (create_new_pointsto items_rest deltas_rest)
-					else Hpointsto (Exp.BinOp(Pplus,a,delta),l1,b1) :: (create_new_pointsto items_rest deltas_rest)
+					then (Hpointsto (a,l1,b1) :: npto), current_base_eq @ nbaseeq
+					else (Hpointsto (Exp.BinOp(Pplus,a,delta),l1,b1) :: npto), current_base_eq @ nbaseeq
 				| _ -> raise Split_contract_RHS
 			in
-			(create_new_pointsto split_items deltas) @(split_pointsto_with_eq_dest rest dest deltas split_items) 
+			let new_pointsto,baseeq=create_new_pointsto split_items deltas Exp.zero in
+			let rec_pointsto,rec_baseeq=split_pointsto_with_eq_dest rest dest deltas split_items in
+			new_pointsto @ rec_pointsto, baseeq @ rec_baseeq
 		
-		else (Hpointsto (a,l,b) :: (split_pointsto_with_eq_dest rest dest deltas split_items))
+		else 
+			let rec_pointsto,rec_baseeq=split_pointsto_with_eq_dest rest dest deltas split_items in
+			(Hpointsto (a,l,b) :: rec_pointsto),rec_baseeq
 		)
-	| first::rest -> first :: (split_pointsto_with_eq_dest rest dest deltas split_items)
+	| first::rest -> 
+			let rec_pointsto,rec_baseeq=split_pointsto_with_eq_dest rest dest deltas split_items in
+			(first :: rec_pointsto), rec_baseeq
 
 let rec split_contract_rhs rhs rec_splits =
 	match rec_splits with
@@ -54,8 +66,8 @@ let rec split_contract_rhs rhs rec_splits =
 				| _ -> raise Split_contract_RHS
 		     in
 		     let new_rhs1=(List.filter neq rhs.sigma) in
-		     let new_rhs2=split_pointsto_with_eq_dest new_rhs1 dest deltas b.sigma in
-		     split_contract_rhs {sigma=new_rhs2@b.sigma; pi=rhs.pi@b.pi} rest
+		     let new_rhs2,added_baseeq=split_pointsto_with_eq_dest new_rhs1 dest deltas b.sigma in
+		     split_contract_rhs {sigma=new_rhs2@b.sigma; pi=rhs.pi@b.pi@added_baseeq} rest
 		else split_contract_rhs rhs rest
 
 
