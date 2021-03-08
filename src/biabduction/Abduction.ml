@@ -494,31 +494,34 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let sigma1_new,pi_tmp1, pi_tmp2, new_lvars= (* compute the splitted part of sigma and new pi*)
         if size_first=(Exp.zero) then
           [ Hpointsto (x1,s2,split_dest);
-            Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
-           [ Exp.BinOp(Peq,x1,x2) ;
-             BinOp ( Plesseq, s1, UnOp ( Len, x1));
-             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, Exp.Var ptr_last_var));
-	     ptr_last_eq; size_last_eq],
-           [ Exp.BinOp(Pless,s2,s1) ],
-	   [ptr_last_var;size_last_var]
-        else if  size_last=(Exp.zero) then
-          [Hpointsto (x1,Exp.Var size_first_var,split_dest);
-           Hpointsto (x2,s2,split_dest)],
-           [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
-             BinOp ( Plesseq, s1, UnOp ( Len, x1));
+            Hpointsto (Exp.Var ptr_last_var,Var size_last_var,split_dest)],
+          [ Exp.BinOp(Peq,x1,x2);
+            BinOp ( Plesseq, s1, UnOp ( Len, x1));
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, Var ptr_last_var));
+            ptr_last_eq; size_last_eq],
+          [ Exp.BinOp(Pless,s2,s1) ],
+          [ ptr_last_var; size_last_var ]
+        else if size_last=(Exp.zero) then
+          [ Hpointsto (x1,Var size_first_var,split_dest);
+            Hpointsto (x2,s2,split_dest)],
+          [ BinOp(Peq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1));
+            BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-	    size_first_eq],
-           [Exp.BinOp(Pless,s2,s1) ],
-	   [size_first_var]
-        else [Hpointsto (x1,Exp.Var size_first_var,split_dest);
-          Hpointsto (x2,s2,split_dest);
-          Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest)],
-          [BinOp ( Plesseq, s1, UnOp ( Len, x1));
+            size_first_eq],
+          [ BinOp(Pless,s2,s1) ],
+          [ size_first_var ]
+        else
+          [ Hpointsto (x1,Var size_first_var,split_dest);
+            Hpointsto (x2,s2,split_dest);
+            Hpointsto (Var ptr_last_var,Var size_last_var,split_dest)],
+          [ BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last));
-	    size_first_eq; ptr_last_eq; size_last_eq],
-          [Exp.BinOp(Plesseq,x1,x2); Exp.BinOp(Pless,s2,s1);Exp.BinOp(Plesseq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1)) ],
-	  [size_first_var;ptr_last_var;size_last_var]
+            size_first_eq; ptr_last_eq; size_last_eq],
+          [ BinOp(Plesseq,x1,x2);
+            BinOp(Pless,s2,s1);
+            BinOp(Plesseq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1)) ],
+          [ size_first_var; ptr_last_var; size_last_var ]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
@@ -570,8 +573,8 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
       (* The RHS of the splitted points to can be 
          -- null 
-	 -- undef: we add a fresh variable for each piece 
-	    we need to get a name of each particular part in the "recorded splits" *)
+         -- undef: we add a fresh variable for each piece
+       we need to get a name of each particular part in the "recorded splits" *)
       let split_dest1,split_dest2,split_dest3,dest_vars=
         let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y2, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form2))
@@ -588,32 +591,36 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let sigma2_new,pi_tmp1,pi_tmp2,new_lvars,deltas= (* compute the splitted part of sigma *)
         if size_first=(Exp.zero) then
           [ Hpointsto (x1,s1,split_dest2);
-            Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest3)],
-           [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2));
-	   ptr_last_eq; size_last_eq; Exp.BinOp(Peq,Exp.UnOp(Base,x1),Exp.UnOp(Base,Exp.Var ptr_last_var))],
-           [ Exp.BinOp(Pless,s1,s2) ],
-	   [ptr_last_var; size_last_var]@dest_vars,
-	   [Exp.zero;s1]
-        else if  size_last=(Exp.zero) then
-          [Hpointsto (x2,Exp.Var size_first_var,split_dest1);
-           Hpointsto (x1,s1,split_dest2)],
-           [Exp.BinOp(Peq,BinOp(Pplus,x2,s2),Exp.BinOp(Pplus,x1,s1));
-             BinOp ( Plesseq, s2, UnOp ( Len, x2));
+            Hpointsto (Var ptr_last_var,Var size_last_var,split_dest3)],
+          [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2));
+            ptr_last_eq; size_last_eq;
+            BinOp(Peq,UnOp(Base,x1),UnOp(Base,Var ptr_last_var))],
+          [ Exp.BinOp(Pless,s1,s2) ],
+          [ ptr_last_var; size_last_var]@dest_vars,
+          [ Exp.zero; s1 ]
+        else if size_last=(Exp.zero) then
+          [ Hpointsto (x2,Var size_first_var,split_dest1);
+            Hpointsto (x1,s1,split_dest2)],
+          [ BinOp(Peq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1));
+            BinOp ( Plesseq, s2, UnOp ( Len, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-	    size_first_eq],
-           [Exp.BinOp(Pless,s1,s2) ],
-	   [ size_first_var]@dest_vars,
-	   [Exp.zero;size_first]
-        else [Hpointsto (x2,Exp.Var size_first_var,split_dest1);
-          Hpointsto (x1,s1,split_dest2);
-          Hpointsto (Exp.Var ptr_last_var,Exp.Var size_last_var,split_dest3)],
-          [BinOp ( Plesseq, s2, UnOp ( Len, x2)); 
-	  	BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-		Exp.BinOp(Peq,Exp.UnOp(Base,x2),Exp.UnOp(Base,Exp.Var ptr_last_var));
-	  	ptr_last_eq; size_last_eq; size_first_eq], 
-          [Exp.BinOp(Plesseq,x2,x1); Exp.BinOp(Pless,s1,s2);Exp.BinOp(Plesseq,BinOp(Pplus,x1,s1),Exp.BinOp(Pplus,x2,s2)) ],
-	  [size_first_var;ptr_last_var;size_last_var ]@dest_vars,
-	  [Exp.zero;size_first;BinOp(Pplus,size_first,s1)]
+            size_first_eq],
+          [ BinOp(Pless,s1,s2) ],
+          [ size_first_var]@dest_vars,
+          [ Exp.zero; size_first ]
+        else
+          [ Hpointsto (x2,Var size_first_var,split_dest1);
+            Hpointsto (x1,s1,split_dest2);
+            Hpointsto (Var ptr_last_var,Var size_last_var,split_dest3)],
+          [ BinOp ( Plesseq, s2, UnOp ( Len, x2));
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
+            BinOp(Peq,UnOp(Base,x2),UnOp(Base,Var ptr_last_var));
+            ptr_last_eq; size_last_eq; size_first_eq],
+          [ BinOp(Plesseq,x2,x1);
+            BinOp(Pless,s1,s2);
+            BinOp(Plesseq,BinOp(Pplus,x1,s1),BinOp(Pplus,x2,s2)) ],
+          [ size_first_var; ptr_last_var; size_last_var ]@dest_vars,
+          [ Exp.zero; size_first; BinOp(Pplus,size_first,s1) ]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)

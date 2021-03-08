@@ -58,12 +58,12 @@ let rec split_contract_rhs rhs rec_splits =
 		let neq a = not (eq a) in
 		if List.exists eq rhs.sigma 
 		then 
-		     let dest=match a with
-		     		| Hpointsto (_,_,b) -> b
+			let dest=match a with
+				| Hpointsto (_,_,b) -> b
 				| _ -> raise Split_contract_RHS
-		     in
-		     let new_rhs1=(List.filter neq rhs.sigma) in
-		     let new_rhs2,added_baseeq=split_pointsto_with_eq_dest new_rhs1 dest deltas b.sigma in
+			in
+			let new_rhs1=(List.filter neq rhs.sigma) in
+			let new_rhs2,added_baseeq=split_pointsto_with_eq_dest new_rhs1 dest deltas b.sigma in
 		     split_contract_rhs {sigma=new_rhs2@b.sigma; pi=rhs.pi@b.pi@added_baseeq} rest
 		else split_contract_rhs rhs rest
 
