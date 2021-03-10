@@ -59,6 +59,12 @@ val check_all_lambdas : Z3.context -> Z3.Solver.solver -> Formula.sigma -> bool
 val check_eq_base : solver -> Z3.Expr.expr list -> Formula.Exp.t ->
                     Formula.Exp.t -> bool
 
+(* The function use "form" as a contex in which the expression is tried to be simplified by a concrete bitvector value.
+   The bitvector is finally tranlated to integer.
+   INPUT: form: SL formula, expr: Formula.Exp.t
+   OUTPUT: None or integer equal to the evaluation of the expr*)
+val try_simplify_bitvector_expr_to_int : solver -> Formula.t -> Formula.Exp.t -> int option
+
 (* UNUSED *)
 val mk_bv2bool : Z3.context -> Z3.Expr.expr -> Z3.Expr.expr
 

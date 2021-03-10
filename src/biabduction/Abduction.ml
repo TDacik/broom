@@ -571,6 +571,11 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
       let ptr_last_var = get_fresh_var (size_last_var+1) ([size_first_var; size_last_var]@variables) in
       let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
+      (*
+      (match (try_simplify_bitvector_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} ptr_last) with
+      | None -> print_string "XXX: none\n"
+      | Some a -> print_string ("XXX: "^(string_of_int a)^"\n")
+      );*)
       (* The RHS of the splitted points to can be 
          -- null 
          -- undef: we add a fresh variable for each piece
