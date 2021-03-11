@@ -8,9 +8,9 @@ struct sll_node {
 
 struct sll_node * s() {
 	struct sll_node *p = malloc(sizeof(struct sll_node));
-	p->data = 3;
-	p->next = p;
 	struct sll_node *q = malloc(sizeof(struct sll_node));
+	p->data = 3;
+	p->next = q;
 	int c = sizeof(*p);
 	memcpy(q, p, c);
 	return q; // memory leak - p

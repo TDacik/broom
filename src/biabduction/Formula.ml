@@ -337,11 +337,34 @@ let rec find_expr_contains_vars vars expr =
 let rec subpi vars pi =
   match pi with
   | [] -> ([],[])
+  | Exp.BinOp (op,UnOp (Len,a),b)::tl ->
+    let (a_vars,a_found) = find_expr_contains_vars vars a in
+    let (tl_vars,subtl) = subpi vars tl in
+    if (a_found) (* must be reach from Len *)
+    then (
+      let (b_vars,_) = find_expr_contains_vars vars b in
+      let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
+      (CL.Util.list_join_unique new_vars tl_vars, Exp.BinOp (op,UnOp (Len,a),b)::subtl) )
+    else
+      (tl_vars,subtl)
+  | BinOp (op,b,UnOp (Len,a))::tl ->
+    let (a_vars,a_found) = find_expr_contains_vars vars a in
+    let (tl_vars,subtl) = subpi vars tl in
+    if (a_found) (* must be reach from Len *)
+    then (
+      let (b_vars,_) = find_expr_contains_vars vars b in
+      let new_vars = CL.Util.list_diff (b_vars @ a_vars) vars in
+      (CL.Util.list_join_unique new_vars tl_vars, BinOp (op,b,UnOp (Len,a))::subtl) )
+    else
+      (tl_vars,subtl)
   | expr::tl -> let (all_vars,found) = find_expr_contains_vars vars expr in
     let (tl_vars, subtl) = subpi vars tl in
-    if (found) then
+    if (found) then (
       let new_vars = CL.Util.list_diff all_vars vars in
-      (CL.Util.list_join_unique new_vars tl_vars, expr::subtl)
+      (* print_string ("PI: ");
+      print_string (CL.Util.list_to_string (Exp.to_string) new_vars);
+      print_endline (Exp.to_string expr); *)
+      (CL.Util.list_join_unique new_vars tl_vars, expr::subtl) )
     else
       (tl_vars, subtl)
 
@@ -350,33 +373,33 @@ let rec subsigma vars sigma =
   | [] -> ([],[])
   | Hpointsto (a,size,b)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
-    let (size_vars,_) = find_expr_contains_vars vars size in
-    let (b_vars,_) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
     if (a_found) (* must be reach from source pointer *)
     then
+      let (size_vars,_) = find_expr_contains_vars vars size in
+      let (b_vars,_) = find_expr_contains_vars vars b in
       let new_vars = CL.Util.list_diff (a_vars @ size_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Hpointsto (a,size,b)::subtl)
     else
       (tl_vars,subtl)
   | Slseg (a,b,l)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
-    let (b_vars,_) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
     if (a_found) (* must be reach from source pointer *)
     then
+      let (b_vars,_) = find_expr_contains_vars vars b in
       let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l)::subtl)
     else
       (tl_vars,subtl)
   | Dlseg (a,b,c,d,l)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
-    let (b_vars,_) = find_expr_contains_vars vars b in
     let (c_vars,c_found) = find_expr_contains_vars vars a in
-    let (d_vars,_) = find_expr_contains_vars vars b in
     let (tl_vars,subtl) = subsigma vars tl in
     if (a_found)||(c_found) (* must be reach from source pointer *)
     then
+      let (b_vars,_) = find_expr_contains_vars vars b in
+      let (d_vars,_) = find_expr_contains_vars vars b in
       let new_vars = CL.Util.list_diff (a_vars @ b_vars @ c_vars @ d_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Dlseg (a,b,c,d,l)::subtl)
     else
