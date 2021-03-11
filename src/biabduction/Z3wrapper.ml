@@ -573,11 +573,11 @@ let check_eq_base {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 a base_ptr =
   in
   (Solver.check solv query)=UNSATISFIABLE
 
-(* The function use "form" as a contex in which the expression is tried to be simplified by a concrete bitvector value.
+(* The function use "form" as a context in which the expression is tried to be simplified by a concrete bitvector value.
    The bitvector is finally tranlated to integer.
-   INPUT: form: SL formula, expr: Formula.Exp.t
+   INPUT: form: SL formula (context), expr: Formula.Exp.t
    OUTPUT: None or integer equal to the evaluation of the expr*)
-let try_simplify_bitvector_expr_to_int solver form expr =
+let try_simplify_SL_expr_to_int solver form expr =
    let newvar=Expr.mk_fresh_const solver.ctx "tmpVAR" (BitVector.mk_sort solver.ctx bw_width) in
    let query=( Boolean.mk_eq solver.ctx (expr_to_solver_only_exp solver.ctx solver.z3_names expr) newvar) ::
    	(formula_to_solver solver.ctx form) in
@@ -592,7 +592,7 @@ let try_simplify_bitvector_expr_to_int solver form expr =
 			let query2=Boolean.mk_not solver.ctx (Boolean.mk_eq solver.ctx newvar value) :: query in
 			if (Solver.check solver.solv query2)==SATISFIABLE
 			then None
-			else Some (int_of_string (BitVector.numeral_to_string value))
+			else Some (Int64.of_string (BitVector.numeral_to_string value))
 		)
    else None
    

@@ -451,38 +451,25 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
-        let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
-              (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver_only_exp ctx z3_names
-                  (BinOp(Pneq, tmp_size_first, Exp.zero)))
-            ]
-        in
-        if (Solver.check solv query)=UNSATISFIABLE
-        then (Exp.zero)
-        else tmp_size_first
+	(* try to get exact size *)
+        match try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} tmp_size_first with
+		| None -> tmp_size_first
+		| Some a -> Exp.Const (Int a)
       in
-      let size_first_var = (get_fresh_var 1 variables) in
-      let size_first_eq = (Exp.BinOp (Peq,Exp.Var size_first_var,size_first)) in
       (* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
       let size_last=
         let tmp_size_last=
           if size_first=(Exp.zero)
           then (Exp.BinOp(Pminus,s1,s2))
           else (Exp.BinOp(Pminus,s1,Exp.BinOp(Pplus,s2,size_first))) in
-        let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
-              (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver_only_exp ctx z3_names
-                  (BinOp(Pneq,tmp_size_last,Exp.zero)))
-            ]
-        in
-        if (Solver.check solv query)=UNSATISFIABLE then (Exp.zero)
-        else tmp_size_last
+	(* try to find exact size *)
+        match try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} tmp_size_last with
+		| None -> tmp_size_last
+		| Some a -> Exp.Const (Int a)
       in
-      let size_last_var = get_fresh_var (size_first_var+1) ([size_first_var]@variables) in
-      let size_last_eq = (Exp.BinOp (Peq,Exp.Var size_last_var,size_last)) in
       (* pointer to the last segment *)
       let ptr_last=(Exp.BinOp(Pplus,x2,s2)) in
-      let ptr_last_var = get_fresh_var (size_last_var+1) ([size_first_var; size_last_var]@variables) in
+      let ptr_last_var = get_fresh_var 1 variables in
       let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
       (* destination of the split (null/undefined)*)
       let split_dest=
@@ -494,34 +481,33 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let sigma1_new,pi_tmp1, pi_tmp2, new_lvars= (* compute the splitted part of sigma and new pi*)
         if size_first=(Exp.zero) then
           [ Hpointsto (x1,s2,split_dest);
-            Hpointsto (Exp.Var ptr_last_var,Var size_last_var,split_dest)],
+            Hpointsto (Exp.Var ptr_last_var,size_last,split_dest)],
           [ Exp.BinOp(Peq,x1,x2);
             BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, Var ptr_last_var));
-            ptr_last_eq; size_last_eq],
+            ptr_last_eq],
           [ Exp.BinOp(Pless,s2,s1) ],
-          [ ptr_last_var; size_last_var ]
+          [ ptr_last_var ]
         else if size_last=(Exp.zero) then
-          [ Hpointsto (x1,Var size_first_var,split_dest);
+          [ Hpointsto (x1,size_first,split_dest);
             Hpointsto (x2,s2,split_dest)],
           [ BinOp(Peq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1));
             BinOp ( Plesseq, s1, UnOp ( Len, x1));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-            size_first_eq],
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
           [ BinOp(Pless,s2,s1) ],
-          [ size_first_var ]
+          []
         else
-          [ Hpointsto (x1,Var size_first_var,split_dest);
+          [ Hpointsto (x1,size_first,split_dest);
             Hpointsto (x2,s2,split_dest);
-            Hpointsto (Var ptr_last_var,Var size_last_var,split_dest)],
+            Hpointsto (Var ptr_last_var,size_last,split_dest)],
           [ BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last));
-            size_first_eq; ptr_last_eq; size_last_eq],
+            ptr_last_eq],
           [ BinOp(Plesseq,x1,x2);
             BinOp(Pless,s2,s1);
             BinOp(Plesseq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1)) ],
-          [ size_first_var; ptr_last_var; size_last_var ]
+          [ ptr_last_var ]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
@@ -537,45 +523,28 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x1,x2)) in
-        let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
-              (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver_only_exp ctx z3_names
-                  (BinOp(Pneq,tmp_size_first,Exp.zero)))
-            ]
-        in
-        if (Solver.check solv query)=UNSATISFIABLE
-        then (Exp.zero)
-        else tmp_size_first
+	(* try to find exact size *)
+        match try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} tmp_size_first with
+		| None -> tmp_size_first
+		| Some a -> Exp.Const (Int a)
+		
       in
-      let size_first_var = (get_fresh_var 1 variables) in
-      let size_first_eq = (Exp.BinOp (Peq,Exp.Var size_first_var,size_first)) in
       (* Compute size of the last block -- Check form1 /\ form2 -> size_last=0 *)
       let size_last=
         let tmp_size_last=
           if size_first=(Exp.zero)
           then (Exp.BinOp(Pminus,s2,s1))
           else (Exp.BinOp(Pminus,s2,Exp.BinOp(Pplus,s1,size_first))) in
-        let query = [ (Boolean.mk_and ctx (formula_to_solver ctx form1));
-              (Boolean.mk_and ctx (formula_to_solver ctx form2));
-              (expr_to_solver_only_exp ctx z3_names
-                  (BinOp(Pneq,tmp_size_last,Exp.zero)))
-            ]
-        in
-        if (Solver.check solv query)=UNSATISFIABLE
-        then (Exp.zero)
-        else tmp_size_last
+	  (* try to find exact size *)
+          match try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} tmp_size_last with
+		| None -> tmp_size_last
+		| Some a -> Exp.Const (Int a)
+		
       in
-      let size_last_var = get_fresh_var (size_first_var+1) ([size_first_var]@variables) in
-      let size_last_eq = (Exp.BinOp (Peq,Exp.Var size_last_var,size_last)) in
       (* pointer to the last block *)
       let ptr_last=(Exp.BinOp(Pplus,x1,s1)) in
-      let ptr_last_var = get_fresh_var (size_last_var+1) ([size_first_var; size_last_var]@variables) in
+      let ptr_last_var = get_fresh_var 1 variables in
       let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
-      (*
-      (match (try_simplify_bitvector_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} ptr_last) with
-      | None -> print_string "XXX: none\n"
-      | Some a -> print_string ("XXX: "^(string_of_int a)^"\n")
-      );*)
       (* The RHS of the splitted points to can be 
          -- null 
          -- undef: we add a fresh variable for each piece
@@ -587,45 +556,50 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
         if (Solver.check solv query_null)=UNSATISFIABLE
         then Exp.zero,Exp.zero,Exp.zero,[]
         else (
-		let v1=get_fresh_var (ptr_last_var+1) ([size_first_var; size_last_var;ptr_last_var]@variables) in
-		let v2=get_fresh_var (v1+1) ([size_first_var; size_last_var;ptr_last_var;v1]@variables) in
-		let v3=get_fresh_var (v2+1) ([size_first_var; size_last_var;ptr_last_var;v1;v2]@variables) in
+		let v1=get_fresh_var (ptr_last_var+1) ([ ptr_last_var]@variables) in
+		let v2=get_fresh_var (v1+1) ([ptr_last_var;v1]@variables) in
+		let v3=get_fresh_var (v2+1) ([ptr_last_var;v1;v2]@variables) in
 		Exp.Var v1,Exp.Var v2, Exp.Var v3,[v1;v2;v3]
 	)
       in
       let sigma2_new,pi_tmp1,pi_tmp2,new_lvars,deltas= (* compute the splitted part of sigma *)
         if size_first=(Exp.zero) then
           [ Hpointsto (x1,s1,split_dest2);
-            Hpointsto (Var ptr_last_var,Var size_last_var,split_dest3)],
+            Hpointsto (Var ptr_last_var,size_last,split_dest3)],
           [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2));
-            ptr_last_eq; size_last_eq;
+            ptr_last_eq; 
             BinOp(Peq,UnOp(Base,x1),UnOp(Base,Var ptr_last_var))],
           [ Exp.BinOp(Pless,s1,s2) ],
-          [ ptr_last_var; size_last_var]@dest_vars,
+          [ ptr_last_var]@dest_vars,
           [ Exp.zero; s1 ]
         else if size_last=(Exp.zero) then
-          [ Hpointsto (x2,Var size_first_var,split_dest1);
+          [ Hpointsto (x2,size_first,split_dest1);
             Hpointsto (x1,s1,split_dest2)],
           [ BinOp(Peq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1));
             BinOp ( Plesseq, s2, UnOp ( Len, x2));
-            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
-            size_first_eq],
+            BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
           [ BinOp(Pless,s1,s2) ],
-          [ size_first_var]@dest_vars,
+          dest_vars,
           [ Exp.zero; size_first ]
         else
-          [ Hpointsto (x2,Var size_first_var,split_dest1);
+	  let delta_last=match try_simplify_SL_expr_to_int 
+	  		{ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=form1.pi@form2.pi} (BinOp(Pplus,size_first,s1)) with
+		| None -> (Exp.BinOp(Pplus,size_first,s1))
+		| Some a -> Exp.Const (Int a)
+	  in	
+
+          [ Hpointsto (x2,size_first,split_dest1);
             Hpointsto (x1,s1,split_dest2);
-            Hpointsto (Var ptr_last_var,Var size_last_var,split_dest3)],
+            Hpointsto (Var ptr_last_var,size_last,split_dest3)],
           [ BinOp ( Plesseq, s2, UnOp ( Len, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
             BinOp(Peq,UnOp(Base,x2),UnOp(Base,Var ptr_last_var));
-            ptr_last_eq; size_last_eq; size_first_eq],
+            ptr_last_eq; ],
           [ BinOp(Plesseq,x2,x1);
             BinOp(Pless,s1,s2);
             BinOp(Plesseq,BinOp(Pplus,x1,s1),BinOp(Pplus,x2,s2)) ],
-          [ size_first_var; ptr_last_var; size_last_var ]@dest_vars,
-          [ Exp.zero; size_first; BinOp(Pplus,size_first,s1) ]
+          [ ptr_last_var ]@dest_vars,
+          [ Exp.zero; size_first; delta_last ]
       in
       let new_pi=
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)

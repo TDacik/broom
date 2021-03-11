@@ -63,7 +63,7 @@ val check_eq_base : solver -> Z3.Expr.expr list -> Formula.Exp.t ->
    The bitvector is finally tranlated to integer.
    INPUT: form: SL formula, expr: Formula.Exp.t
    OUTPUT: None or integer equal to the evaluation of the expr*)
-val try_simplify_bitvector_expr_to_int : solver -> Formula.t -> Formula.Exp.t -> int option
+val try_simplify_SL_expr_to_int : solver -> Formula.t -> Formula.Exp.t -> int64 option
 
 (* UNUSED *)
 val mk_bv2bool : Z3.context -> Z3.Expr.expr -> Z3.Expr.expr
