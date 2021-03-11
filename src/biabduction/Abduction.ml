@@ -504,9 +504,9 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last));
             ptr_last_eq],
-          [ BinOp(Plesseq,x1,x2);
-            BinOp(Pless,s2,s1);
-            BinOp(Plesseq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1)) ],
+          [ (* BinOp(Plesseq,x1,x2); *)
+            BinOp(Pless,s2,s1)(* ;
+            BinOp(Plesseq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1)) *) ],
           [ ptr_last_var ]
       in
       let new_pi=
@@ -595,9 +595,9 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2));
             BinOp(Peq,UnOp(Base,x2),UnOp(Base,Var ptr_last_var));
             ptr_last_eq; ],
-          [ BinOp(Plesseq,x2,x1);
-            BinOp(Pless,s1,s2);
-            BinOp(Plesseq,BinOp(Pplus,x1,s1),BinOp(Pplus,x2,s2)) ],
+          [ (* BinOp(Plesseq,x2,x1); *)
+            BinOp(Pless,s1,s2)(* ;
+            BinOp(Plesseq,BinOp(Pplus,x1,s1),BinOp(Pplus,x2,s2)) *) ],
           [ ptr_last_var ]@dest_vars,
           [ Exp.zero; size_first; delta_last ]
       in
