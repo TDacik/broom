@@ -238,6 +238,19 @@ let expr_to_solver_only_exp ctx func expr =
 (*  " a-> ... => alloc(base a)  " *)
 (*  " x-> ... * y -> ... => x!=y "/\" [base(x)= base(y) => y + size_y<=x "\/" x+size_x<=y] " *)
 
+(*
+let block_equal_base ctx func beg_addr len =
+	let midvar=Expr.mk_fresh_const ctx "mid" (BitVector.mk_sort ctx bw_width) in
+	let neq_base= Boolean.mk_and ctx [
+		BitVector.mk_sle ctx beg_addr midvar;
+		BitVector.mk_sle ctx midvar (BitVector.mk_add ctx beg_addr len);
+		Boolean.mk_not ctx
+			(Boolean.mk_eq ctx (Expr.mk_app ctx func.base [beg_addr]) (Expr.mk_app ctx func.base [midvar])) 
+		] in
+	let ex_neq_base= (create_ex_quantifier ctx [midvar] neq_base) in
+	(Boolean.mk_not ctx ex_neq_base )
+*)
+
 let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
   let alloc node=(expr_to_solver ctx func node) in
   let base_eq x y =
@@ -255,7 +268,8 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         /\ base(a)<=a 
         /\ a<=a+size_of_field_a --- this guarantee no overflow of bitvector
 	/\ len(base(a))=len(a) + (a-base(a)) 
-	/\ a+size_of_field_a<=base(a)+len(base(a)) *)
+	/\ a+size_of_field_a<=base(a)+len(base(a)) 
+	/\ NOTEXISTS mid. base(a)<=mid<=a+len(a) /\ base(a)!=base(mid) <<-- this significantly increase computational time!!! *)
 
     let x,exundef1=alloc a in
     let local_c1= Expr.mk_app ctx func.alloc [Expr.mk_app ctx func.base [x]] in
@@ -276,6 +290,8 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     			(BitVector.mk_add ctx x size_z3)
     			(BitVector.mk_add ctx (Expr.mk_app ctx func.base [x]) (Expr.mk_app ctx func.len [(Expr.mk_app ctx func.base [x])]))
     in
+    (* local_c9 significatly increase computational time *)
+    (*let local_c9=block_equal_base ctx func x (Expr.mk_app ctx func.len [x]) in*)
 
       
     (* Create constrains for two space predicates *)
@@ -349,8 +365,10 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
       | [] -> [],[]
     in
     let noneq,exundef3=create_noneq rest_preds in
-    ((Boolean.mk_and ctx [ local_c1; local_c2; local_c3; local_c4; local_c5; local_c6; local_c7; local_c8 ]) :: noneq), (exundef1@exundef2@exundef3)
+    ((Boolean.mk_and ctx [ local_c1; local_c2; local_c3; local_c4; local_c5; local_c6; local_c7; local_c8 (*; local_c9*) ]) :: noneq), 
+    	(exundef1@exundef2@exundef3)
     )
+    
   | Slseg (a,b,_) ->
     let x,exundef1=alloc a in
     let y,exundef2=alloc b in

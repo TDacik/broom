@@ -79,7 +79,8 @@ let apply_contract solver state c pvars =
     let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in
     (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
        The post_contract_application function takes care about it. *)
-    CAppOk {miss=missing; curr=current; lvars=(state.lvars @ l_vars)  }
+    let res={miss=missing; curr=current; lvars=(state.lvars @ l_vars)  } in
+    CAppOk res
 
 
 
