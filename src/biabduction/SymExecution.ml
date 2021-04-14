@@ -498,8 +498,8 @@ and exec_insns tbl bb_tbl states insns =
   )
 
 (* FIXME: assert for non-pointer static variables *)
-let exec_zeroinitializer _(* fuid *) s _(* (uid, var) *) =
-  (* let assign exp =
+let exec_zeroinitializer _(* fuid *) s (uid, var) =
+  let assign exp =
     let pi_add = Exp.BinOp (Peq, Var uid, exp) in
     {miss = s.miss;
     curr = {pi=pi_add::s.curr.pi; sigma=s.curr.sigma};
@@ -513,14 +513,15 @@ let exec_zeroinitializer _(* fuid *) s _(* (uid, var) *) =
   | TypeReal -> assign (Const (Float 0.0))
   | TypeStruct _ | TypeUnion _ | TypeArray _ ->
     (* l1 -(type.size)-> 0 & static(l1,var) & len(l1)=type.size & base(l1)=l1 *)
-    let fresh_var = State.get_fresh_lvar fuid s.lvars in
+    assert false (* TODO object on static storage unsupported *)
+    (* let fresh_var = State.get_fresh_lvar fuid s.lvars in
     let size, stor = Contract.get_storage_with_size (Var fresh_var) (Var uid) in
     let sig_add = Hpointsto ((Var fresh_var), size, Exp.zero) in
     {miss = s.miss;
     curr = {pi=s.curr.pi @ stor; sigma=sig_add::s.curr.sigma};
-    lvars = fresh_var::s.lvars}
+    lvars = fresh_var::s.lvars} *)
   | TypeFnc _ -> assert false
-  | _ -> *) s
+  | _ -> s
 
 (* add anchors into LHS, if main(int argc, char **argv)
    MISS: arg1=argc & arg2=argv & arg2 -(l1)->Undef & (len(arg2)=l1) &
