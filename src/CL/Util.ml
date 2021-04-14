@@ -76,6 +76,12 @@ let is_void op =
 	| OpVoid -> true
 	| _ -> false
 
+let is_ptr op =
+	let typ = get_type op.Operand.typ in
+	match typ.code with
+	| TypePtr _ -> true
+	| _ -> false
+
 let is_constant op =
 	match op.Operand.data with
 	| OpCst _ -> true

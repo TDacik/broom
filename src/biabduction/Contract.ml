@@ -342,19 +342,28 @@ let contract_for_binop code dst src1 src2 =
 	match bin_exp with
 	| [_] ->
 		let pi_add = ( match code with
-			| CL_BINOP_POINTER_PLUS -> [ (* Exp.BinOp ( Plesseq,
-				 new_dst.root,
-				 BinOp ( Pplus,
-					 UnOp (Base, new_dst.root),
-					 UnOp (Len, new_dst.root))
-				 ) *) ]
 			| CL_BINOP_POINTER_MINUS ->
 				[ Exp.BinOp ( Peq, (UnOp (Base, ef_src1.root)), (UnOp (Base, ef_src2.root)) )]
 			| CL_BINOP_EXACT_DIV | CL_BINOP_TRUNC_DIV | CL_BINOP_TRUNC_MOD ->
 				[ Exp.BinOp ( Pneq, ef_src2.root, Exp.zero )]
 			| _ -> []
 		) in
-		let rhs = {pi = [assign] @ pi_add @ new_dst.f.pi; sigma = new_dst.f.sigma} in
+		let pi_add_rhs =
+			let add_same_base () =
+				let ef_ptr_op = ( if (CL.Util.is_ptr src1)
+					then ef_src1.root
+					else if (CL.Util.is_ptr src2)
+						then ef_src2.root
+					else assert false ) in
+					[ Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), (UnOp (Base, ef_ptr_op)) ) ] in
+
+			( match code with
+			| CL_BINOP_PLUS ->
+				( if (CL.Util.is_ptr dst) then add_same_base () else [] )
+			| CL_BINOP_POINTER_PLUS -> add_same_base ()
+			| _ -> []
+		) in
+		let rhs = {pi = [assign] @ pi_add @ pi_add_rhs @ new_dst.f.pi; sigma = new_dst.f.sigma} in
 		[{lhs = {pi = pi_add @ lhs.pi; sigma = lhs.sigma}; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}]
 	| e1::e2::[] ->
 		let lhs1 = {pi = e1::lhs.pi; sigma = lhs.sigma} in
