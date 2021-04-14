@@ -176,7 +176,7 @@ let post_contract_application state solver pvarmap pvars =
   let new_lvars=List.filter (notmem pvars) vars in
   let final_state={
     miss=step1.miss;
-    curr=(Simplify.remove_freed_and_invalid_parts solver step1.curr);
+    curr=(* Simplify.remove_freed_and_invalid_parts solver  *)step1.curr;
     lvars=new_lvars} in
   (* check that both parts of the resulting state are satisfiable *)
   let sat_query_curr=formula_to_solver solver.ctx final_state.curr in

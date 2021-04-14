@@ -426,14 +426,15 @@ let contract_for_free src =
 			(src, pvm, [ Exp.BinOp ( Peq, src.root, Exp.Undef ) ]) *)
 		| _ -> (ef_src, [], [])) in
 	let lhs = new_src.f in
-	(* let len = Exp.BinOp ( Peq, (UnOp (Len, ef_src.root)), Undef) in *)
-	let sig_add = Hpointsto (ef_src.root, Exp.one, Undef) in
+	let len_var = new_src.cnt_cvars + 1 in
+	let len = Exp.BinOp ( Peq, (UnOp (Len, ef_src.root)), CVar len_var) in
+	let sig_add = Hpointsto (ef_src.root, CVar len_var, Undef) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, ef_src.root)), ef_src.root) in
 	(* let not_freed_pi = Exp.UnOp ( Pnot, (UnOp (Freed, ef_src.root))) in *)
 	let freed_pi = Exp.UnOp (Freed, ef_src.root) in
-	let c1 = {lhs = {pi = base :: lhs.pi; sigma = sig_add :: lhs.sigma};
+	let c1 = {lhs = {pi = base :: len :: lhs.pi; sigma = sig_add :: lhs.sigma};
 		      rhs = {pi = freed_pi :: undef_src @ lhs.pi; sigma = lhs.sigma};
-		      cvars = new_src.cnt_cvars;
+		      cvars = len_var;
 		      pvarmap = pvarmap;
 		      s = OK} in
 	let null_pi = Exp.BinOp ( Peq, ef_src.root, Exp.null) in
