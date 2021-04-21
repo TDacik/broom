@@ -115,6 +115,7 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
 (* try to apply learn1 rule for pointsto *)
 let try_learn_pointsto solver form1 form2 level _ =
   let ctx=solver.ctx in
+  let z3_names=solver.z3_names in
   let common_part=match level with
   | 1 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)] 
   | _ ->  [Boolean.mk_and ctx (formula_to_solver ctx form1); 
@@ -137,25 +138,47 @@ let try_learn_pointsto solver form1 form2 level _ =
     { pi=form.pi;
       sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
   in
+  (* learn part is dropped 
+     -- if the size is 0 and 
+     -- the pointsto is not at the base adress *)
+  let get_learned_part index=
+      let (y2,size2,dest2) = to_hpointsto_unsafe (List.nth form2.sigma index) in
+      (* try to find exact size *)
+      let size_simplified=
+        match try_simplify_SL_expr_to_int solver {sigma=[]; pi=form1.pi@form2.pi} size2 with
+		| None -> size2
+		| Some a -> Exp.Const (Int a)
+		
+      in
+      let y2_z3=expr_to_solver_only_exp ctx z3_names y2 in
+      let query=[Boolean.mk_eq ctx y2_z3 (Expr.mk_app ctx z3_names.base [y2_z3])] in
+      if (size_simplified=Exp.zero)&&(Solver.check solver.solv query)=UNSATISFIABLE
+	then {sigma=[]; pi=[]}
+	else {sigma=[Hpointsto (y2,size_simplified,dest2)]; pi=[]}
+  in
+
   match (get_index 0) with
   | (-1,-1) -> Solver.pop solver.solv 1; Fail
-  | (-3,i2) -> Solver.pop solver.solv 1; 
+  | (-3,i2) ->  
     (* learn with level 3 *)
-    Apply ( { sigma=form1.sigma; pi = form1.pi},
-      (remove i2 form2),
-      {sigma=[List.nth form2.sigma i2]; pi=[]},
-      [],
-      NoRecord)
-  | (i1,i2) -> Solver.pop solver.solv 1;
-    (* learn with level 1 *)
-    let (y1,_,_) = to_hpointsto_unsafe (List.nth form1.sigma i1) in
-    let (y2,_,_) = to_hpointsto_unsafe (List.nth form2.sigma i2) in
-
-    Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
-      (remove i2 form2),
-      {sigma=[List.nth form2.sigma i2]; pi=[]},
-      [],
-      NoRecord)
+      let learned_part=get_learned_part i2 in
+      Solver.pop solver.solv 1;
+      Apply ( { sigma=form1.sigma; pi = form1.pi},
+         (remove i2 form2),
+         learned_part,
+         [],
+         NoRecord)
+  | (i1,i2) -> 
+      (* learn with level 1 *)
+      let (y1,_,_) = to_hpointsto_unsafe (List.nth form1.sigma i1) in
+      let (y2,_,_) = to_hpointsto_unsafe (List.nth form2.sigma i2) in
+      let learned_part=get_learned_part i2 in
+      Solver.pop solver.solv 1;
+      Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
+        (remove i2 form2),
+        learned_part,
+        [],
+        NoRecord)
 
 (**** LEARN - Slseg ****)
 (* check whether we can apply learn on the form2.sigma[i2].
@@ -486,7 +509,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
             BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, Var ptr_last_var));
             ptr_last_eq],
-          [ Exp.BinOp(Pless,s2,s1) ],
+          [ Exp.BinOp(Plesseq,s2,s1) ],
           [ ptr_last_var ]
         else if size_last=(Exp.zero) then
           [ Hpointsto (x1,size_first,split_dest);
@@ -494,7 +517,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
           [ BinOp(Peq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1));
             BinOp ( Plesseq, s1, UnOp ( Len, x1));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
-          [ BinOp(Pless,s2,s1) ],
+          [ BinOp(Plesseq,s2,s1) ],
           []
         else
           [ Hpointsto (x1,size_first,split_dest);
@@ -505,7 +528,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, ptr_last));
             ptr_last_eq],
           [ (* BinOp(Plesseq,x1,x2); *)
-            BinOp(Pless,s2,s1)(* ;
+            BinOp(Plesseq,s2,s1)(* ;
             BinOp(Plesseq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1)) *) ],
           [ ptr_last_var ]
       in
@@ -569,7 +592,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
           [ Exp.BinOp(Peq,x1,x2); BinOp ( Plesseq, s2, UnOp ( Len, x2));
             ptr_last_eq; 
             BinOp(Peq,UnOp(Base,x1),UnOp(Base,Var ptr_last_var))],
-          [ Exp.BinOp(Pless,s1,s2) ],
+          [ Exp.BinOp(Plesseq,s1,s2) ],
           [ ptr_last_var]@dest_vars,
           [ Exp.zero; s1 ]
         else if size_last=(Exp.zero) then
@@ -578,7 +601,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
           [ BinOp(Peq,BinOp(Pplus,x2,s2),BinOp(Pplus,x1,s1));
             BinOp ( Plesseq, s2, UnOp ( Len, x2));
             BinOp ( Peq, UnOp ( Base, x1), UnOp ( Base, x2))],
-          [ BinOp(Pless,s1,s2) ],
+          [ BinOp(Plesseq,s1,s2) ],
           dest_vars,
           [ Exp.zero; size_first ]
         else
@@ -596,7 +619,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
             BinOp(Peq,UnOp(Base,x2),UnOp(Base,Var ptr_last_var));
             ptr_last_eq; ],
           [ (* BinOp(Plesseq,x2,x1); *)
-            BinOp(Pless,s1,s2)(* ;
+            BinOp(Plesseq,s1,s2)(* ;
             BinOp(Plesseq,BinOp(Pplus,x1,s1),BinOp(Pplus,x2,s2)) *) ],
           [ ptr_last_var ]@dest_vars,
           [ Exp.zero; size_first; delta_last ]
