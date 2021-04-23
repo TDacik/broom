@@ -330,14 +330,16 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
         Boolean.mk_and ctx [
         (BitVector.mk_sle ctx lhs rhs);
         (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
-        (BitVector.mk_sgt ctx lhs_size rhs_size)
+        (BitVector.mk_sge ctx lhs_size rhs_size)
         ] )
     ] in
-    (Solver.check solv query)=UNSATISFIABLE 
+    let query2=[(BitVector.mk_sgt ctx lhs_size rhs_size)] in (* check that lhs_size can be really > rhs size *)
+    (Solver.check solv query)=UNSATISFIABLE && (Solver.check solv query2)=SATISFIABLE
     (* &&((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) *)(* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
       (BitVector.mk_sle ctx lhs rhs);
+      (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));
       (BitVector.mk_sge ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
       (BitVector.mk_sgt ctx lhs_size rhs_size) 
     ] in
@@ -398,14 +400,16 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
         Boolean.mk_and ctx [
         (BitVector.mk_sge ctx lhs rhs);
         (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
-        (BitVector.mk_slt ctx lhs_size rhs_size)
+        (BitVector.mk_sle ctx lhs_size rhs_size)
         ] )
      ] in
-    (Solver.check solv query)=UNSATISFIABLE 
+    let query2=[(BitVector.mk_slt ctx lhs_size rhs_size)] in (* check that lhs_size can be really < rhs size *)
+    (Solver.check solv query)=UNSATISFIABLE && (Solver.check solv query2)=SATISFIABLE
     (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
       (BitVector.mk_sge ctx lhs rhs);
+      (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));
       (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
       (BitVector.mk_slt ctx lhs_size rhs_size)
     ] in
@@ -468,9 +472,9 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
   | (i1,i2,leftright) ->
     let x1,s1,y1 = to_hpointsto_unsafe (List.nth form1.sigma i1) in
     let x2,s2,y2 = to_hpointsto_unsafe (List.nth form2.sigma i2) in
-
     match leftright with
     | 1 -> (* split left *)
+      print_string "Splitleft ";
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
@@ -543,6 +547,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
 	NoRecord)
 
     | 2 ->   (* split right *)
+      print_string "Split_right ";
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x1,x2)) in

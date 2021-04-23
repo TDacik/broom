@@ -185,9 +185,9 @@ let post_contract_application state solver pvarmap pvars =
      ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
   then  CAppOk final_state
   else 
-  ( print_string "------------CURR:\n";
+  ( print_string "------------\nCURR:";
   Formula.print final_state.curr;
-  print_string "MISS:\n";
+  print_string "MISS:";
   Formula.print final_state.miss;
   prerr_endline "SAT Fail (Contract application)"; CAppFail)
 
