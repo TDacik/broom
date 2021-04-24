@@ -355,7 +355,7 @@ let contract_for_binop code dst src1 src2 =
 					else if (CL.Util.is_ptr src2)
 						then ef_src2.root
 					else assert false ) in
-					[ Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), (UnOp (Base, ef_ptr_op)) ) ] in
+				[ Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), (UnOp (Base, ef_ptr_op)) ) ] in
 
 			( match code with
 			| CL_BINOP_PLUS ->
@@ -534,14 +534,16 @@ let contract_for_memcpy dst dstm srcm size =
 		sigma = sig_dstm_rhs :: sig_srcm :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = cvar_src; pvarmap = pvarmap; s = OK}
 
-let contract_nondet dst =
+let contract_nondet ?unsign:(unsign=false) dst =
 	match dst.data with
 	| OpVoid -> []
 	| _ ->
 		let ef_dst = operand_to_exformula dst empty_exformula in
 		let lhs = ef_dst.f in
 		let (new_dst, pvarmap) = rewrite_root ef_dst in
-		let assign = Exp.BinOp ( Peq, new_dst.root, Undef) in
+		let assign = (if unsign
+			then Exp.BinOp ( Plesseq, Exp.zero, new_dst.root) (* 0..inf *)
+			else Exp.BinOp ( Peq, new_dst.root, Undef) ) in (* -inf..inf *)
 		let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
 		{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}::[]
 
@@ -560,8 +562,8 @@ let contract_for_builtin dst called args =
 	| "__builtin___memcpy_chk", dstm::srcm::size::_::[] -> (* gcc *)
 		(contract_for_memcpy dst dstm srcm size)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
-	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet dst (* TODO: 0..MAX *)
-	| "rand", [] -> contract_nondet dst (* TODO: 0..MAX *)
+	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet ~unsign:true dst
+	| "rand", [] -> contract_nondet ~unsign:true dst
 	| _,_ -> [] (* TODO: unrecognized built-in/extern function *)
 
 (****** CONTRACTS CALLED FUNCTIONS ******)
@@ -617,7 +619,6 @@ let get_contract insn =
 	match insn.code with
 	| InsnRET ret -> contract_for_ret ret
 	| InsnCOND (op,_,_) -> contract_for_cond op
-	(* | InsnCLOBBER var -> [] *)
 	| InsnABORT -> (contract_fail)::[]
 	| InsnBINOP (code, dst, src1, src2) -> contract_for_binop code dst src1 src2
 	| InsnCALL ops -> ( match ops with
