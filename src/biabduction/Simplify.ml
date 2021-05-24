@@ -177,6 +177,7 @@ let formula solver fixed_vars form =
 (* fixed_vars - variables can't be removed
    state - expect satisfiable state only *)
 (* FIXME may be more variables in lvars than are in state *)
+(* TODO if found invalid(var) put var into lvars and remove from fixed_vars *)
 let state solver fixed_vars state =
   let fixed_vars_exp = FExp.get_list_vars fixed_vars in
   let rems = State.remove_equiv_vars fixed_vars state.State.lvars state in

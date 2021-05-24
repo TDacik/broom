@@ -414,7 +414,7 @@ let contract_for_malloc dst size =
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
-(* PRE: base(src)=src POS: freed(src) & src'=UNDEF
+(* PRE: src-c1->Undef & base(src)=src & c1=len(src)   POS: freed(src)
    PRE: src=NULL      POS:
 *)
 let contract_for_free src =
