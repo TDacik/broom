@@ -474,7 +474,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
     let x2,s2,y2 = to_hpointsto_unsafe (List.nth form2.sigma i2) in
     match leftright with
     | 1 -> (* split left *)
-      print_string "Splitleft ";
+      print_string "Split_left ";
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
