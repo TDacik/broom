@@ -548,6 +548,10 @@ let contract_nondet ?unsign:(unsign=false) dst =
 		let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
 		{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}::[]
 
+let contract_skip fnc_name =
+	prerr_endline ("debug: ignoring call to "^fnc_name^"()");
+	[]
+
 let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
@@ -564,6 +568,7 @@ let contract_for_builtin dst called args =
 		(contract_for_memcpy dst dstm srcm size)::[]
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet ~unsign:true dst
+	| "__builtin_object_size", _::_::[] -> (* gcc *) contract_skip fnc_name
 	| "rand", [] -> contract_nondet ~unsign:true dst
 	| _,_ ->
 		Config.prerr_warn ("ignoring call of undefined function: "^fnc_name);
