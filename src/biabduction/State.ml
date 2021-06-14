@@ -39,7 +39,7 @@ let check_main_args_type args =
   let arg1_typ = CL.Util.get_type arg1.typ in
   let arg1_ok = (match arg1_typ.code with
   | TypeInt -> true
-  | _ -> prerr_endline "!!! warning: first argument of 'main' should be 'int'"; false) in
+  | _ -> Config.prerr_warn "first argument of 'main' should be 'int'"; false) in
   let arg2_typ = CL.Util.get_type arg2.typ in
   let arg2_ok = (match arg2_typ.code with
     | TypePtr typ2 -> (let arg2_typ2 = CL.Util.get_type typ2 in
@@ -47,9 +47,9 @@ let check_main_args_type args =
       | TypePtr typ3 -> (let arg2_typ3 = CL.Util.get_type typ3 in
         match arg2_typ3.code with
         | TypeChar | TypeInt when arg2_typ3.size=1 -> true
-        | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
-      | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false)
-    | _ -> prerr_endline "!!! warning: second argument of 'main' should be 'char **'"; false) in
+        | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'"; false)
+      | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'"; false)
+    | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'"; false) in
   (arg1_ok && arg2_ok)
 
 (* add anchors into LHS, if main(int argc, char **argv)
@@ -80,7 +80,7 @@ let init_main fuid =
         sigma = sig_add :: anchor_state.miss.sigma} in
       let s = {miss = new_f; curr = new_f; lvars = [new_var]} in
       print s; s)
-  | _ -> prerr_endline "!!! warning: 'main' takes only zero or two arguments";
+  | _ -> Config.prerr_warn  "'main' takes only zero or two arguments";
     init fuid (* handling as with an ordinary function *)
 
 let remove_equiv_vars gvars evars s =

@@ -23,6 +23,24 @@ let steps = Finish (* --steps=n|s|f *)
 
 end
 
+(* errors handling *)
+(* TODO: location *)
+let prerr_error str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
+    else prerr_endline ("!!! error: "^str)
+
+let prerr_warn str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;35m!!! warning: "^str^"\027[0m")
+    else prerr_endline ("!!! warning: "^str)
+
+let prerr_note str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;35m!!! note: "^str^"\027[0m")
+    else prerr_endline ("!!! note: "^str)
+
+
 type stat = {
 	abstracts : int;
 	entailments : int;
@@ -61,7 +79,7 @@ let oom = false
 
 (* --exit-leaks report memory leaks of static variables at the end of program
    (while executing a no-return function or main) *)
-let exit_leaks = false
+let exit_leaks () = true
 
 let memory_leaks_as_errors = false
 

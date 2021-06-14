@@ -245,21 +245,6 @@ let rec add_gvars_moves gvars c =
     else {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap; s = c.s} in
 	(add_gvars_moves tl new_c)
 
-(* TODO errors handling - more general *)
-let prerr_error str =
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
-    else prerr_endline ("!!! error: "^str)
-
-let prerr_warn str =
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;35m!!! warning: "^str^"\027[0m")
-    else prerr_endline ("!!! warning: "^str)
-
-let prerr_note str =
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;35m!!! note: "^str^"\027[0m")
-    else prerr_endline ("!!! note: "^str)
 
 (* note: error from call of error() *)
 
@@ -269,12 +254,12 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl states fuid insn
   let get_err_contract s =
     let (removed_sigma,new_miss) = Simplify.formula solver fixed s.miss in
     if (removed_sigma) then
-      prerr_error "impossible precondition";
+      Config.prerr_error "impossible precondition";
     let msg = "error from call of "^(CL.Printer.insn_to_string insn) in
     if (status=Error) then (* already reported error *)
-      prerr_note msg
+      Config.prerr_note msg
     else
-      prerr_error msg;
+      Config.prerr_error msg;
     let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
     let s_err =
       {miss = new_miss;
@@ -304,12 +289,11 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid ins
   print_string "GVARS:";
   CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
 
-  let exit_leaks = true in (* FIXME: set in config file *)
   let memcheck_gvars = (
-    if (exit_leaks) then
+    if (Config.exit_leaks ()) then
       let fname = CL.Printer.get_fnc_name (CL.Util.get_fnc fuid) in
       match status with
-      | OK when fname = "main" -> [] (* report memory leaks for static vars *)
+      | OK when fname = Config.main -> [] (* report memory leaks for static vars *)
       | Aborted -> [] (* report memory leaks for static vars *)
       | _ -> gvars
     else gvars ) in
@@ -324,7 +308,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid ins
         let subs = Simplify.state solver fixed nostack_s in
         State.print subs;
         if (is_invalid subs.curr.pi) then
-          prerr_warn "function returns address of local variable";
+          Config.prerr_warn "function returns address of local variable";
         let c = state2contract ~status:status subs 0 in
         let new_c = add_gvars_moves gvars c in
         Contract.print new_c;
@@ -556,7 +540,7 @@ let exec_fnc fnc_tbl f =
     let bb_tbl = StateTable.create fuid in (* for states on basic block entry *)
     let fname = CL.Printer.get_fnc_name f in
     let init_states =
-      if fname = "main"
+      if fname = Config.main
       then init_state_main fnc_tbl bb_tbl
       else (State.init fuid)::[] in
     let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) in

@@ -152,9 +152,7 @@ let substate solver fixed_vars state =
   let (curr_removed_sigma,curr_vars,new_curr) =
     subformula solver miss_vars state.curr in
   if (curr_removed_sigma)
-  then (if (Unix.isatty Unix.stderr) (* TODO more general *)
-    then prerr_endline "\027[1;35m!!! MEMORY LEAK\027[0m"
-    else prerr_endline "!!! MEMORY LEAK");
+  then (Config.prerr_warn "MEMORY LEAK");
     (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) curr_vars ^ "AFTER curr\n"); *)
   let all_vars = List.filter_map get_lvar (curr_vars) in
   {State.miss = new_miss;
