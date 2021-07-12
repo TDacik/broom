@@ -61,7 +61,7 @@ void sll_clear(struct sll_item **plist)
 #ifdef TEST
 int main(void)
 {
-    struct sll_item **p_list = alloca(sizeof(sll_item *));
+    struct sll_item **p_list = alloca(sizeof(struct sll_item *));
     *p_list = NULL;
 
     sll_insert(p_list, 1);
@@ -70,7 +70,7 @@ int main(void)
 
     sll_print(*p_list);
 
-    list = sll_reverse(*p_list);
+    *p_list = sll_reverse(*p_list);
 
     sll_print(*p_list);
 
