@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <alloca.h>
 #include <stdio.h>
-#include <math.h>
 
 struct dll {
     struct dll *next; 

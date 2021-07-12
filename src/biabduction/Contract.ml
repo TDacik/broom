@@ -570,6 +570,7 @@ let contract_for_builtin dst called args =
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet ~unsign:true dst
 	| "__builtin_object_size", _::_::[] -> (* gcc *) contract_skip fnc_name
 	| "rand", [] -> contract_nondet ~unsign:true dst
+	| "random", [] -> contract_nondet ~unsign:true dst
 	| _,_ ->
 		Config.prerr_warn ("ignoring call of undefined function: "^fnc_name);
 		[] (* TODO: unrecognized built-in/extern function *)
