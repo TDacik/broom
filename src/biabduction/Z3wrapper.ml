@@ -106,7 +106,10 @@ let const_to_solver ctx c =
   | Exp.Ptr a -> BitVector.mk_numeral ctx (string_of_int a) bw_width
   | Exp.Int a -> BitVector.mk_numeral ctx (Int64.to_string a) bw_width
   | Exp.Bool a -> Boolean.mk_val ctx a
-  | Exp.String _ -> raise (NoZ3Translation "Can't translate String expression to Z3")
+  | Exp.String _ ->
+    Config.prerr_warn "Can't translate String expression to Z3, used NULL";
+    BitVector.mk_numeral ctx (string_of_int 0) bw_width (* FIXME: not NULL *)
+    (* raise (NoZ3Translation "Can't translate String expression to Z3") *)
   | Exp.Float _ -> raise (NoZ3Translation "Can't translate Float expression to Z3")
   (*| Exp.String a -> a *)
   (* | Exp.Float a -> Real.mk_numeral_i ctx a *)
