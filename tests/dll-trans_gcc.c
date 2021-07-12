@@ -57,9 +57,9 @@ void insertDLS(struct dll* l) {
 int main() {
     struct dll **p_lst = alloca(sizeof(struct dll *));
     struct dll *fst = alloc_dll(p_lst);
-    trans(fst, lst);
+    trans(fst, *p_lst);
     for(struct dll *i = fst->next; i != NULL; i = i->next) 
         free(i->prev);
-    free(lst);
+    free(*p_lst);
     return 0;
 }
