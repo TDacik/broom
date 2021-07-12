@@ -1,7 +1,9 @@
 // Creating a DLL.
 // based on predator-regre test-0054.c !!! without size
 
+#include <assert.h>
 #include <stdlib.h>
+extern int __VERIFIER_nondet_int(void);
 
 struct item {
     struct item *next;
@@ -182,7 +184,7 @@ void dll_destroy(struct dll *list)
 
 int main()
 {
-    struct item *list = create_dll();
+    struct dll *list = create_dll();
 
     dll_push_front(list);
     struct item *item = dll_push_back(list);
