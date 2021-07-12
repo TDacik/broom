@@ -15,7 +15,7 @@ int ok() {
 	struct p sp = {3, NULL};
 	int si = *((int *)&sp);
 
-	return si;           // overapproximation return Undef, not 3
+	return si;
 }
 
 int err() {
