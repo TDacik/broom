@@ -474,7 +474,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
     let x2,s2,y2 = to_hpointsto_unsafe (List.nth form2.sigma i2) in
     match leftright with
     | 1 -> (* split left *)
-      print_string "Split_left ";
+      print_string "Splitleft ";
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
@@ -1002,7 +1002,7 @@ and entailment_ll solver form1 form2 evars=
   | 0 -> false
   | 1 -> true
   | -1 ->
-     (match (try_match solver form1 form2 1 []),(try_match solver form1 form2 2 []) with
+     (match (try_match solver form1 form2 0 []),(try_match solver form1 form2 2 []) with
      | Apply (f1,f2,_,_,_),_ ->
   		print_string "Match, "; flush stdout;
   		(entailment_ll solver f1 f2 evars)
