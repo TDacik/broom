@@ -417,11 +417,11 @@ let contract_for_malloc dst size =
 	let (new_dst, pvarmap) = rewrite_root {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
 	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), ef_size.root) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
-	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let size_chk = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
 	let sig_add = Hpointsto (new_dst.root, ef_size.root, Undef) in
-	let lhs = { pi= size :: ef_size.f.pi ; sigma = ef_size.f.sigma} in
+	let lhs = { pi= size_chk :: ef_size.f.pi ; sigma = ef_size.f.sigma} in
 	let rhs =
-		{pi = len :: base :: size :: new_dst.f.pi;
+		{pi = len :: base :: size_chk :: new_dst.f.pi;
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
@@ -446,12 +446,12 @@ let contract_for_calloc dst n size =
 	) in
 	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), block_len) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
-	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
-	let n = Exp.BinOp ( Plesseq, Exp.zero, ef_n.root) in
+	let size_chk = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let n_chk = Exp.BinOp ( Plesseq, Exp.zero, ef_n.root) in
 	let sig_add = Hpointsto (new_dst.root, block_len, Exp.zero) in
-	let lhs = { pi= size :: n :: ef_size.f.pi ; sigma = ef_size.f.sigma} in
+	let lhs={ pi= size_chk :: n_chk :: ef_size.f.pi; sigma = ef_size.f.sigma} in
 	let rhs =
-		{pi = len :: base :: n :: size :: new_dst.f.pi @ pi_add;
+		{pi = len :: base :: n_chk :: size_chk :: new_dst.f.pi @ pi_add;
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = cvars; pvarmap = pvarmap; s = OK}
 
@@ -500,11 +500,11 @@ let contract_for_alloca dst size =
 	let (new_dst, pvarmap) = rewrite_root {f=ef_size.f; cnt_cvars=ef_size.cnt_cvars; root=ef_dst.root} in
 	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), ef_size.root) in
 	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
-	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let size_chk = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
 	let stack = Exp.UnOp ( Stack, new_dst.root) in
 	let sig_add = Hpointsto (new_dst.root, ef_size.root, Undef) in
 	let rhs =
-		{pi = len :: base :: size :: stack :: new_dst.f.pi;
+		{pi = len :: base :: size_chk :: stack :: new_dst.f.pi;
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
@@ -562,19 +562,66 @@ let contract_for_memcpy dst dstm srcm size =
 		(dst_l, pvarmap_l, [Exp.BinOp ( Peq, dst_l.root, ef_dstm.root)]) ) in
 	let len1 = Exp.BinOp ( Plesseq, ef_size.root, (UnOp (Len, ef_dstm.root))) in
 	let len2 = Exp.BinOp ( Plesseq, ef_size.root, (UnOp (Len, ef_srcm.root))) in
-	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let size_chk = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
 	let cvar_dst = new_dst.cnt_cvars + 1 in
 	let cvar_src = cvar_dst + 1 in
 	let sig_dstm = Hpointsto (ef_dstm.root, ef_size.root, CVar cvar_dst) in
 	let sig_srcm = Hpointsto (ef_srcm.root, ef_size.root, CVar cvar_src) in
 	let sig_dstm_rhs = Hpointsto (ef_dstm.root, ef_size.root, CVar cvar_src) in
 	let lhs = {
-		pi= size :: len1 :: len2 :: ef_size.f.pi ;
+		pi= size_chk :: len1 :: len2 :: ef_size.f.pi ;
 		sigma = sig_dstm :: sig_srcm :: ef_size.f.sigma } in
 	let rhs =
-		{pi = size :: len1 :: len2 :: assign @ new_dst.f.pi;
+		{pi = size_chk :: len1 :: len2 :: assign @ new_dst.f.pi;
 		sigma = sig_dstm_rhs :: sig_srcm :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = cvar_src; pvarmap = pvarmap; s = OK}
+
+(*	dst = memset(dstm, ch, n);
+	dstm- pointer to the object to fill
+	ch  - fill byte (covert to unsigned char) 1 Byte [value: 0 to 255]
+	n   - number of bytes to fill
+
+	If count is greater than the size of the object dstmointed to by dest, the behavior is undefined.
+
+	PRE: dstm-c1->Undef & c1=8*n & ch=0 & c1<=len(dstm)
+	POS: dstm-c1->0 & c1=8*n & c1<=len(dstm) & dst'=dstm
+
+	PRE: dstm-c1->Undef & c1=n & ch!=0 & c1<=len(dstm)
+	POS: dstm-c1->Undef & c1=n & c1<=len(dstm) & dst'=dstm
+*)
+let contract_for_memset dst dstm ch n =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_dstm = operand_to_exformula dstm {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let ef_ch = operand_to_exformula ch {f=ef_dstm.f; cnt_cvars=ef_dstm.cnt_cvars; root=Undef} in
+	let ef_n = operand_to_exformula n {f=ef_ch.f; cnt_cvars=ef_ch.cnt_cvars; root=Undef} in
+	let (new_dst, pvarmap, assign) = (match dst.data with
+	| OpVoid -> (ef_n,[],[])
+	| _ -> let (dst_l, pvarmap_l) = rewrite_root {f=ef_n.f; cnt_cvars=ef_n.cnt_cvars; root=ef_dst.root} in
+		(dst_l, pvarmap_l, [Exp.BinOp ( Peq, dst_l.root, ef_dstm.root)]) ) in
+
+	let len = Exp.BinOp ( Plesseq, ef_n.root, (UnOp (Len, new_dst.root))) in
+	let ch_0 = Exp.BinOp ( Peq, ef_ch.root, Exp.zero) in
+	let ch_not0 = Exp.BinOp ( Pneq, ef_ch.root, Exp.zero) in
+	let n_check = Exp.BinOp ( Plesseq, Exp.zero, ef_n.root) in
+	let sig_dstm = Hpointsto (ef_dstm.root, ef_n.root, Undef) in
+	let sig_dstm_zero = Hpointsto (ef_dstm.root, ef_n.root, Exp.zero) in
+	let lhs = {
+		pi = n_check :: len ::ef_n.f.pi ;
+		sigma = ef_n.f.sigma } in
+	let rhs =
+		{pi = n_check :: len :: assign @ new_dst.f.pi;
+		sigma = new_dst.f.sigma} in
+	let c1 = {lhs = {pi = ch_0 :: lhs.pi; sigma = sig_dstm :: lhs.sigma};
+		      rhs = {pi = rhs.pi; sigma = sig_dstm_zero :: rhs.sigma};
+		      cvars = new_dst.cnt_cvars;
+		      pvarmap = pvarmap;
+		      s = OK} in
+	let c2 = {lhs = {pi = ch_not0 :: lhs.pi; sigma = sig_dstm :: lhs.sigma};
+		      rhs = {pi = rhs.pi; sigma = sig_dstm :: rhs.sigma};
+		      cvars = new_dst.cnt_cvars;
+		      pvarmap = pvarmap;
+		      s = OK} in
+	c1::c2::[]
 
 let contract_nondet ?unsign:(unsign=false) dst =
 	match dst.data with
@@ -608,6 +655,10 @@ let contract_for_builtin dst called args =
 		(contract_for_memcpy dst dstm srcm size)::[]
 	| "__builtin___memcpy_chk", dstm::srcm::size::_::[] -> (* gcc *)
 		(contract_for_memcpy dst dstm srcm size)::[]
+	| "memset", dstm::ch::n::[] ->
+		contract_for_memset dst dstm ch n
+	| "__builtin___memset_chk", dstm::ch::n::_::[] -> (* gcc *)
+		contract_for_memset dst dstm ch n
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet ~unsign:true dst
 	| "__builtin_object_size", _::_::[] -> (* gcc *) contract_skip fnc_name
