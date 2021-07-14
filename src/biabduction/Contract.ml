@@ -425,6 +425,36 @@ let contract_for_malloc dst size =
 		sigma = sig_add :: new_dst.f.sigma} in
 	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
 
+(*
+   if size<0 or n<0 or unsuccesful alloc : dst=null
+   else         len(dst)=size*n & base(dst)=dst & dst-(size*n)->0
+   allowd create object of size 0
+   TODO: if size or n are constant, don't generate 0<=size & 0<=n
+*)
+let contract_for_calloc dst n size =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_n = operand_to_exformula n {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let ef_size = operand_to_exformula size {f=ef_n.f; cnt_cvars=ef_n.cnt_cvars; root=Undef} in
+	let (new_dst, pvarmap) = rewrite_root {f=ef_n.f; cnt_cvars=ef_n.cnt_cvars; root=ef_dst.root} in
+	let cvars, pi_add, block_len = (match ef_n.root, ef_size.root with
+		| (Const (Int cn)),(Const (Int csize)) ->
+			let i = Int64.mul cn csize in
+			(new_dst.cnt_cvars, [], (Exp.Const (Int i)))
+		| _,_ ->
+			let clen = new_dst.cnt_cvars + 1 in
+			(clen, [ Exp.BinOp ( Peq, CVar clen, (BinOp ( Pmult, ef_n.root, ef_size.root))) ], CVar clen)
+	) in
+	let len = Exp.BinOp ( Peq, (UnOp (Len, new_dst.root)), block_len) in
+	let base = Exp.BinOp ( Peq, (UnOp (Base, new_dst.root)), new_dst.root) in
+	let size = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
+	let n = Exp.BinOp ( Plesseq, Exp.zero, ef_n.root) in
+	let sig_add = Hpointsto (new_dst.root, block_len, Exp.zero) in
+	let lhs = { pi= size :: n :: ef_size.f.pi ; sigma = ef_size.f.sigma} in
+	let rhs =
+		{pi = len :: base :: n :: size :: new_dst.f.pi @ pi_add;
+		sigma = sig_add :: new_dst.f.sigma} in
+	{lhs = lhs; rhs = rhs; cvars = cvars; pvarmap = pvarmap; s = OK}
+
 (* PRE: src-c1->Undef & base(src)=src & c1=len(src)   POS: freed(src)
    PRE: src=NULL      POS:
 *)
@@ -570,6 +600,7 @@ let contract_for_builtin dst called args =
 	| "exit", op::[] -> (contract_for_exit op)::[]
 	| "_Exit", op::[] -> (contract_for_exit op)::[]
 	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
+	| "calloc", n::size::[] -> (contract_for_calloc dst n size)::[]
 	| "free", src::[] -> contract_for_free src
 	| "alloca", size::[] -> (contract_for_alloca dst size)::[]
 	| "__builtin_alloca", size::[] -> (contract_for_alloca dst size)::[]
