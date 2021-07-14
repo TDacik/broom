@@ -67,17 +67,28 @@ let get_storage_with_size ptr var =
 	| _ -> Exp.zero,[]
 
 let constant_to_exformula data accs ef =
+	let simple_constant exp =
+		{f=ef.f; cnt_cvars = ef.cnt_cvars; root = exp}
+	in
 	if (accs != []) then assert false;
-	let pi_add = (match data with
-	| CstPtr i -> Exp.Const (Ptr i)
-	| CstInt i -> Const (Int i)
-	| CstEnum i -> Const (Int (Int64.of_int i))
-	| CstChar i -> Const (Int (Int64.of_int (Char.code i)))
-	| CstBool b -> Const (Bool b)
-	| CstReal r -> Const (Float r)
-	| CstString str -> Const (String str)
-	| CstStruct | CstUnion | CstArray | CstFnc _ -> assert false) in
-	{f=ef.f; cnt_cvars = ef.cnt_cvars; root = pi_add}
+	match data with
+	| CstPtr i -> simple_constant (Exp.Const (Ptr i))
+	| CstInt i -> simple_constant (Const (Int i))
+	| CstEnum i -> simple_constant (Const (Int (Int64.of_int i)))
+	| CstChar i -> simple_constant (Const (Int (Int64.of_int (Char.code i))))
+	| CstBool b -> simple_constant (Const (Bool b))
+	| CstReal r -> simple_constant (Const (Float r))
+	| CstString str ->
+		let new_cvar = ef.cnt_cvars + 1 in
+		let str_size = (String.length str) + 1 in
+		let exp_str_size = Exp.Const (Int (Int64.of_int str_size)) in
+		let pi_add = [ Exp.UnOp (Static, CVar new_cvar) ;
+			Exp.BinOp ( Peq, (UnOp (Len, CVar new_cvar)), exp_str_size) ] in
+		let sig_add = [ Hpointsto (CVar new_cvar, exp_str_size, Const (String str)) ] in
+		{f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi @ pi_add};
+		cnt_cvars=new_cvar;
+		root=(CVar new_cvar)}
+	| CstStruct | CstUnion | CstArray | CstFnc _ -> assert false
 
 let rec operand_to_exformula op ef =
 	match op.data with

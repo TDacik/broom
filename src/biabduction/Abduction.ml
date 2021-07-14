@@ -499,6 +499,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
       let ptr_last_var = get_fresh_var 1 variables in
       let ptr_last_eq = (Exp.BinOp (Peq,Exp.Var ptr_last_var,ptr_last)) in
       (* destination of the split (null/undefined)*)
+      (* TODO: string: undef + end of string or char +...+ end of string *)
       let split_dest=
         let query_null=[ expr_to_solver_only_exp ctx z3_names (BinOp (Pneq,y1, Exp.zero));
           (Boolean.mk_and ctx (formula_to_solver ctx form1))
