@@ -2,15 +2,22 @@ type cl_uid = CL.Loc.cl_uid
 
 (*
   key is a unique uid of basic block
-  value is list of states (miss, act1), (miss, act2)...
+  value is entailment counter and list of states (miss, act1), (miss, act2)...
 *)
 
-type st_tbl = (cl_uid, State.t list) Hashtbl.t
+type st_value = {
+    cnt: int; (** number of entailment calls *)
+    states: State.t list
+}
+
+type st_tbl = (cl_uid, st_value) Hashtbl.t
 
 type t = {
     fuid: cl_uid; (** for which function *)
     tbl: st_tbl
 }
+
+exception EntailmentLimit
 
 val create : cl_uid -> t
 

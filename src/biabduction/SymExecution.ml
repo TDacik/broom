@@ -272,6 +272,9 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl states fuid insn
   let c_errs = List.map get_err_contract states in
   SpecTable.add fnc_tbl fuid c_errs
 
+let set_fnc_unfinished_contract fnc_tbl fuid =
+  SpecTable.add fnc_tbl fuid ((Contract.contract_for_unfinished_fnc ())::[])
+
 (* anchors - existential vars representing arguments of function and original
    value of gvars
    gvars - global variables (may appear after calling function)
@@ -347,7 +350,7 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
                 let simple_s = Simplify.state solver pvars s in
                 State.print simple_s;
                 match c.s with
-                | OK -> simple_s::(solve_contract tl)
+                | OK | Unfinished -> simple_s::(solve_contract tl)
                 | Error ->
                   set_fnc_error_contract ~status:c.s solver tbl [simple_s] fuid insn;
                   empty_is_err_ref := false;
@@ -423,8 +426,13 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
   then states
   else (
     Printf.printf ">>> executing block L%i:\n%!" uid;
-    let new_states = StateTable.add bb_tbl uid states in
-    exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
+    try
+      let new_states = StateTable.add bb_tbl uid states in
+      exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
+    with StateTable.EntailmentLimit -> (
+      set_fnc_unfinished_contract tbl bb_tbl.fuid;
+      states
+    )
   )
 
 and exec_insn tbl bb_tbl states insn =

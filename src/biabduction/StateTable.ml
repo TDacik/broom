@@ -2,16 +2,22 @@ type cl_uid = CL.Loc.cl_uid
 
 (*
   key is a unique uid of basic block
-  value is list of states (miss, curr1), (miss, curr2)...
+  value is entailment counter and list of states (miss, act1), (miss, act2)...
 *)
 
+type st_value = {
+    cnt: int; (** number of entailment calls *)
+    states: State.t list
+}
 
-type st_tbl = (cl_uid, State.t list) Hashtbl.t
+type st_tbl = (cl_uid, st_value) Hashtbl.t
 
 type t = {
     fuid: cl_uid; (** for which function *)
     tbl: st_tbl
 }
+
+exception EntailmentLimit
 
 let create fuid = let (bb_tbl : st_tbl) = Hashtbl.create 1 in {fuid=fuid; tbl=bb_tbl}
 
@@ -41,9 +47,17 @@ let rec entailment_states old_states states =
 let add st uid states =
 	let found = Hashtbl.find_opt st.tbl uid in
 	match found with
-	| None -> Hashtbl.add st.tbl uid states; states (* first entry *)
-	| Some old_states -> prerr_endline ">>> entailment_check: next";
-		let new_states = entailment_states old_states states in
-		Hashtbl.replace st.tbl uid (old_states @ new_states); new_states
+	| None -> (* first entry *)
+		Hashtbl.add st.tbl uid {cnt=0; states=states}; states
+	| Some {cnt=old_cnt; states=old_states} ->
+		if (Config.entailment_limit () = old_cnt) then (
+			prerr_endline ">>> entailment_check: limit";
+			raise EntailmentLimit
+		) else (
+			prerr_endline ">>> entailment_check: next";
+			let new_states = entailment_states old_states states in
+			let value = {cnt=(old_cnt + 1); states=(old_states @ new_states)} in
+			Hashtbl.replace st.tbl uid value;
+			new_states )
 
 let reset st = Hashtbl.reset st.tbl

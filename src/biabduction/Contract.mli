@@ -4,7 +4,7 @@ open Formula
 type formula = Formula.t
 type variable = Exp.variable
 
-type status = OK | Error | Aborted (* | Unreached *)
+type status = OK | Error | Aborted | Unfinished (* | Unreached *)
 
 type t = {
     lhs: formula;
@@ -44,5 +44,7 @@ val get_storage_with_size : Exp.t -> Exp.t -> (Exp.t * pi)
     contract c for function fuid; renaming from RET(c0) and anchors(uid<0) *)
 val contract_for_called_fnc : CL.Operand.t -> CL.Operand.t list ->
                               CL.Loc.cl_uid -> t -> t
+
+val contract_for_unfinished_fnc : unit -> t
 
 val get_contract : CL.Fnc.insn -> t list

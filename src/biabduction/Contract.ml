@@ -13,7 +13,7 @@ type extend_formula = {
 	root: Exp.t; (* only Var/CVar *)
 }
 
-type status = OK | Error | Aborted (* | Unreached *)
+type status = OK | Error | Aborted | Unfinished (* | Unreached *)
 
 type t = {
 	lhs: formula;
@@ -37,6 +37,7 @@ let status_to_string s =
 	| OK -> ""
 	| Error -> "[error]"
 	| Aborted -> "[aborted]"
+	| Unfinished -> "[unfinished]"
 
 let to_string c =
 	status_to_string c.s
@@ -640,6 +641,9 @@ let contract_skip fnc_name =
 	prerr_endline ("debug: ignoring call to "^fnc_name^"()");
 	[]
 
+(* unrecognized built-in/extern function *)
+let contract_unknown_fnc dst = contract_nondet dst
+
 let contract_for_builtin dst called args =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
@@ -666,7 +670,7 @@ let contract_for_builtin dst called args =
 	| "random", [] -> contract_nondet ~unsign:true dst
 	| _,_ ->
 		Config.prerr_warn ("ignoring call of undefined function: "^fnc_name);
-		[] (* TODO: unrecognized built-in/extern function *)
+		contract_unknown_fnc dst
 
 (****** CONTRACTS CALLED FUNCTIONS ******)
 
@@ -715,6 +719,10 @@ let contract_for_called_fnc dst args fuid c =
 		s = c.s
 	}
 
+
+let contract_for_unfinished_fnc () =
+	let rhs = {pi=[ Exp.BinOp ( Peq, Exp.ret, Undef) ]; sigma=[]} in
+	{lhs = Formula.empty; rhs = rhs; cvars = 0; pvarmap = []; s = Unfinished}
 
 let get_contract insn =
 	match insn.code with

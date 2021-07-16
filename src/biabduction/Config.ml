@@ -98,5 +98,8 @@ let abstract_on_call_done = false
 
 (* if true entailment states when traversing a loop-closing edge,
    else on each basic block entry *)
-let entailment_on_loop_edges_only = true
+let entailment_on_loop_edges_only = false
+
+(* max number of entailment calls for one loop *)
+let entailment_limit () = 20
 
