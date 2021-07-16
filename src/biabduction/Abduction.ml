@@ -1139,6 +1139,7 @@ let rec biabduction solver form1 form2 pvars  =
     )
   | Fail ->
     Solver.pop  solver.solv 1;
+    prerr_endline "No applicable rule (biabduction)";
     raise NoApplicableRule
 
 

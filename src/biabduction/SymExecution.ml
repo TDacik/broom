@@ -273,7 +273,10 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl states fuid insn
   SpecTable.add fnc_tbl fuid c_errs
 
 let set_fnc_unfinished_contract fnc_tbl fuid =
-  SpecTable.add fnc_tbl fuid ((Contract.contract_for_unfinished_fnc ())::[])
+  print_endline ">>> final unfinished contract";
+  let c = Contract.contract_for_unfinished_fnc () in
+  Contract.print c;
+  SpecTable.add fnc_tbl fuid (c::[])
 
 (* anchors - existential vars representing arguments of function and original
    value of gvars
@@ -548,7 +551,7 @@ let exec_fnc fnc_tbl f =
       else (State.init fuid)::[] in
     let states = try
       exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg)
-    with StateTable.EntailmentLimit (* | Abduction.NoApplicableRule *) -> (
+    with StateTable.EntailmentLimit | Abduction.NoApplicableRule -> (
       set_fnc_unfinished_contract fnc_tbl fuid;
       []
     ) in
