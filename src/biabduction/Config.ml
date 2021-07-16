@@ -101,5 +101,5 @@ let abstract_on_call_done = false
 let entailment_on_loop_edges_only = false
 
 (* max number of entailment calls for one loop *)
-let entailment_limit () = 20
+let entailment_limit () = 5
 

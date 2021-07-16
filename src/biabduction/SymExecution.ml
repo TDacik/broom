@@ -431,7 +431,7 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
       exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
     with StateTable.EntailmentLimit -> (
       set_fnc_unfinished_contract tbl bb_tbl.fuid;
-      states
+      []
     )
   )
 
