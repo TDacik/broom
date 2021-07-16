@@ -21,7 +21,9 @@ type t = {
 
 val empty : t
 
-val to_string : t -> string
+(** [to_string not_unfinished c ] ctreates string representing contract c; if not_unfinished is true,
+    unfinished contract isn't printed *)
+val to_string : ?not_unfinished:bool -> t -> string
 
 val print : t -> unit
 

@@ -39,12 +39,14 @@ let status_to_string s =
 	| Aborted -> "[aborted]"
 	| Unfinished -> "[unfinished]"
 
-let to_string c =
-	status_to_string c.s
-	^ "Count of Contract EVARS: " ^ string_of_int c.cvars ^ "\n"
-	^ "LHS: " ^ Formula.to_string c.lhs ^ "\n"
-	^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
-	^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap
+let to_string ?not_unfinished:(not_unfinished=false) c =
+	if (not_unfinished && c.s = Unfinished) then ""
+	else
+		status_to_string c.s
+		^ "Count of Contract EVARS: " ^ string_of_int c.cvars ^ "\n"
+		^ "LHS: " ^ Formula.to_string c.lhs ^ "\n"
+		^ "RHS: " ^ Formula.to_string c.rhs ^ "\n"
+		^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap
 
 let print c = print_endline (to_string c)
 

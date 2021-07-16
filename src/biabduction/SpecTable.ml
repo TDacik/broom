@@ -24,7 +24,7 @@ let find_opt tbl x = Hashtbl.find_opt tbl x
 let print_spec uid contracts =
 	let fnc_decl = CL.Printer.fnc_declaration_to_string (CL.Util.get_fnc uid) in
 	print_endline (">>> spec of function " ^ fnc_decl ^ ":");
-	CL.Util.print_list_endline Contract.to_string contracts
+	CL.Util.print_list_endline (Contract.to_string ~not_unfinished:true) contracts
 
 let print tbl =
 	print_endline ("FUNCTIONS: " ^ (Int.to_string (Hashtbl.length tbl)));
