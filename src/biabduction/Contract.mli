@@ -47,6 +47,6 @@ val get_storage_with_size : Exp.t -> Exp.t -> (Exp.t * pi)
 val contract_for_called_fnc : CL.Operand.t -> CL.Operand.t list ->
                               CL.Loc.cl_uid -> t -> t
 
-val contract_for_unfinished_fnc : unit -> t
+val contract_for_unfinished_fnc : CL.Fnc.t -> t
 
 val get_contract : CL.Fnc.insn -> t list

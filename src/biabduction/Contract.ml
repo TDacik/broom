@@ -722,8 +722,10 @@ let contract_for_called_fnc dst args fuid c =
 	}
 
 
-let contract_for_unfinished_fnc () =
-	let rhs = {pi=[ Exp.BinOp ( Peq, Exp.ret, Undef) ]; sigma=[]} in
+let contract_for_unfinished_fnc f =
+	let rhs = (if (CL.Util.is_fnc_nonreturn f)
+		then Formula.empty
+		else {pi=[ Exp.BinOp ( Peq, Exp.ret, Undef) ]; sigma=[]} ) in
 	{lhs = Formula.empty; rhs = rhs; cvars = 0; pvarmap = []; s = Unfinished}
 
 let get_contract insn =

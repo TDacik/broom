@@ -62,6 +62,8 @@ val is_extern: Operand.t -> bool
 
 val is_fnc_static: Fnc.t -> bool
 
+val is_fnc_nonreturn: Fnc.t -> bool
+
 val get_fnc_uid_from_op: Operand.t -> Loc.cl_uid
 
 val get_fnc_uid: Fnc.t -> Loc.cl_uid

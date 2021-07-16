@@ -98,6 +98,14 @@ let is_fnc_static f =
 	let scope = f.Fnc.def.scope in
 		scope == CL_SCOPE_STATIC
 
+let is_fnc_nonreturn f =
+	let typ = get_type f.Fnc.def.typ in
+	match typ.code with
+	| TypeFnc t ->
+		let return_type = get_type ((Array.get t 0).item_typ) in
+		if return_type.size=0 then true else false
+	| _ -> false
+
 let get_fnc_uid_from_op op =
 	match op.Operand.data with
 	| OpCst { cst_data } -> ( match cst_data with

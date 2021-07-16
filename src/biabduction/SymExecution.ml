@@ -274,7 +274,7 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl states fuid insn
 
 let set_fnc_unfinished_contract fnc_tbl fuid =
   print_endline ">>> final unfinished contract";
-  let c = Contract.contract_for_unfinished_fnc () in
+  let c = Contract.contract_for_unfinished_fnc (CL.Util.get_fnc fuid) in
   Contract.print c;
   SpecTable.add fnc_tbl fuid (c::[])
 
