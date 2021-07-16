@@ -426,13 +426,8 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
   then states
   else (
     Printf.printf ">>> executing block L%i:\n%!" uid;
-    try
-      let new_states = StateTable.add bb_tbl uid states in
-      exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
-    with StateTable.EntailmentLimit -> (
-      set_fnc_unfinished_contract tbl bb_tbl.fuid;
-      []
-    )
+    let new_states = StateTable.add bb_tbl uid states in
+    exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
   )
 
 and exec_insn tbl bb_tbl states insn =
@@ -551,7 +546,12 @@ let exec_fnc fnc_tbl f =
       if fname = Config.main
       then init_state_main fnc_tbl bb_tbl
       else (State.init fuid)::[] in
-    let states = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) in
+    let states = try
+      exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg)
+    with StateTable.EntailmentLimit (* | Abduction.NoApplicableRule *) -> (
+      set_fnc_unfinished_contract fnc_tbl fuid;
+      []
+    ) in
     assert (states = []);
     StateTable.reset bb_tbl;
   )
