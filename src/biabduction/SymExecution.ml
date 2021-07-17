@@ -411,8 +411,7 @@ let try_abstraction_on_states solver fuid states =
 let find_fnc_contract tbl dst args fuid =
   let patterns = SpecTable.find_opt tbl fuid in
   match patterns with
-  | None ->
-      raise (NoContract "No contract (wrong functions order or recursion)")
+  | None -> raise_notrace (NoContract "No contract (wrong functions order or recursion)")
   | Some p ->
     let rec rename_fnc_contract c =
       match c with
@@ -506,7 +505,7 @@ let exec_zeroinitializer _(* fuid *) s (uid, var) =
   | TypeReal -> assign (Const (Float 0.0))
   | TypeStruct _ | TypeUnion _ | TypeArray _ ->
     (* l1 -(type.size)-> 0 & static(l1,var) & len(l1)=type.size & base(l1)=l1 *)
-    raise (Contract.ErrorInContract "static object unsupported")
+    raise_notrace (Contract.ErrorInContract "static object unsupported")
     (* let fresh_var = State.get_fresh_lvar fuid s.lvars in
     let size, stor = Contract.get_storage_with_size (Var fresh_var) (Var uid) in
     let sig_add = Hpointsto ((Var fresh_var), size, Exp.zero) in

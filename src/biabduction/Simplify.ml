@@ -147,7 +147,7 @@ let substate solver fixed_vars state =
   let (miss_removed_sigma,miss_vars,new_miss) =
     subformula solver fixed_vars state.miss in
   if (miss_removed_sigma)
-  then raise RemovedSpatialPartFromMiss;
+  then raise_notrace RemovedSpatialPartFromMiss;
   (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
   let (curr_removed_sigma,curr_vars,new_curr) =
     subformula solver miss_vars state.curr in

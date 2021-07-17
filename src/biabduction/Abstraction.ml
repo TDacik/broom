@@ -265,7 +265,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				(match (check_matched_pointsto ctx solv z3_names form matchres ((a1,a2,0)::block_bases) 0 gvars) with
 					| CheckOK checked_matchres -> CheckOK  checked_matchres
 					| CheckFail  -> CheckFail
-					| DlsegBackLink -> raise (ErrorInAbstraction "DllBackling is not expected here")
+					| DlsegBackLink -> raise_notrace (ErrorInAbstraction "DllBackling is not expected here")
 				)
 		)
 	| Slseg(a1,b1,l1), Slseg(a2,b2,l2) -> ( 
@@ -397,7 +397,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			(* Here the numerical values are abstracted to "undef" ~~ any value,
 			   some abstract interpretation may be added here *)
 			| CheckOK res,_ ->  CheckOK ((i1,i2, Hpointsto (a1,s1,Undef),0):: res)
-			| DlsegBackLink,_ -> raise (ErrorInAbstraction "DllBackling is not expected here")
+			| DlsegBackLink,_ -> raise_notrace (ErrorInAbstraction "DllBackling is not expected here")
 			)
 		| [x1],[x2],f1::_,f2::_,[],[] 
 		| [x1],[x2],[],[],f1::_,f2::_ ->
@@ -407,7 +407,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 				| CheckFail -> CheckFail
 				| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: res)
-				| DlsegBackLink -> raise (ErrorInAbstraction "DllBackling is not expected here")
+				| DlsegBackLink -> raise_notrace (ErrorInAbstraction "DllBackling is not expected here")
 				)
 			| false, 0 -> CheckFail
 			| false, _ -> 
@@ -419,13 +419,13 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: (res @ res_rec))
-					| DlsegBackLink -> raise (ErrorInAbstraction "DllBackling is not expected here")
+					| DlsegBackLink -> raise_notrace (ErrorInAbstraction "DllBackling is not expected here")
 					)
 				| DlsegBackLink -> (match (check_matched_pointsto ctx solv z3_names form rest block_bases
 						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
-					| DlsegBackLink -> raise (ErrorInAbstraction "DllBackling is not expected here")
+					| DlsegBackLink -> raise_notrace (ErrorInAbstraction "DllBackling is not expected here")
 					)
 
 				)
@@ -485,10 +485,10 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		match flag with
 		| 0 |1 -> (new_i2 :: tmp2) (* the indeces of unfolded part of the predicate are new_i2:: tmp2 *)
 		| 2 ->  (new_i1 :: tmp1) (* flag 2 --> the unfolded DLL has indeces new_i1 :: tmp1 *)
-		| _ -> raise (ErrorInAbstraction "BAD flag")
+		| _ -> raise_notrace (ErrorInAbstraction "BAD flag")
 	in
 	if not (List.sort compare indeces_to_check = range ((List.length form.sigma)-1) (i_unfolded_slseg-1))
-	then raise (ErrorInAbstraction "BAD indeces")  (* AbstractionFail *)
+	then raise_notrace (ErrorInAbstraction "BAD indeces")  (* AbstractionFail *)
 	else
 	let mem l x =
     		let eq y= (x=y) in
@@ -531,43 +531,43 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 			| _ -> (Hpointsto (a,l,Exp.Var (get_fresh_var (new_back_link_var+1) (find_vars unfolded_form))) 
 				::new_l), new_back_link_var (* change null/undef or equations for fresch variable *)
 			)
-		| _ -> raise (ErrorInAbstraction "Something bad happened, probably broken unfolding") (*[]*)
+		| _ -> raise_notrace (ErrorInAbstraction "Something bad happened, probably broken unfolding") (*[]*)
 	in
 	(* get the parameters of the list segment *)
 	let pto_a,pto_b = match (List.nth unfolded_form.sigma new_i1) with
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
-			| _ -> raise (ErrorInAbstraction "Expecting pointsto")
+			| _ -> raise_notrace (ErrorInAbstraction "Expecting pointsto")
 	in
 	let pto_a2,pto_b2 = match (List.nth unfolded_form.sigma new_i2) with
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
-			| _ -> raise (ErrorInAbstraction "Expecting pointsto")
+			| _ -> raise_notrace (ErrorInAbstraction "Expecting pointsto")
 	in
 	let pto_back_b,dll_backlink = if y1<0 then [],[]
 		else match (List.nth unfolded_form.sigma y1),dll_backlink with
 			| Hpointsto (_,_,b),-1 -> (find_vars_expr b),(find_vars_expr b)
 			|  Hpointsto (_,_,b),back_l -> (find_vars_expr b), [back_l]
-			| _ -> raise (ErrorInAbstraction "Expecting pointsto")
+			| _ -> raise_notrace (ErrorInAbstraction "Expecting pointsto")
 	in
 	let lseg_d,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
-			| Hpointsto _ -> raise (ErrorInAbstraction "Points-to can not be on this place")
+			| Hpointsto _ -> raise_notrace (ErrorInAbstraction "Points-to can not be on this place")
 			| Slseg (_,d,lambda) -> (find_vars_expr d),lambda
 			| Dlseg (_,_,_,d,lambda) -> (find_vars_expr d),lambda
 	in
 	let lseg_a_orig,lseg_b_orig,lseg_c_orig,lseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
-			| Hpointsto _ -> raise (ErrorInAbstraction "Points-to can not be on this place");
+			| Hpointsto _ -> raise_notrace (ErrorInAbstraction "Points-to can not be on this place");
 			| Slseg (a,d,lambda) -> (find_vars_expr a),[],[],(find_vars_expr d),lambda
 			| Dlseg (a,b,c,d,lambda) -> (find_vars_expr a),(find_vars_expr b),(find_vars_expr c),(find_vars_expr d),lambda
 	in
 	(* this is a safety check that unfolding works correctly. *)
 	if not (((lseg_d=lseg_d_orig)||flag=2) && (lambda=lambda_orig) ) 
-	then raise (ErrorInAbstraction "Abstraction: Something bad with unfolding") (*AbstractionFail*)
+	then raise_notrace (ErrorInAbstraction "Abstraction: Something bad with unfolding") (*AbstractionFail*)
 	else
 	let p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda=
 		match flag with
 		| 0 -> pto_a,pto_back_b,lseg_c_orig,lseg_d,pto_a,lseg_a_orig,dll_backlink
 		| 1 -> lseg_a_orig,[],[],pto_b,pto_a,pto_b,[]
 		| 2 -> lseg_a_orig,lseg_b_orig,pto_a2,pto_b2,pto_a,pto_a2,dll_backlink
-		| _ -> raise (ErrorInAbstraction "flag is different from 0,1,2")
+		| _ -> raise_notrace (ErrorInAbstraction "flag is different from 0,1,2")
 	in
 	match p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda,y1 with
 	| [a],_,_,[d],[a_lambda],[b_lambda],_,-1 -> (*Slseg*)
@@ -626,14 +626,14 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 				match (List.nth unfolded_form.sigma  i_unfolded_slseg) with
 				| Slseg (_,b,_) -> (expr_to_solver_only_exp ctx z3_names b)
 				| Dlseg (_,_,_,b,_) -> (expr_to_solver_only_exp ctx z3_names b) 
-				| _ -> raise (ErrorInAbstraction "Incompatible unfolding")
+				| _ -> raise_notrace (ErrorInAbstraction "Incompatible unfolding")
 			in	
 			let e1,e2=
 				match flag with 
 				| 0 -> b1,a2 
 				| 1 -> endlist,a1
 				| 2 -> b2,a1
-				| _ -> raise (ErrorInAbstraction "incorrect flag")				
+				| _ -> raise_notrace (ErrorInAbstraction "incorrect flag")
 			in
 			let query1 = [	
 				Boolean.mk_or ctx [
@@ -655,7 +655,7 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 	in
 	(* sanity check that the unfolding works ok *)
 	if not ((List.nth form.sigma i_pto)=(List.nth unfolded_form.sigma new_i1)) 
-	then raise (ErrorInAbstraction "This should not happen - Problem with unfolding") (*AbstractionFail*)
+	then raise_notrace (ErrorInAbstraction "This should not happen - Problem with unfolding") (*AbstractionFail*)
 	else
 	match (List.nth unfolded_form.sigma new_i1) with
 	| Hpointsto (a,l,b) -> (
@@ -668,7 +668,7 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 		(* swap new_i1 and new_i2 and a1 and a2 in the case of flag=2 --- the part unfolded from dll is "before" the  block which shold be added *)
 		let a2= match (List.nth unfolded_form.sigma new_i2) with
 			| Hpointsto (aa,_,_) -> (expr_to_solver_only_exp ctx z3_names aa) 
-			| _ -> raise (ErrorInAbstraction "This should not happen")
+			| _ -> raise_notrace (ErrorInAbstraction "This should not happen")
 		in
 		let new_i1,new_i2,a1,a2=
 			match flag with
@@ -685,7 +685,7 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 			| CheckOK checked_matchres -> 
 				fold_pointsto_slseg form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
 			| CheckFail ->  AbstractionFail
-			| DlsegBackLink -> raise (ErrorInAbstraction "DllBackLink is not expected here")
+			| DlsegBackLink -> raise_notrace (ErrorInAbstraction "DllBackLink is not expected here")
 	)
 	| _ -> AbstractionFail
 	
@@ -863,7 +863,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 				(fold_pointsto ctx solv z3_names form i1 i2 checked_matchres) 
 				
 			| CheckFail -> AbstractionFail
-			| DlsegBackLink -> raise (ErrorInAbstraction "DllBackLink is not expected here")
+			| DlsegBackLink -> raise_notrace (ErrorInAbstraction "DllBackLink is not expected here")
 		)
 	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in

@@ -1137,7 +1137,7 @@ let rec biabduction solver form1 form2 pvars  =
     )
   | Fail ->
     Solver.pop  solver.solv 1;
-    raise NoApplicableRule
+    raise_notrace NoApplicableRule
 
 
 

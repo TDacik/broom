@@ -131,7 +131,7 @@ and variable_to_exformula end_typ var accs ef =
 			(* let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in *)
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract "stack/static object unsupported")
 			);
 			let (dbg, ef_new) = var_to_exformula ptr tl
 				{f={sigma = new_sigma; pi = ef.f.pi};
@@ -158,7 +158,7 @@ and variable_to_exformula end_typ var accs ef =
 			assert (idx.accessor = []);
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract "stack/static object unsupported")
 			);
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
@@ -191,7 +191,7 @@ and variable_to_exformula end_typ var accs ef =
 		| Item _ ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract "stack/static object unsupported")
 			);
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
@@ -219,7 +219,7 @@ and variable_to_exformula end_typ var accs ef =
 		| Offset off ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract "stack/static object unsupported")
 			);
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
@@ -562,7 +562,7 @@ let contract_for_clobber var =
 			pvarmap = [];
 			s = OK}
 	| _ ->
-		raise (ErrorInContract "stack object unsupported")
+		raise_notrace (ErrorInContract "stack object unsupported")
 
 (* dst = memcpy(dstm, srcm, size)
    PRE: dstm-size->l1 * srcm-size->l2 & 0<=size & size<=len(dstm) &

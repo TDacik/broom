@@ -30,6 +30,8 @@ val formula : Z3wrapper.solver -> FExp.variable list -> Formula.t ->
     exception is raised. If something left in spatial part of curr, memory leak
     is reported.
     fixed_vars - variables can't be removed
-    state - expect satisfiable state only *)
+    state - expect satisfiable state only
+    @raise RemovedSpatialPartFromMiss if part of spatial part is not accesible
+    by [fixed_vars] and related variables *)
 (* FIXME may be more variables in lvars than are in state *)
 val state : Z3wrapper.solver -> FExp.variable list -> State.t -> State.t
