@@ -11,8 +11,6 @@ open Z3wrapper
 type variable = Formula.Exp.variable
 
 exception TempExceptionBeforeApiCleanup of string
-exception ShouldBeRefactoredToMakeExhaustive of unit
-exception IllegalArgumentException of string
 exception NoApplicableRule
 
 (** result of the rule application
@@ -28,14 +26,14 @@ type res =
   | Fail
 
 let to_slseg_unsafe hpred = match hpred with
-  | Hpointsto _ | Dlseg _ -> raise (IllegalArgumentException "Received points-to assertion instead of list")
+  | Hpointsto _ | Dlseg _ -> raise (Invalid_argument "to_slseg_unsafe: Received points-to/dll instead of list")
   | Slseg (a,b,l) -> (a,b,l)
 
 let to_hpointsto_unsafe hpred = match hpred with
-  | Slseg _ | Dlseg _ -> raise (IllegalArgumentException "Received list instead of points-to assertion")
+  | Slseg _ | Dlseg _ -> raise (Invalid_argument "to_hpointsto_unsafe: Received list instead of points-to")
   | Hpointsto (a,l,b) -> (a,l,b)
 let to_dlseg_unsafe hpred = match hpred with
-  | Hpointsto _ | Slseg _ -> raise (IllegalArgumentException "Received points-to assertion instead of list")
+  | Hpointsto _ | Slseg _ -> raise (Invalid_argument "to_dlseg_unsafe: Received points-to instead of dll list")
   | Dlseg (a,b,c,d,l) -> (a,b,c,d,l)
 
 (**** LEARN - pointsto ****)
@@ -1139,7 +1137,6 @@ let rec biabduction solver form1 form2 pvars  =
     )
   | Fail ->
     Solver.pop  solver.solv 1;
-    prerr_endline "No applicable rule (biabduction)";
     raise NoApplicableRule
 
 

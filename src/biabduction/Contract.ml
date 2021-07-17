@@ -7,6 +7,8 @@ open Formula
 type formula = Formula.t
 type variable = Exp.variable
 
+exception ErrorInContract of string
+
 type extend_formula = {
 	f: formula;
 	cnt_cvars: int;(* variable list; *)
@@ -49,6 +51,8 @@ let to_string ?not_unfinished:(not_unfinished=false) c =
 		^ "Prog. VARS moves: " ^ pvarmap_to_string c.pvarmap
 
 let print c = print_endline (to_string c)
+
+let is_OK c = if (c.s=OK) then true else false
 
 (* var is Exp.t but only Var/CVar *)
 let get_storage_with_size ptr var =
@@ -105,7 +109,8 @@ let rec operand_to_exformula op ef =
 
 (* var is Exp.t but only Var/CVar, last C represents root
    returns tuple (debub_string, ef) where debug_string contains the order of
-   applying accessors rules *)
+   applying accessors rules
+   @raise ErrorInContract if var is object on stack/static (not implemented) *)
 and variable_to_exformula end_typ var accs ef =
   let rec var_to_exformula var accs ef =
 	match accs with
@@ -125,7 +130,9 @@ and variable_to_exformula end_typ var accs ef =
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(* let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in *)
-			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
+			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
+				raise (ErrorInContract "stack/static object unsupported")
+			);
 			let (dbg, ef_new) = var_to_exformula ptr tl
 				{f={sigma = new_sigma; pi = ef.f.pi};
 				cnt_cvars=cvars_ptr;
@@ -150,7 +157,9 @@ and variable_to_exformula end_typ var accs ef =
 		| DerefArray idx ->
 			assert (idx.accessor = []);
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
+			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
+				raise (ErrorInContract "stack/static object unsupported")
+			);
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_elm = cvars_ptr + 1 in
@@ -181,7 +190,9 @@ and variable_to_exformula end_typ var accs ef =
 		   to: C2-()->C & C2 = C1 + item & base(C2)=base(C1)*)
 		| Item _ ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
+			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
+				raise (ErrorInContract "stack/static object unsupported")
+			);
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
 			let cvar_itm = cvars_ptr + 1 in
@@ -207,7 +218,9 @@ and variable_to_exformula end_typ var accs ef =
 		   to: C2 -(1)-> C & C2 = C1 + off *)
 		| Offset off ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
-			assert (ef.cnt_cvars = cvars_ptr); (* TODO object on stack unsupported *)
+			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
+				raise (ErrorInContract "stack/static object unsupported")
+			);
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
 			let const_off = Exp.Const (Int (Int64.of_int off)) in
@@ -513,6 +526,7 @@ let contract_for_alloca dst size =
 
 (* PRE: var-(size)->c1 & stack(var) & base(var)=var  POS: invalid(var)
    TODO: PRE: c1-(size)->var & stack(c1,var) & base(c1)=c1   POS: invalid(c1)
+   @raise ErrorInContract if operand is not contract variable
 *)
 let contract_for_clobber var =
 	let var_uid = ( match var.data with
@@ -547,7 +561,8 @@ let contract_for_clobber var =
 			cvars = ef_var.cnt_cvars;
 			pvarmap = [];
 			s = OK}
-	| _ -> assert false
+	| _ ->
+		raise (ErrorInContract "stack object unsupported")
 
 (* dst = memcpy(dstm, srcm, size)
    PRE: dstm-size->l1 * srcm-size->l2 & 0<=size & size<=len(dstm) &

@@ -7,10 +7,10 @@ open Z3wrapper
 *)
 
 exception ErrorInAbstraction of string
-exception IllegalArgumentException of string
 
+(* since ocaml 4.12.0 there is __FUNCTION__ *)
 let to_hpointsto_unsafe hpred = match hpred with
-  | Slseg _ | Dlseg _ -> raise (IllegalArgumentException "Received list instead of points-to assertion")
+  | Slseg _ | Dlseg _ -> raise (Invalid_argument "to_hpointsto_unsafe: Received list instead of points-to")
   | Hpointsto (a,l,b) -> (a,l,b)
 
 type res =

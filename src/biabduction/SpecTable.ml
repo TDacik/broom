@@ -17,6 +17,17 @@ let add tbl uid contracts =
 	| None -> Hashtbl.add tbl uid contracts
 	| Some c -> Hashtbl.replace tbl uid (c @ contracts) (* TODO join *)
 
+let only_add tbl uid contracts =
+	let remove_ok_contracts con =
+		if (Contract.is_OK con) then None else Some con
+	in
+	let found = Hashtbl.find_opt tbl uid in
+	match found with
+	| None -> Hashtbl.add tbl uid contracts
+	| Some c ->
+		let stay = List.filter_map remove_ok_contracts c in
+		Hashtbl.replace tbl uid (stay @ contracts)
+
 let find_opt tbl x = Hashtbl.find_opt tbl x
 
 (** printing on standard output *)

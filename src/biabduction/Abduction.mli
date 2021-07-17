@@ -13,12 +13,6 @@ type abduction_res =
 (** Raise in case of ... *)
 exception TempExceptionBeforeApiCleanup of string
 
-(** Raise in case of ... *)
-exception ShouldBeRefactoredToMakeExhaustive of unit
-
-(** Raise in case of ... *)
-exception IllegalArgumentException of string
-
 exception NoApplicableRule
 
 (** [biabduction solver form1 form2] is main biabduction function

@@ -15,6 +15,8 @@ type contract_app_res =
 *)
 exception Split_contract_RHS
 
+exception NoContract of string
+
 let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
 	let query= (Boolean.mk_not ctx (expr_to_solver_only_exp ctx z3_names expr)) :: form_z3 in
 	(Solver.check solv query)=SATISFIABLE
@@ -276,7 +278,7 @@ let set_fnc_unfinished_contract fnc_tbl fuid =
   print_endline ">>> final unfinished contract";
   let c = Contract.contract_for_unfinished_fnc (CL.Util.get_fnc fuid) in
   Contract.print c;
-  SpecTable.add fnc_tbl fuid (c::[])
+  SpecTable.only_add fnc_tbl fuid (c::[])
 
 (* anchors - existential vars representing arguments of function and original
    value of gvars
@@ -404,10 +406,13 @@ let try_abstraction_on_states solver fuid states =
 
 (* FIND CONTRACT FOR CALLING FUNCTION *)
 
+(* @raise NoContract if no contract in tbl for function [fuid] becouse of wrong
+   order or recursive function *)
 let find_fnc_contract tbl dst args fuid =
   let patterns = SpecTable.find_opt tbl fuid in
   match patterns with
-  | None -> assert false (* wrong order; recursive function not supported *)
+  | None ->
+      raise (NoContract "No contract (wrong functions order or recursion)")
   | Some p ->
     let rec rename_fnc_contract c =
       match c with
@@ -485,7 +490,7 @@ and exec_insns tbl bb_tbl states insns =
       exec_insns tbl bb_tbl s tl
   )
 
-(* FIXME: assert for non-pointer static variables *)
+(* FIXME: exception for non-pointer static variables *)
 let exec_zeroinitializer _(* fuid *) s (uid, var) =
   let assign exp =
     let pi_add = Exp.BinOp (Peq, Var uid, exp) in
@@ -501,7 +506,7 @@ let exec_zeroinitializer _(* fuid *) s (uid, var) =
   | TypeReal -> assign (Const (Float 0.0))
   | TypeStruct _ | TypeUnion _ | TypeArray _ ->
     (* l1 -(type.size)-> 0 & static(l1,var) & len(l1)=type.size & base(l1)=l1 *)
-    assert false (* TODO object on static storage unsupported *)
+    raise (Contract.ErrorInContract "static object unsupported")
     (* let fresh_var = State.get_fresh_lvar fuid s.lvars in
     let size, stor = Contract.get_storage_with_size (Var fresh_var) (Var uid) in
     let sig_add = Hpointsto ((Var fresh_var), size, Exp.zero) in
@@ -549,11 +554,25 @@ let exec_fnc fnc_tbl f =
       if fname = Config.main
       then init_state_main fnc_tbl bb_tbl
       else (State.init fuid)::[] in
-    let states = try
+    let states = (try
       exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg)
-    with StateTable.EntailmentLimit | Abduction.NoApplicableRule -> (
-      set_fnc_unfinished_contract fnc_tbl fuid;
-      []
+    with
+      | StateTable.EntailmentLimit ->
+        Config.prerr_internal "Limit reached (increase 'entailment_limit')";
+        set_fnc_unfinished_contract fnc_tbl fuid;
+        []
+      | Abduction.NoApplicableRule ->
+        Config.prerr_internal "No applicable abduction rule";
+        set_fnc_unfinished_contract fnc_tbl fuid;
+        []
+      | Abstraction.ErrorInAbstraction msg ->
+        Config.prerr_internal (msg^" (abstraction)");
+        set_fnc_unfinished_contract fnc_tbl fuid;
+        []
+      | Contract.ErrorInContract msg | NoContract msg ->
+        Config.prerr_internal msg;
+        set_fnc_unfinished_contract fnc_tbl fuid;
+        []
     ) in
     assert (states = []);
     StateTable.reset bb_tbl;

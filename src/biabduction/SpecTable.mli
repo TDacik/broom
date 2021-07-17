@@ -12,6 +12,10 @@ val create : t
 
 val add : t -> cl_uid -> Contract.t list -> unit
 
+(** [only_add tbl uid contracts] removes all correct contracts and leave new
+    [contracts] and not correct contracts for function defined by [uid] *)
+val only_add : t -> cl_uid -> Contract.t list -> unit
+
 val find_opt : t -> cl_uid -> Contract.t list option
 
 val print : t -> unit

@@ -4,6 +4,8 @@ open Formula
 type formula = Formula.t
 type variable = Exp.variable
 
+exception ErrorInContract of string
+
 type status = OK | Error | Aborted | Unfinished (* | Unreached *)
 
 type t = {
@@ -26,6 +28,8 @@ val empty : t
 val to_string : ?not_unfinished:bool -> t -> string
 
 val print : t -> unit
+
+val is_OK : t -> bool
 
 (** [get_storage ptr var] returns size of storage and pure part desribed
     storage of [var]

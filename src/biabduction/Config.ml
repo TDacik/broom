@@ -25,6 +25,11 @@ end
 
 (* errors handling *)
 (* TODO: location *)
+let prerr_internal str =
+  if (Unix.isatty Unix.stderr)
+    then prerr_endline ("\027[1;31m!!! internal error: "^str^"\027[0m")
+    else prerr_endline ("!!! error: "^str)
+
 let prerr_error str =
   if (Unix.isatty Unix.stderr)
     then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
