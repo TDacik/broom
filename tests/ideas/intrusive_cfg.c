@@ -71,7 +71,8 @@ list* list_create(size_t offset) {
   list *l = malloc(sizeof(list));
   if (l) {
     l->offset = offset;
-    link_init(&l->link, offset);
+    //link_init(&l->link, offset);
+    link_init(l+offsetof(list,link), offset);
   }
   return l;
 }

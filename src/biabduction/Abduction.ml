@@ -1115,8 +1115,8 @@ let rec biabduction solver form1 form2 pvars  =
     (try_match,2,"Match2");
     (try_split,2,"Split2");
     (try_match,3,"Match3");
-    (try_learn_pointsto,1,"Learn1-Pointsto");
-    (try_learn_slseg,1,"Learn1-Slseg");
+    (*(try_learn_pointsto,1,"Learn1-Pointsto");*)
+    (*(try_learn_slseg,1,"Learn1-Slseg");*)
     (try_learn_pointsto,3,"Learn3-Pointsto");
     (try_learn_slseg,2,"Learn3-Slseg");
     (try_match,4,"Match4");
