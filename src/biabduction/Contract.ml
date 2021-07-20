@@ -709,7 +709,7 @@ let contract_for_called_fnc dst args fuid c =
 	let ef_dst = operand_to_exformula dst ef_init in
 	let (roots,ef_args) = args_to_exformula args ef_dst in
 	(* FIXME: allow accessors for arguments *)
-	assert (ef_args.f = Formula.empty);
+	assert (c.lhs.sigma = [] || ef_args.f = Formula.empty);
 
 	(* args - roots na fresh_lvars  CL.Util.list_max_positive (CL.Util.get_fnc_vars curr_fuid @ glob_vars)*)
 
@@ -730,7 +730,8 @@ let contract_for_called_fnc dst args fuid c =
 	{
 		lhs = {sigma = new_lhs.sigma @ ef_args.f.sigma;
 			pi = new_lhs.pi @ ef_args.f.pi};
-		rhs = new_rhs;
+		rhs = {sigma = new_rhs.sigma @ ef_args.f.sigma;
+			pi = new_rhs.pi @ ef_args.f.pi};
 		cvars = new_dst.cnt_cvars;
 		pvarmap = c.pvarmap @ pvarmap;
 		s = c.s
