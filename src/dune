@@ -1,13 +1,26 @@
+(rule
+  (targets Version.ml)
+  (action
+    (with-stdout-to Version.ml
+     (echo "let curr=\"`git log -1 | head -1 | cut -f2 -d" "`\"\n"))))
+
 (executable
   (name ContractGenerator)
   (public_name bi)
   (libraries CL biabd)
   (modules ContractGenerator))
 
+(library
+  (name bi)
+  (public_name bi)
+  (flags :standard)
+  (libraries core z3 CL biabd)
+  (modules :standard \ biabductor ContractGenerator test))
+
 (executable
   (name biabductor)
   (public_name bi)
-  (libraries core z3 biabd)
+  (libraries bi)
   (modules biabductor))
 
 (executable

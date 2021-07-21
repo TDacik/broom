@@ -1,3 +1,4 @@
+open Bi
 (* * * * * * * * * * * * * * * main * * * * * * * * * * * * * * *)
 
 let () =
@@ -9,4 +10,5 @@ let () =
 	in
 	exec fnc_tbl CL.Util.stor.fncs;
 	print_endline "===============================================";
+	(* print_endline Version.curr; *)
 	Biabd.SpecTable.print fnc_tbl
