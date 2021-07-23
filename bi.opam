@@ -1,6 +1,7 @@
 opam-version: "2.0"
 
 name: "bi"
+version: "0.0.1"
 
 synopsis: "A static analyzer for C"
 

@@ -33,7 +33,7 @@ int main() {
 	struct dll *x=create_dll();
 	struct dll *item=create_dll();
 	insert_after(x,item);
-	remove_item(item);
+	remove_item(item); // memory leak
 	return 0;
 }
 

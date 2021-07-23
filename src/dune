@@ -2,7 +2,7 @@
   (targets Version.ml)
   (action
     (with-stdout-to Version.ml
-     (echo "let curr=\"`git log -1 | head -1 | cut -f2 -d" "`\"\n"))))
+     (bash "echo \"let curr=\\\"%{version:bi}-`git describe --always`\\\"\n\""))))
 
 (executable
   (name ContractGenerator)
