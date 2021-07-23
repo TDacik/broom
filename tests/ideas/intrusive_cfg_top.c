@@ -146,6 +146,7 @@ person* person_create(int id) {
   return p;
 }
 
+#ifdef TEST1
 int test_1() {
   person *p = person_create(1); //Robie
   person *p2 = person_create(2); //Trunky
@@ -175,7 +176,9 @@ int test_1() {
 
   return 0;
 }
+#endif
 
+#ifdef TEST2
 int test_2(list *l) {
   person *p = person_create(1); //Robie
   person *p2 = person_create(2); //Trunky
@@ -203,5 +206,38 @@ int test_2(list *l) {
 
   return 0;
 }
+#endif
 
+#define TEST3
+#ifdef TEST3
+int test_1() {
+  person *p = person_create(1); //Robie
+  person *p2 = person_create(2); //Trunky
+  
+  list* l = LIST_CREATE(person, link);
+  list_insert_tail(l, p);
+  list_insert_tail(l, p2);
+
+  person *phead = (person*) list_head(l);
+  person *next = (person*) link_next(&phead->link);
+
+  /*MU_ASSERT("head of the list is Trunky", strcmp("Trunky", phead->name) == 0);*/
+  assert(phead->id==2);
+  /*MU_ASSERT("second in the list is Robbie", strcmp("Robbie", next->name) == 0);*/
+  assert(next->id==1);
+  /* MU_ASSERT("head is linked before unlink", link_is_linked(&phead->link)); */
+  assert(link_is_linked(&phead->link));
+  link_unlink(&phead->link);
+  /*MU_ASSERT("head is not linked after unlink", !link_is_linked(&phead->link));*/
+  assert(!link_is_linked(&phead->link));
+  phead = (person*) list_head(l);
+  /*MU_ASSERT("head of the list is Robbie", strcmp("Robbie", phead->name) == 0);*/
+  assert(phead->id==1);
+  free(p);
+  free(p2);
+  free(l);
+
+  return 0;
+}
+#endif
 
