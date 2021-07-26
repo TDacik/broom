@@ -76,9 +76,9 @@ void init_dll(struct list_head *head)
     head->next = head;
 }
 
-struct list_head* test1(struct master_item *next)
+struct list_head* test1()
 {
-    struct list_head *head=malloc(sizeof(list_head));
+    struct list_head *head=malloc(sizeof(struct list_head));
     init_dll(head);
     append_one(head);
     append_one(head);
