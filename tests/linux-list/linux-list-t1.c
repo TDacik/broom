@@ -82,6 +82,7 @@ struct list_head* test1()
     init_dll(head);
     append_one(head);
     append_one(head);
+    return head;
 }
 
 /**
