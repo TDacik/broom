@@ -872,7 +872,7 @@ let rec apply_match solver i pred_type form1 form2 pvars dir =
       let _,y1,ls1 = to_slseg_unsafe  (List.nth form1.sigma i1) in
       let _,y2,ls2 = to_slseg_unsafe (List.nth form2.sigma i2) in
       (*if (ls1=ls2) then *) (* Use this line to break the mutual recursion. *)
-      if (check_lambda_entailment solver ls1 ls2)=1 then
+      if (check_lambda_entailment (config_solver_to 2000) ls1 ls2)=1 then
         let lhs=(remove i1 form1) in
         let rhs_tmp=(remove i2 form2) in
         let rhs={sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in

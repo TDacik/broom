@@ -19,6 +19,8 @@ type solver = {
   z3_names : sl_function_names_z3;
 }
 
+val config_solver_to : int -> solver
+
 val config_solver : unit -> solver
 
 (** [create_ex_quantifier ctx evars form] creates existential quantifier

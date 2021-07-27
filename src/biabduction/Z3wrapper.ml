@@ -37,12 +37,18 @@ let get_sl_functions_z3 ctx =
       [(BitVector.mk_sort ctx bw_width)] (Boolean.mk_sort ctx);
   }
 
-let config_solver () =
-  let cfg = [("model", "true"); ("proof", "false")] in
+
+let config_solver_to timeout =
+  let cfg = if timeout=0 
+  		then [("model", "true"); ("proof", "false")] 
+		else [("model", "true"); ("proof", "false"); ("timeout",(string_of_int timeout))] 
+		in
   let ctx = (Z3.mk_context cfg) in
   let solv = (Z3.Solver.mk_solver ctx None) in
   let z3_names = get_sl_functions_z3 ctx in
   {ctx = ctx; solv = solv; z3_names = z3_names}
+
+let config_solver () = config_solver_to 0
 
 (* Create existential quantifier
    ctx - Z3context, evars - a list of variables for quantification, form - Z3
