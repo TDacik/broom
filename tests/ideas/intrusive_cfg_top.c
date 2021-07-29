@@ -146,6 +146,7 @@ person* person_create(int id) {
   return p;
 }
 
+#define TEST1
 #ifdef TEST1
 int test_1() {
   person *p = person_create(1); //Robie
@@ -208,7 +209,6 @@ int test_2(list *l) {
 }
 #endif
 
-#define TEST3
 #ifdef TEST3
 int test_1() {
   person *p = person_create(1); //Robie

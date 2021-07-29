@@ -73,7 +73,7 @@ let rec split_contract_rhs rhs rec_splits =
 let apply_contract solver state c pvars =
   match (Abduction.biabduction solver state.curr c.Contract.lhs pvars) with
   | BFail -> CAppFail
-  | Bok  (miss, fr, l_vars,rec_splits) ->
+  | Bok  ((miss, fr, l_vars,rec_splits)::_) ->
     (* prune useless constrains in miss.pi *)
     let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
     let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
@@ -83,6 +83,7 @@ let apply_contract solver state c pvars =
        The post_contract_application function takes care about it. *)
     let res={miss=missing; curr=current; lvars=(state.lvars @ l_vars)  } in
     CAppOk res
+  | _ -> CAppFail
 
 
 

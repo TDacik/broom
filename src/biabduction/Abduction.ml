@@ -1070,24 +1070,31 @@ let test_sat {ctx=ctx; solv=solv; z3_names=_} form1 form2 =
   else Finish ({pi=(prune_pure_form1 form1.pi)@form2.pi; sigma=[]}, {pi=form1.pi; sigma=form1.sigma} )
 
 (* main biabduction function *)
-(* The result is:  "missing, frame, added_lvars, recorded split-rights" *)
+(* A single result is:  "missing, frame, added_lvars, recorded split-rights" *)
+(* There may be more then one solution => list of results is returned *)
+(* Config.abduction_strategy=0 => only a single result is returned *)
+(* Config.abduction_strategy=1 => multiple results can be returned *)
+
+
 type abduction_res =
-| Bok of Formula.t * Formula.t * variable list * split_record list
+| Bok of (Formula.t * Formula.t * variable list * split_record list) list
 | BFail
 
 let rec biabduction solver form1 form2 pvars  =
   (* try the rules till an applicable if founded *)
   let rec try_rules todo=
     match todo with
-    | (func_name,rule_arg,rule_name) :: rest ->
+    | (func_name,rule_arg,rule_name,more_results) :: rest ->
       (match (func_name solver form1 form2 rule_arg pvars) with
       | Apply (f1,f2,missing,n_lvars,split_rec) ->
-        print_string (rule_name ^", "); flush stdout;
-        Apply (f1,f2,missing,n_lvars,split_rec)
+        	print_string (rule_name ^", "); flush stdout;
+		if more_results && Config.abduction_strategy=1 (* try to get more solutions *)
+		then (f1,f2,missing,n_lvars,split_rec) :: (try_rules rest)
+		else [ (f1,f2,missing,n_lvars,split_rec) ]
       | Fail ->
-        try_rules rest
+        	try_rules rest
       )
-    | [] -> Fail
+    | [] -> [ ]
   in
   (* First test SAT of form1 and form2.
      Postponing SAT to the end of biabduction may lead to hidden conflicts.
@@ -1103,41 +1110,50 @@ let rec biabduction solver form1 form2 pvars  =
   | Finish (missing,frame) ->
     Solver.pop  solver.solv 1;
     print_endline "Finish true"; 
-    Bok ( missing,frame, [], [])
+    Bok [( missing,frame, [], [])]
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
+  (* The lase argument specify, whether another rule can be applied to get more abduction results. *)
   let rules=[
-    (try_match,0,"Match0");
-    (try_split,0,"Split0");
-    (*(try_match,1,"Match1");*)
-    (*(try_split,1,"Split1");*)
-    (try_match,2,"Match2");
-    (try_split,2,"Split2");
-    (try_match,3,"Match3");
-    (*(try_learn_pointsto,1,"Learn1-Pointsto");*)
-    (*(try_learn_slseg,1,"Learn1-Slseg");*)
-    (try_learn_pointsto,3,"Learn3-Pointsto");
-    (try_learn_slseg,2,"Learn3-Slseg");
-    (try_match,4,"Match4");
-    (try_split,4,"Split4");
+    (try_match,0,"Match0",false);
+    (try_split,0,"Split0",false);
+    (*(try_match,1,"Match1",false);*)
+    (*(try_split,1,"Split1",false);*)
+    (try_match,2,"Match2",false);
+    (try_split,2,"Split2",false);
+    (try_match,3,"Match3",false);
+    (*(try_learn_pointsto,1,"Learn1-Pointsto",false);*)
+    (*(try_learn_slseg,1,"Learn1-Slseg",false);*)
+    (try_learn_pointsto,3,"Learn3-Pointsto",true);
+    (try_learn_slseg,2,"Learn3-Slseg",true);
+    (try_match,4,"Match4",false);
+    (try_split,4,"Split4",false);
   ] in
-  match try_rules rules with
-  | Apply (f1,f2,missing,n_lvars,rule_split_rec) ->
-    Solver.pop  solver.solv 1;
-    let split_rec_to_add=
-    	match rule_split_rec with
-    	| Record _ -> [rule_split_rec ]
-    	| NoRecord -> []
-    in
-    (match biabduction solver f1 f2 pvars with
-    | BFail -> BFail
-    | Bok (miss,fr,l_vars,split_rec)-> 
-    	Bok ({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)}  ,fr, n_lvars@l_vars, split_rec_to_add@split_rec)
-    )
-  | Fail ->
-    Solver.pop  solver.solv 1;
-    raise_notrace NoApplicableRule
+  let app_result=try_rules rules in
+  Solver.pop  solver.solv 1;
+  print_endline ("No. of applied rules: "^(string_of_int (List.length app_result))^"\n");
+  (* process a result of a single abduction rule *)
+  let process_single_result (f1,f2,missing,n_lvars,rule_split_rec) =
+    	let split_rec_to_add=
+	    	match rule_split_rec with
+    		| Record _ -> [rule_split_rec ]
+	    	| NoRecord -> []
+    	in
+    	(match biabduction solver f1 f2 pvars with
+    	| BFail -> []
+    	| Bok res ->
+		let create_result (miss,fr,l_vars,split_rec) =
+			({pi=(List.append missing.pi miss.pi);sigma=(List.append missing.sigma miss.sigma)} ,
+				fr, n_lvars@l_vars, split_rec_to_add@split_rec)
+		in
+		(List.map create_result res)
+    	)
+  in
+  (* merge results of all applied abduction  rules *)
+  match (List.concat (List.map process_single_result app_result)) with
+    | [] -> BFail
+    | x -> Bok x
 
 
 

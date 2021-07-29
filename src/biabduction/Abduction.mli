@@ -7,7 +7,7 @@ type split_record =
 
 (** The result is:  "missing, frame, added_lvars, recorded split-rights" *)
 type abduction_res =
-  | Bok of Formula.t * Formula.t * variable list * split_record list
+  | Bok of (Formula.t * Formula.t * variable list * split_record list) list
   | BFail
 
 (** Raise in case of ... *)
