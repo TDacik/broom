@@ -1,4 +1,3 @@
-#include <verifier-builtins.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
