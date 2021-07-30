@@ -378,7 +378,7 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
                 set_fnc_error_contract solver tbl [s] fuid insn;
                 process_new_states atl
               )
-          in (* end of process_new_state *)
+          in (* end of process_new_states *)
 
           let res = contract_application solver s c pvars in
           match res with
