@@ -1132,7 +1132,6 @@ let rec biabduction solver form1 form2 pvars  =
   ] in
   let app_result=try_rules rules in
   Solver.pop  solver.solv 1;
-  print_endline ("No. of applied rules: "^(string_of_int (List.length app_result))^"\n");
   (* process a result of a single abduction rule *)
   let process_single_result (f1,f2,missing,n_lvars,rule_split_rec) =
     	let split_rec_to_add=

@@ -6,7 +6,7 @@ open Z3wrapper
 (*** APPLAYING CONTRACTS ***)
 
 type contract_app_res =
-  | CAppOk of State.t
+  | CAppOk of State.t list
   | CAppFail
 
 (* apply contract,
@@ -73,17 +73,17 @@ let rec split_contract_rhs rhs rec_splits =
 let apply_contract solver state c pvars =
   match (Abduction.biabduction solver state.curr c.Contract.lhs pvars) with
   | BFail -> CAppFail
-  | Bok  ((miss, fr, l_vars,rec_splits)::_) ->
-    (* prune useless constrains in miss.pi *)
-    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
-    let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
-    let splited_rhs=split_contract_rhs c.rhs rec_splits in
-    let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in
-    (* Note that the created contract may be temporarily UNSAT due to the "freed" predicate. 
-       The post_contract_application function takes care about it. *)
-    let res={miss=missing; curr=current; lvars=(state.lvars @ l_vars)  } in
-    CAppOk res
-  | _ -> CAppFail
+  | Bok  abd_result ->
+	let process_abd_result (miss, fr, l_vars,rec_splits) =
+	    (* prune useless constrains in miss.pi *)
+	    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
+	    let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
+	    let splited_rhs=split_contract_rhs c.rhs rec_splits in
+	    let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in	    
+	    {miss=missing; curr=current; lvars=(state.lvars @ l_vars)} 
+	in
+	let res=List.map process_abd_result abd_result in
+    	CAppOk res
 
 
 
@@ -166,7 +166,7 @@ let rec post_contract_application_vars state pvarmap seed pvars=
 
 (* after contract application do the following thing
   1: rename variables according to pvarmap
-  2: for each freed(x) predicate in pure part remove the spatial predicates
+  2: OBSOLATE, NO MORE APPLIED: for each freed(x) predicate in pure part remove the spatial predicates
      with the equal base
 *)
 let post_contract_application state solver pvarmap pvars =
@@ -186,11 +186,12 @@ let post_contract_application state solver pvarmap pvars =
   let sat_query_missing=formula_to_solver solver.ctx final_state.miss in
   if ((Solver.check solver.solv sat_query_curr)=SATISFIABLE) &&
      ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
-  then  CAppOk final_state
+  then [final_state]
   else (
-    prerr_endline "------------";
+    (*prerr_endline "------------";
     prerr_endline (State.to_string final_state);
-    prerr_endline "SAT Fail (Contract application)"; CAppFail)
+    prerr_endline "SAT Fail (Contract application)";*) 
+    [])
 
 (* Do
    1) rename conflicting contract variables
@@ -219,7 +220,12 @@ let contract_application solver state c pvars =
   | CAppFail -> CAppFail
   | CAppOk s_applied ->  
   		(* The post contrat application must be called with pvars. All variables outside pvars are considered to be logical. *)
-		(post_contract_application s_applied solver c_rename.pvarmap pvars)
+  		let postprocess st = post_contract_application st solver c_rename.pvarmap pvars in
+		(* If Config.abduction_strategy=1 then s_applied can contain more then a single result. *)
+		let res=List.concat (List.map postprocess s_applied) in
+		match res with
+		| [] -> CAppFail
+		| _ -> CAppOk res
 
 
 (* PREPARE STATE FOR CONTRACT
@@ -348,10 +354,12 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
         match contracts with
         | [] -> []
         | c::tl -> Contract.print c;
+	    (* !!! res can contain more then a single result. All of them should be processed *)
+	    (* Now we drop everything except the first result *)
             let res = contract_application solver s c pvars in
             match res with
-            | CAppFail -> solve_contract tl (* FIXME error handling *)
-            | CAppOk s ->
+            | CAppFail | CAppOk [] -> solve_contract tl (* FIXME error handling *)
+            | CAppOk (s::_) ->
               try
                 let simple_s = Simplify.state solver pvars s in
                 State.print simple_s;
