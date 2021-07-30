@@ -354,31 +354,37 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
         match contracts with
         | [] -> []
         | c::tl -> Contract.print c;
-	    (* !!! res can contain more then a single result. All of them should be processed *)
-	    (* Now we drop everything except the first result *)
-            let res = contract_application solver s c pvars in
-            match res with
-            | CAppFail | CAppOk [] -> solve_contract tl (* FIXME error handling *)
-            | CAppOk (s::_) ->
+
+          let rec process_new_states abd_states =
+            match abd_states with
+            | [] -> []
+            | a::atl ->
               try
-                let simple_s = Simplify.state solver pvars s in
-                State.print simple_s;
+                let simple_a = Simplify.state solver pvars a in
+                State.print simple_a;
                 match c.s with
-                | OK | Unfinished -> simple_s::(solve_contract tl)
+                | OK | Unfinished -> simple_a::(process_new_states atl)
                 | Error ->
-                  set_fnc_error_contract ~status:c.s solver tbl [simple_s] fuid insn;
+                  set_fnc_error_contract ~status:c.s solver tbl [simple_a] fuid insn;
                   empty_is_err_ref := false;
-                  solve_contract tl
+                  process_new_states atl
                 | Aborted ->
-                  set_fnc_contract ~status:c.s solver tbl [simple_s] fuid insn;
+                  set_fnc_contract ~status:c.s solver tbl [simple_a] fuid insn;
                   empty_is_err_ref := false;
-                  solve_contract tl
+                  process_new_states atl
 
               with Simplify.RemovedSpatialPartFromMiss -> (
-                State.print s;
+                State.print a;
                 set_fnc_error_contract solver tbl [s] fuid insn;
-                solve_contract tl
+                process_new_states atl
               )
+          in (* end of process_new_state *)
+
+          let res = contract_application solver s c pvars in
+          match res with
+          | CAppFail -> solve_contract tl (* FIXME error handling *)
+          | CAppOk abd_s -> (process_new_states abd_s) @ (solve_contract tl)
+
       in (* end of solve_contract *)
 
       (solve_contract contracts) @ (apply_contracts_on_states tl contracts)

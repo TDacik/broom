@@ -108,5 +108,7 @@ let entailment_on_loop_edges_only = false
 (* max number of entailment calls for one loop *)
 let entailment_limit () = 5
 
-(* Abduction strategy: 0 - single strategy = one result, 1 - more strategies = possible more restults *)
-let abduction_strategy=0
+(* Abduction strategy: 0 - single strategy = one result,
+                       1 - more strategies = possible more restults
+*)
+let abduction_strategy = 1
