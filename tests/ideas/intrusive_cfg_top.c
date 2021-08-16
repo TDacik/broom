@@ -146,7 +146,7 @@ person* person_create(int id) {
   return p;
 }
 
-#define TEST1
+#define TEST2
 #ifdef TEST1
 int test_1() {
   person *p = person_create(1); //Robie

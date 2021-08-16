@@ -111,4 +111,8 @@ let entailment_limit () = 5
 (* Abduction strategy: 0 - single strategy = one result,
                        1 - more strategies = possible more restults
 *)
-let abduction_strategy = 1
+let abduction_strategy = 0
+
+(* Solver timeout (in miliseconds) : 0 - no timeout *)
+let solver_timeout = 300
+                   
