@@ -114,5 +114,6 @@ let entailment_limit () = 5
 let abduction_strategy = 0
 
 (* Solver timeout (in miliseconds) : 0 - no timeout *)
-let solver_timeout = 300
+let solver_timeout = 1000
+let solver_timeout_simplify = 100
                    

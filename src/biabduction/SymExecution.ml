@@ -17,9 +17,13 @@ exception Split_contract_RHS
 
 exception NoContract of string
 
+(*  Checke whether expr should be added to form_z3
+     false iff form_z3 => expr (no need to add expr)
+     true othervice (incl. timeout)
+*)
 let prune_expr {ctx=ctx; solv=solv; z3_names=z3_names} form_z3 expr =
 	let query= (Boolean.mk_not ctx (expr_to_solver_only_exp ctx z3_names expr)) :: form_z3 in
-	(Solver.check solv query)=SATISFIABLE
+	not ((Solver.check solv query)=UNSATISFIABLE)
 
 let rec split_pointsto_with_eq_dest rhs dest deltas split_items=
 	match rhs with
@@ -76,7 +80,12 @@ let apply_contract solver state c pvars =
   | Bok  abd_result ->
 	let process_abd_result (miss, fr, l_vars,rec_splits) =
 	    (* prune useless constrains in miss.pi *)
-	    let pruned_miss_pi=List.filter (prune_expr solver (formula_to_solver solver.ctx state.miss)) miss.pi in
+	    let solver_for_pruning=
+	    	let solver2=config_solver_to Config.solver_timeout_simplify in
+		Solver.add solver2.solv (formula_to_solver solver2.ctx state.miss);
+		solver2
+	    in
+	    let pruned_miss_pi=List.filter (prune_expr solver_for_pruning []) miss.pi in
 	    let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
 	    let splited_rhs=split_contract_rhs c.rhs rec_splits in
 	    let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in	    
