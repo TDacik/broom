@@ -74,9 +74,7 @@ let rec split_contract_rhs rhs rec_splits =
 		else split_contract_rhs rhs rest
 
 
-(*let apply_contract solver state c pvars =*)
-let apply_contract _ state c pvars =
-  let solver=config_solver () in
+let apply_contract solver state c pvars =
   match (Abduction.biabduction solver state.curr c.Contract.lhs pvars) with
   | BFail -> CAppFail
   | Bok  abd_result ->
