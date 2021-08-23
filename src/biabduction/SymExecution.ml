@@ -304,7 +304,9 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
     Contract.print c_err;
     c_err
   in
-  let fin_states = if Config.rerun () then check_rerun bb_tbl states else states in
+  let fin_states = if Config.rerun () && bb_tbl.fst_run
+    then check_rerun bb_tbl states
+    else states in
   let c_errs = List.map get_err_contract fin_states in
   SpecTable.add fnc_tbl bb_tbl.fuid c_errs
 
@@ -331,7 +333,9 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
   print_string "GVARS:";
   CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
 
-  let fin_states = if Config.rerun () then check_rerun bb_tbl states else states in
+  let fin_states = if Config.rerun () && bb_tbl.fst_run
+    then check_rerun bb_tbl states
+    else states in
 
   let memcheck_gvars = (
     if (Config.exit_leaks ()) then

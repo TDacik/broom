@@ -14,13 +14,14 @@ type st_tbl = (cl_uid, st_value) Hashtbl.t
 
 type t = {
 	fuid: cl_uid; (** for which function *)
+	mutable fst_run: bool;
 	mutable rerun: State.t list; (** states that need to be rerun *)
 	tbl: st_tbl
 }
 
 exception EntailmentLimit
 
-let create fuid = let (bb_tbl : st_tbl) = Hashtbl.create 1 in {fuid=fuid; rerun=[]; tbl=bb_tbl}
+let create fuid = let (bb_tbl : st_tbl) = Hashtbl.create 1 in {fuid=fuid; fst_run=true; rerun=[]; tbl=bb_tbl}
 
 (* entailment check miss1 <= miss2 and curr1 <= curr2 *)
 let rec entailment_states old_states states =
@@ -63,4 +64,4 @@ let add st uid states =
 
 let add_rerun st state = st.rerun <- state::st.rerun
 
-let reset st = Hashtbl.reset st.tbl; st.rerun <- []
+let reset st = Hashtbl.reset st.tbl; st.fst_run <- true; st.rerun <- []

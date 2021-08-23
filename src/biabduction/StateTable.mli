@@ -14,6 +14,7 @@ type st_tbl = (cl_uid, st_value) Hashtbl.t
 
 type t = {
 	fuid: cl_uid; (** for which function *)
+	mutable fst_run: bool;
 	mutable rerun: State.t list; (** states that need to be rerun *)
 	tbl: st_tbl
 }
