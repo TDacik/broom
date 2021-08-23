@@ -605,12 +605,11 @@ let exec_fnc fnc_tbl f =
       let run1 = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) in
       if Config.rerun () && bb_tbl.rerun!=[]
       then (
-        let init_curr = (List.hd init_states).curr in
-        (* let init_miss = (List.hd init_states).miss in *)
+        let init_s = (List.hd init_states) in
         let add_curr s =
           (* if init_miss=s.miss
             then None else *)
-            (* Some *) {miss = s.miss; curr = init_curr; lvars = s.lvars; through_loop = false}
+            (* Some *) {miss = s.miss; curr = init_s.curr; lvars = CL.Util.list_diff s.lvars (CL.Util.get_fnc_args fuid); through_loop = false}
         in
 
         let rerun_states = List.map add_curr bb_tbl.rerun in
