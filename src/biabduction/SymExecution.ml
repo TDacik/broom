@@ -606,16 +606,17 @@ let exec_fnc fnc_tbl f =
       if Config.rerun () && bb_tbl.rerun!=[]
       then (
         let init_curr = (List.hd init_states).curr in
-        let init_miss = (List.hd init_states).miss in
+        (* let init_miss = (List.hd init_states).miss in *)
         let add_curr s =
-          if init_miss=s.miss
-            then None else
-            Some {miss = s.miss; curr = init_curr; lvars = s.lvars; through_loop = false}
+          (* if init_miss=s.miss
+            then None else *)
+            (* Some *) {miss = s.miss; curr = init_curr; lvars = s.lvars; through_loop = false}
         in
 
-        let rerun_states = List.filter_map add_curr bb_tbl.rerun in
+        let rerun_states = List.map add_curr bb_tbl.rerun in
         StateTable.reset bb_tbl; bb_tbl.fst_run <- false;
         print_endline (">>> executing reruns for function "^fnc_decl_str^":");
+        CL.Util.print_list_endline State.to_string rerun_states;
         run1 @ exec_block fnc_tbl bb_tbl rerun_states (List.hd f.cfg) )
       else run1
     with
