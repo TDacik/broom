@@ -13,8 +13,9 @@ type st_value = {
 type st_tbl = (cl_uid, st_value) Hashtbl.t
 
 type t = {
-    fuid: cl_uid; (** for which function *)
-    tbl: st_tbl
+	fuid: cl_uid; (** for which function *)
+	mutable rerun: State.t list; (** states that need to be rerun *)
+	tbl: st_tbl
 }
 
 exception EntailmentLimit
@@ -25,5 +26,8 @@ val create : cl_uid -> t
     runs, where [uid] is basic block at the beginning of which we add [states]
  *)
 val add : t -> cl_uid -> State.t list -> State.t list
+
+(** [add_rerun tbl states] adds [states] states which need to be rerun *)
+val add_rerun : t -> State.t -> unit
 
 val reset : t -> unit

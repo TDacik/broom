@@ -6,9 +6,14 @@ type t = {
     miss: Formula.t;
     curr: Formula.t;
     lvars: variable list;
+    through_loop: bool;
 }
 
-let empty = {miss = Formula.empty; curr = Formula.empty; lvars = []}
+let empty = {
+  miss = Formula.empty;
+  curr = Formula.empty;
+  lvars = [];
+  through_loop = false}
 
 let to_string state =
   "EXISTS: " ^ Formula.lvariables_to_string state.lvars
@@ -29,7 +34,7 @@ let init fuid =
   in
   let pi = List.map get_anchor (CL.Util.get_anchors fuid) in
   let f = {Formula.sigma = []; pi = pi} in
-  {miss = f; curr = f; lvars = []}
+  {miss = f; curr = f; lvars = []; through_loop = false}
 
 (* check if main is called with int argc and char **argv *)
 (* TODO warnings handling *)
@@ -78,7 +83,7 @@ let init_main fuid =
       let new_f =
         {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
         sigma = sig_add :: anchor_state.miss.sigma} in
-      let s = {miss = new_f; curr = new_f; lvars = [new_var]} in
+      let s = {miss = new_f; curr = new_f; lvars = [new_var]; through_loop = false} in
       print s; s)
   | _ -> Config.prerr_warn  "'main' takes only zero or two arguments";
     init fuid (* handling as with an ordinary function *)
@@ -98,9 +103,10 @@ let remove_equiv_vars gvars evars s =
       let curr1 = Formula.substitute a eq_vars_ex state.curr in
       let miss1 = Formula.substitute a eq_vars_ex state.miss in
       let lvars1 = List.filter (notmem eq_vars_ex) state.lvars in
-      rename_eqviv_vars todo_evars {miss=miss1; curr=curr1; lvars=lvars1}
+      rename_eqviv_vars todo_evars {miss=miss1; curr=curr1; lvars=lvars1; through_loop = state.through_loop}
   in
   let s_rename = rename_eqviv_vars evars s in
   {miss= {pi = Formula.remove_redundant_eq s_rename.miss.pi; sigma = s_rename.miss.sigma};
   curr= {pi = Formula.remove_redundant_eq s_rename.curr.pi; sigma = s_rename.curr.sigma};
-  lvars=s_rename.lvars}
+  lvars=s_rename.lvars;
+  through_loop = s_rename.through_loop}

@@ -157,7 +157,8 @@ let substate solver fixed_vars state =
   let all_vars = List.filter_map get_lvar (curr_vars) in
   {State.miss = new_miss;
    curr = new_curr;
-   lvars = all_vars}
+   lvars = all_vars;
+   through_loop = state.through_loop}
 
 
 (* SIMPLIFY *)

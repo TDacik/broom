@@ -77,7 +77,11 @@ let verbose = 0xD
 
 (* --main=<name> set name of entry function - initializing global variables and
    expecting 0 or 2 arguments (argv, argc) *)
-let main = "main"
+let main () = "main"
+
+(* if true summery of function will be rerun when abstraction happend or go
+   through the loops *)
+let rerun () = true
 
 (* --oom / --out-of-memory unsuccesful heap allocation *)
 let oom = false

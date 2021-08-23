@@ -89,7 +89,7 @@ let apply_contract solver state c pvars =
 	    let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
 	    let splited_rhs=split_contract_rhs c.rhs rec_splits in
 	    let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in	    
-	    {miss=missing; curr=current; lvars=(state.lvars @ l_vars)} 
+	    {miss=missing; curr=current; lvars=(state.lvars @ l_vars); through_loop = state.through_loop}
 	in
 	let res=List.map process_abd_result abd_result in
     	CAppOk res
@@ -170,6 +170,7 @@ let rec post_contract_application_vars state pvarmap seed pvars=
       let new_state={ curr=new_curr;
           miss= new_miss;
           lvars=new_lvars @ [new_var];
+          through_loop = state.through_loop
         } in
       (post_contract_application_vars new_state rest (new_var+1) pvars)
 
@@ -189,7 +190,8 @@ let post_contract_application state solver pvarmap pvars =
   let final_state={
     miss=step1.miss;
     curr=(* Simplify.remove_freed_and_invalid_parts solver  *)step1.curr;
-    lvars=new_lvars} in
+    lvars=new_lvars;
+    through_loop = step1.through_loop} in
   (* check that both parts of the resulting state are satisfiable *)
   let sat_query_curr=formula_to_solver solver.ctx final_state.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_state.miss in
@@ -249,7 +251,8 @@ let rec state2contract ?(status=Contract.OK) s cvar =
       let new_s = {
         miss = substitute_vars_cvars (CVar new_cvar) (Var var) s.miss;
         curr = substitute_vars_cvars (CVar new_cvar) (Var var) s.curr;
-        lvars = tl} in
+        lvars = tl;
+        through_loop = s.through_loop} in
       state2contract ~status:status new_s new_cvar
 
 (* substitue gvars used (new_rhs <> c.rhs) in function of contract c and add
@@ -263,12 +266,25 @@ let rec add_gvars_moves gvars c =
     else {Contract.lhs = c.lhs; rhs = new_rhs; cvars = new_cvar; pvarmap = (gvar,new_cvar)::c.pvarmap; s = c.s} in
 	(add_gvars_moves tl new_c)
 
+(* check for abstract object in precondition and through_loop=true *)
+(* FIXME more lvars than used *)
+let rec check_rerun tbl sts =
+  match sts with
+  | [] -> []
+  | s::tl ->
+    if (s.through_loop=true || is_abstract s.miss) && s.miss!=Formula.empty
+    then (
+      let re_s = {miss = s.miss; curr = Formula.empty; lvars = s.lvars; through_loop = false} in
+      StateTable.add_rerun tbl re_s;
+      tl )
+    else s::(check_rerun tbl tl)
+
 
 (* note: error from call of error() *)
 
-let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl states fuid insn =
+let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states insn =
   print_endline ">>> final error contract";
-  let fixed = (CL.Util.get_anchors_uid fuid) @ CL.Util.stor.global_vars in
+  let fixed = (CL.Util.get_anchors_uid bb_tbl.StateTable.fuid) @ CL.Util.stor.global_vars in
   let get_err_contract s =
     let (removed_sigma,new_miss) = Simplify.formula solver fixed s.miss in
     if (removed_sigma) then
@@ -282,13 +298,15 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl states fuid insn
     let s_err =
       {miss = new_miss;
       curr = Formula.empty(* {pi = [Exp.Const (Bool false)]; sigma = []} *);
-      lvars = removed_vars} in
+      lvars = removed_vars;
+      through_loop = s.through_loop} in
     let c_err = state2contract ~status:Error s_err 0 in
     Contract.print c_err;
     c_err
   in
-  let c_errs = List.map get_err_contract states in
-  SpecTable.add fnc_tbl fuid c_errs
+  let fin_states = if Config.rerun () then check_rerun bb_tbl states else states in
+  let c_errs = List.map get_err_contract fin_states in
+  SpecTable.add fnc_tbl bb_tbl.fuid c_errs
 
 let set_fnc_unfinished_contract fnc_tbl fuid =
   print_endline ">>> final unfinished contract";
@@ -300,11 +318,11 @@ let set_fnc_unfinished_contract fnc_tbl fuid =
    value of gvars
    gvars - global variables (may appear after calling function)
    tmp_vars - local program variables *)
-let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid insn =
+let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states insn =
   print_endline ">>> final contract";
-  let anchors = CL.Util.get_anchors_uid fuid in
+  let anchors = CL.Util.get_anchors_uid bb_tbl.StateTable.fuid in
   let gvars = CL.Util.stor.global_vars in
-  let fvars = CL.Util.get_fnc_vars fuid in
+  let fvars = CL.Util.get_fnc_vars bb_tbl.fuid in
   let tmp_vars = CL.Util.list_diff fvars gvars in
   print_string "PVARS:";
   CL.Util.print_list Exp.variable_to_string fvars; print_newline ();
@@ -313,11 +331,13 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid ins
   print_string "GVARS:";
   CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
 
+  let fin_states = if Config.rerun () then check_rerun bb_tbl states else states in
+
   let memcheck_gvars = (
     if (Config.exit_leaks ()) then
-      let fname = CL.Printer.get_fnc_name (CL.Util.get_fnc fuid) in
+      let fname = CL.Printer.get_fnc_name (CL.Util.get_fnc bb_tbl.fuid) in
       match status with
-      | OK when fname = Config.main -> [] (* report memory leaks for static vars *)
+      | OK when fname = Config.main () -> [] (* report memory leaks for static vars *)
       | Aborted -> [] (* report memory leaks for static vars *)
       | _ -> gvars
     else gvars ) in
@@ -327,7 +347,8 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid ins
       let nostack_s = {
         miss = s.miss;
         curr = Simplify.remove_stack ~replaced:true solver s.curr;
-        lvars = removed_vars} in
+        lvars = removed_vars;
+        through_loop = s.through_loop} in
       try
         let subs = Simplify.state solver fixed nostack_s in
         State.print subs;
@@ -338,23 +359,23 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl states fuid ins
         Contract.print new_c;
         Some new_c
       with Simplify.RemovedSpatialPartFromMiss -> (
-        set_fnc_error_contract solver fnc_tbl [nostack_s] fuid insn;
+        set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
         None
       )
   in
-  let fnc_c = List.filter_map get_contract states in
-  SpecTable.add fnc_tbl fuid fnc_c
+  let fnc_c = List.filter_map get_contract fin_states in
+  SpecTable.add fnc_tbl bb_tbl.fuid fnc_c
 
 
 (* NEW STATES *)
 
 (* if contracts not empty, applay each contract on each state for instruction
   [insn] *)
-let new_states_for_insn empty_is_err solver tbl fuid insn states c =
+let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
   (* Applay each contract on each state *)
   let empty_is_err_ref = ref empty_is_err in
   let rec apply_contracts_on_states states contracts =
-    let pvars = CL.Util.get_pvars fuid in
+    let pvars = CL.Util.get_pvars bb_tbl.StateTable.fuid in
     match states with
     | [] -> []
     | s::tl ->
@@ -374,17 +395,17 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
                 match c.s with
                 | OK | Unfinished -> simple_a::(process_new_states atl)
                 | Error ->
-                  set_fnc_error_contract ~status:c.s solver tbl [simple_a] fuid insn;
+                  set_fnc_error_contract ~status:c.s solver tbl bb_tbl [simple_a] insn;
                   empty_is_err_ref := false;
                   process_new_states atl
                 | Aborted ->
-                  set_fnc_contract ~status:c.s solver tbl [simple_a] fuid insn;
+                  set_fnc_contract ~status:c.s solver tbl bb_tbl [simple_a] insn;
                   empty_is_err_ref := false;
                   process_new_states atl
 
               with Simplify.RemovedSpatialPartFromMiss -> (
                 State.print a;
-                set_fnc_error_contract solver tbl [s] fuid insn;
+                set_fnc_error_contract solver tbl bb_tbl [s] insn;
                 process_new_states atl
               )
           in (* end of process_new_states *)
@@ -405,7 +426,7 @@ let new_states_for_insn empty_is_err solver tbl fuid insn states c =
     let new_states = apply_contracts_on_states states c in
     if (!empty_is_err_ref && new_states = []) then (
       (* error appears, continue with empty states *)
-      set_fnc_error_contract solver tbl states fuid insn;[])
+      set_fnc_error_contract solver tbl bb_tbl states insn;[])
     else new_states
   )
 
@@ -420,7 +441,7 @@ let try_abstraction_on_states solver fuid states =
     | s::tl ->
       let new_miss = Abstraction.lseg_abstraction solver s.miss pvars in
       let new_curr = Abstraction.lseg_abstraction solver s.curr pvars in
-      let abstract_state = {miss = new_miss; curr = new_curr; lvars=s.lvars} in
+      let abstract_state = {miss = new_miss; curr = new_curr; lvars=s.lvars; through_loop = s.through_loop} in
       (* TODO: update lvars *)
       abstract_state :: (try_abstraction tl)
   in
@@ -463,7 +484,7 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
 
 and exec_insn tbl bb_tbl states insn =
   let get_new_states ?(empty_is_err=true) c =
-    new_states_for_insn empty_is_err solver tbl bb_tbl.StateTable.fuid insn states c
+    new_states_for_insn empty_is_err solver tbl bb_tbl insn states c
   in
   let abstract_if_end_loop bb_uid ss =
     if (CL.Util.is_loop_closing_block bb_uid insn)
@@ -488,9 +509,9 @@ and exec_insn tbl bb_tbl states insn =
   | InsnRET _ ->
     let c = Contract.get_contract insn in
     let new_states = get_new_states c in
-    set_fnc_contract solver tbl new_states bb_tbl.fuid insn; []
+    set_fnc_contract solver tbl bb_tbl new_states insn; []
   | InsnABORT ->
-    set_fnc_contract ~status:Aborted solver tbl states bb_tbl.fuid insn;
+    set_fnc_contract ~status:Aborted solver tbl bb_tbl states insn;
     []
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
@@ -519,7 +540,7 @@ let exec_zeroinitializer _(* fuid *) s (uid, var) =
     let pi_add = Exp.BinOp (Peq, Var uid, exp) in
     {miss = s.miss;
     curr = {pi=pi_add::s.curr.pi; sigma=s.curr.sigma};
-    lvars = s.lvars}
+    lvars = s.lvars; through_loop = s.through_loop}
   in
   let typ_code = CL.Util.get_type_code var.CL.Var.typ in
   match typ_code with
@@ -574,11 +595,22 @@ let exec_fnc fnc_tbl f =
     let bb_tbl = StateTable.create fuid in (* for states on basic block entry *)
     let fname = CL.Printer.get_fnc_name f in
     let init_states =
-      if fname = Config.main
+      if fname = Config.main ()
       then init_state_main fnc_tbl bb_tbl
       else (State.init fuid)::[] in
     let states = (try
-      exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg)
+      let run1 = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) in
+      if Config.rerun () && bb_tbl.rerun!=[]
+      then (
+        let init_curr = (List.hd init_states).curr in
+        let add_curr s =
+          {miss = s.miss; curr = init_curr; lvars = s.lvars; through_loop = s.through_loop}
+        in
+
+        let rerun_states = List.map add_curr bb_tbl.rerun in
+        print_endline (">>> executing reruns for function "^fnc_decl_str^":");
+        run1 @ exec_block fnc_tbl bb_tbl rerun_states (List.hd f.cfg) )
+      else run1
     with
       | StateTable.EntailmentLimit ->
         Config.prerr_internal "Limit reached (increase 'entailment_limit')";

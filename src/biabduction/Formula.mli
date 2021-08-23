@@ -114,6 +114,9 @@ val disjoint_union : t -> t -> t
 (** [is_invalid pi] returns true, if [pi] contains Invalid predicate *)
 val is_invalid : pi -> bool
 
+(** [is_abstract f] returns true, if [f.sigma] contains abstract predicates *)
+val is_abstract : t -> bool
+
 (** {3 Find all variables in formula} *)
 
 (** [find_and_remove_var_pointsto obj sigma cvars] returns variable pointed to

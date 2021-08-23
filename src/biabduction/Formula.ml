@@ -268,6 +268,15 @@ let rec is_invalid pi =
   | Exp.UnOp (Invalid,_)::_ -> true
   | _::tl -> is_invalid tl
 
+let rec is_sigma_abstract sigma =
+  match sigma with
+  | [] -> false
+  | Slseg (_,_,_)::_ -> true
+  | Dlseg (_,_,_,_,_)::_ -> true
+  | _::tl -> is_sigma_abstract tl
+
+let is_abstract f = is_sigma_abstract f.sigma
+
 (*** FIND ALL VARIABLES IN FORMULA ***)
 
 (* returns: ptr new_sigma new_cvars *)
