@@ -23,6 +23,12 @@ let to_string state =
 let print state =
   print_endline (to_string state)
 
+let set_through_loop s = {
+  miss = s.miss;
+  curr = s.curr;
+  lvars = s.lvars;
+  through_loop = true}
+
 (* gets unique variable uid for function defined by fuid *)
 let get_fresh_lvar fuid lvars =
   (CL.Util.list_max_positive ((CL.Util.get_pvars fuid) @ lvars)) + 1

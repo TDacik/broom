@@ -60,7 +60,7 @@ let add st uid states =
 			let new_states = entailment_states old_states states in
 			let value = {cnt=(old_cnt + 1); states=(old_states @ new_states)} in
 			Hashtbl.replace st.tbl uid value;
-			new_states )
+			List.map State.set_through_loop new_states )
 
 let add_rerun st state = st.rerun <- state::st.rerun
 
