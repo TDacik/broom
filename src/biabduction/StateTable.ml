@@ -48,7 +48,7 @@ let add st uid states =
 	let found = Hashtbl.find_opt st.tbl uid in
 	match found with
 	| None -> (* first entry *)
-		Hashtbl.add st.tbl uid {cnt=0; states=states}; states
+		Hashtbl.add st.tbl uid {cnt=1; states=states}; states
 	| Some {cnt=old_cnt; states=old_states} ->
 		if (Config.entailment_limit () = old_cnt) then (
 			prerr_endline ">>> entailment_check: limit";

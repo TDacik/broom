@@ -105,7 +105,7 @@ let abstract_on_call_done = false
    else on each basic block entry *)
 let entailment_on_loop_edges_only = false
 
-(* max number of entailment calls for one loop *)
+(* max number of entailment calls for one loop : 0 - no limit *)
 let entailment_limit () = 5
 
 (* Abduction strategy: 0 - single strategy = one result,
