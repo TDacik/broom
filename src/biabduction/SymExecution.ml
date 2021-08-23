@@ -268,16 +268,14 @@ let rec add_gvars_moves gvars c =
 
 (* check for abstract object in precondition and through_loop=true *)
 (* FIXME more lvars than used *)
-let rec check_rerun tbl sts =
-  match sts with
-  | [] -> []
-  | s::tl ->
-    if (s.through_loop=true || is_abstract s.miss) && s.miss!=Formula.empty
-    then (
-      let re_s = {miss = s.miss; curr = Formula.empty; lvars = s.lvars; through_loop = false} in
-      StateTable.add_rerun tbl re_s;
-      tl )
-    else s::(check_rerun tbl tl)
+let check_rerun tbl s =
+  if Config.rerun () && tbl.StateTable.fst_run &&
+    (s.through_loop=true || is_abstract s.miss) && s.miss!=Formula.empty
+  then (
+    let re_s = {miss = s.miss; curr = Formula.empty; lvars = s.lvars; through_loop = false} in
+    StateTable.add_rerun tbl re_s;
+    None )
+  else Some s
 
 
 (* note: error from call of error() *)
@@ -300,14 +298,16 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
       curr = Formula.empty(* {pi = [Exp.Const (Bool false)]; sigma = []} *);
       lvars = removed_vars;
       through_loop = s.through_loop} in
-    let c_err = state2contract ~status:Error s_err 0 in
-    Contract.print c_err;
-    c_err
+
+    let check = if not removed_sigma then check_rerun bb_tbl s_err else Some s_err in
+    match (check) with
+    | None -> None
+    | Some check_s ->
+      let c_err = state2contract ~status:Error check_s 0 in
+      Contract.print c_err;
+      Some c_err
   in
-  let fin_states = if Config.rerun () && bb_tbl.fst_run
-    then check_rerun bb_tbl states
-    else states in
-  let c_errs = List.map get_err_contract fin_states in
+  let c_errs = List.filter_map get_err_contract states in
   SpecTable.add fnc_tbl bb_tbl.fuid c_errs
 
 let set_fnc_unfinished_contract fnc_tbl fuid =
@@ -333,10 +333,6 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
   print_string "GVARS:";
   CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
 
-  let fin_states = if Config.rerun () && bb_tbl.fst_run
-    then check_rerun bb_tbl states
-    else states in
-
   let memcheck_gvars = (
     if (Config.exit_leaks ()) then
       let fname = CL.Printer.get_fnc_name (CL.Util.get_fnc bb_tbl.fuid) in
@@ -353,21 +349,24 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         curr = Simplify.remove_stack ~replaced:true solver s.curr;
         lvars = removed_vars;
         through_loop = s.through_loop} in
-      try
-        let subs = Simplify.state solver fixed nostack_s in
-        State.print subs;
-        if (is_invalid subs.curr.pi) then
-          Config.prerr_warn "function returns address of local variable";
-        let c = state2contract ~status:status subs 0 in
-        let new_c = add_gvars_moves gvars c in
-        Contract.print new_c;
-        Some new_c
-      with Simplify.RemovedSpatialPartFromMiss -> (
-        set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
-        None
-      )
+      match (check_rerun bb_tbl nostack_s) with
+      | None -> None
+      | Some check_s ->
+        try
+          let subs = Simplify.state solver fixed check_s in
+          State.print subs;
+          if (is_invalid subs.curr.pi) then
+            Config.prerr_warn "function returns address of local variable";
+          let c = state2contract ~status:status subs 0 in
+          let new_c = add_gvars_moves gvars c in
+          Contract.print new_c;
+          Some new_c
+        with Simplify.RemovedSpatialPartFromMiss -> (
+          set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
+          None
+        )
   in
-  let fnc_c = List.filter_map get_contract fin_states in
+  let fnc_c = List.filter_map get_contract states in
   SpecTable.add fnc_tbl bb_tbl.fuid fnc_c
 
 
@@ -607,11 +606,15 @@ let exec_fnc fnc_tbl f =
       if Config.rerun () && bb_tbl.rerun!=[]
       then (
         let init_curr = (List.hd init_states).curr in
+        let init_miss = (List.hd init_states).miss in
         let add_curr s =
-          {miss = s.miss; curr = init_curr; lvars = s.lvars; through_loop = s.through_loop}
+          if init_miss=s.miss
+            then None else
+            Some {miss = s.miss; curr = init_curr; lvars = s.lvars; through_loop = false}
         in
 
-        let rerun_states = List.map add_curr bb_tbl.rerun in
+        let rerun_states = List.filter_map add_curr bb_tbl.rerun in
+        StateTable.reset bb_tbl; bb_tbl.fst_run <- false;
         print_endline (">>> executing reruns for function "^fnc_decl_str^":");
         run1 @ exec_block fnc_tbl bb_tbl rerun_states (List.hd f.cfg) )
       else run1
