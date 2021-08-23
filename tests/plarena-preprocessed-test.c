@@ -16,6 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define TEST
+
+
 ////////////////////////////////////////////////////////////////////
 // NSPR types (for x86_64 linux)
 

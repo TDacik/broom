@@ -45,11 +45,58 @@ let close_lambda lambda =
 		| _ :: rest -> get_blocks rest
 	in
 	let blocks=get_blocks lambda.form.sigma in 
+	(* sort the block od points-to predicates *)
+	let order_in_block b1 b2 =
+		match b1,b2 with
+		| (Hpointsto (a,_,_)), (Hpointsto (b,_,_)) ->
+			let query=[BitVector.mk_slt ctx (expr_to_solver_only_exp ctx z3_names a) (expr_to_solver_only_exp ctx z3_names b)] in
+			if (Solver.check solv query)=SATISFIABLE
+			then -1
+			else 1
+	in
+	let sorted_blocks=List.map (List.sort order_in_block) blocks in
+	(* close blocks by missing pointsto *)
+	let close_block block =
+		(* first check that there is no space before the first points-to *)
+		let beg=match List.nth block 0 with
+			| (Hpointsto (a,_,_)) -> a
+		in
+		let base_beg=(Expr.mk_app ctx z3_names.base [expr_to_solver_only_exp ctx z3_names beg]) in
+		let query_beg=[Boolean.mk_not ctx 
+				(Boolean.mk_eq ctx 
+				(expr_to_solver_only_exp ctx z3_names beg) 
+				base_beg)]
+		in
+		let res1= if (Solver.check solv query_beg)=UNSATISFIABLE 
+			then []
+			else [Hpointsto (UnOp ( Base, beg),(BinOp (Pminus, beg, UnOp ( Base, beg))) ,Undef)]
+		in
+		(* check that there is no space after the last points-to *)
+		let fin=match List.nth block ((List.length block)-1) with
+			| (Hpointsto (a,b,_)) -> Exp.BinOp (Pplus, a, b)
+		in
+		let query_beg=[Boolean.mk_not ctx 
+				(Boolean.mk_eq ctx 
+				(Expr.mk_app ctx z3_names.len [base_beg])
+				(expr_to_solver_only_exp ctx z3_names fin))] 
+				
+		in
+		let res2= if (Solver.check solv query_beg)=UNSATISFIABLE 
+			then []
+			else [Hpointsto (fin,(BinOp (Pminus, UnOp(Len, UnOp(Base,beg) ), fin)) ,Undef)]
+		in
+
+
+		res1@block@res2
+					
+	in
+	let closed_blocks=List.map close_block sorted_blocks in
+
 	let rec print_blocks bl =
 		match bl with
 		| [] -> print_endline "END"
 		| first::rest -> print_string "BLOCK:"; print {sigma=first; pi=[]}; print_blocks rest
 	in
-	print_blocks blocks;
+	print_blocks closed_blocks;
 	lambda
 
