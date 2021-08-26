@@ -69,27 +69,86 @@ let close_lambda lambda =
 		in
 		let res1= if (Solver.check solv query_beg)=UNSATISFIABLE 
 			then []
-			else [Hpointsto (UnOp ( Base, beg),(BinOp (Pminus, beg, UnOp ( Base, beg))) ,Undef)]
+			else (
+				let size=(Exp.BinOp (Pminus, beg, UnOp ( Base, beg))) in
+				let size2=
+					match (try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=[]} size) with
+					| None -> size
+					| Some a -> Exp.Const (Int a)
+      				in
+
+				[Hpointsto (UnOp ( Base, beg),size2 ,Undef)]
+			)
 		in
+		(* check that there is no space between particular pointsto *)
+		let check_intermediate index =
+			let p1,p2=match (List.nth block index),(List.nth block (index+1)) with
+				| (Hpointsto (a,l,_)),(Hpointsto (b,_,_)) ->  (Exp.BinOp (Pplus, a, l)),b
+			in
+			let query=[Boolean.mk_not ctx 
+				(Boolean.mk_eq ctx 
+				(expr_to_solver_only_exp ctx z3_names p1)
+				(expr_to_solver_only_exp ctx z3_names p2))]
+			in
+			if (Solver.check solv query)=SATISFIABLE
+			then (
+				let size=(Exp.BinOp (Pminus, p2, p1 )) in
+				let size2=
+					match (try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=[]} size) with
+					| None -> size
+					| Some a -> Exp.Const (Int a)
+      				in
+				[Hpointsto (p1,size2 ,Undef)]
+			     )
+			else []
+		in
+		let rec close_intermediate index =
+			if index=((List.length block)-1) 
+			then []
+			else (check_intermediate index)@ close_intermediate (index+1)
+		in
+		
+
+
+
 		(* check that there is no space after the last points-to *)
 		let fin=match List.nth block ((List.length block)-1) with
 			| (Hpointsto (a,b,_)) -> Exp.BinOp (Pplus, a, b)
 		in
 		let query_beg=[Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx 
-				(Expr.mk_app ctx z3_names.len [base_beg])
+				(BitVector.mk_add ctx base_beg (Expr.mk_app ctx z3_names.len [base_beg]))
 				(expr_to_solver_only_exp ctx z3_names fin))] 
 				
 		in
 		let res2= if (Solver.check solv query_beg)=UNSATISFIABLE 
 			then []
-			else [Hpointsto (fin,(BinOp (Pminus, UnOp(Len, UnOp(Base,beg) ), fin)) ,Undef)]
+			else (
+				let size_to_end=(Exp.BinOp (Pminus, UnOp(Len, UnOp(Base,beg)), BinOp(Pminus,fin,UnOp(Base,beg)))) in
+				let size_to_end2=
+					match (try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=[]} size_to_end) with
+					| None -> size_to_end
+					| Some a -> Exp.Const (Int a)
+      				in
+
+
+			[Hpointsto (fin,size_to_end2,Undef)]
+			)
 		in
-
-
-		res1@block@res2
+		res1@block@(close_intermediate 0)@res2
 					
 	in
+	(* get slseg/dlseg from the original lambda *)
+	let rec get_lseg sigma =
+		match sigma with
+		| [] -> []
+		| (Slseg (a,b,c))::rest -> (Slseg (a,b,c)) :: get_lseg rest
+		| (Dlseg (a,b,c,d,e)):: rest -> (Dlseg (a,b,c,d,e)) :: get_lseg rest
+		| _::rest -> (* we drop pointsto *)
+			get_lseg rest
+	in
+
+
 	let closed_blocks=List.map close_block sorted_blocks in
 
 	let rec print_blocks bl =
@@ -98,5 +157,6 @@ let close_lambda lambda =
 		| first::rest -> print_string "BLOCK:"; print {sigma=first; pi=[]}; print_blocks rest
 	in
 	print_blocks closed_blocks;
-	lambda
+	let res_form={sigma=(List.concat closed_blocks)@(get_lseg lambda.form.sigma); pi=lambda.form.pi} in
+	{form=res_form; param=lambda.param}
 

@@ -113,11 +113,12 @@ print_endline ("state_ren: " ^ (State.to_string state_ren));
 
 
 let () = 
+	let size4=Exp.Const (Exp.Int (Int64.of_int 4)) in
 	let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8)) in
-	(* let ptr_size2=Exp.Const (Exp.Int (Int64.of_int 16)) in *)
+	let ptr_size2=Exp.Const (Exp.Int (Int64.of_int 16)) in 
 	let solv=config_solver () in
 	 print_string "ahoj";
-	 (* let form1 =
+	 let form1 =
 	    let lambda= {param=[1;2;3] ;form={
 	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ];
 		pi=[BinOp ( Peq, Var 1, UnOp ( Base, Var 1));BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 16)));] }}
@@ -152,7 +153,9 @@ let () =
 	    }
 	 in
 	 let form_empty={sigma=[];pi=[]} in
+
 	 let form4={sigma=[Hpointsto (Var 11, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 11, ptr_size), ptr_size, Var 3)];pi=[]} in
+	 
 	 let form5=
 	    let lambda= {param=[1;2;3] ;form={
 	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ];
@@ -233,7 +236,7 @@ let () =
 		 ]
 
 	    }
-	 in *)
+	 in 
 	 let form9=
 	    let lambda= {param=[1;2;3] ;form={
 	      	sigma = [ Hpointsto (Var 1, ptr_size, Var 2); Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3)  ];
@@ -254,17 +257,43 @@ let () =
 
 	    }
 	 in
+	 let form10=
+	       {
+   		 sigma = [ Hpointsto (Var 1, ptr_size, Var 40);
+		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size), ptr_size, Var 3);
+		 	Hpointsto (BinOp ( Pplus, Var 1, ptr_size2), ptr_size, Var 10);
+			Hpointsto (Var 3, ptr_size, Var 1);
+			Hpointsto (Var 10, ptr_size, Var 1);
+			Hpointsto (BinOp ( Pplus, Var 10, ptr_size), ptr_size, Var 11);
+		 	Hpointsto (BinOp ( Pplus, Var 10, ptr_size2), ptr_size, Var 20);
+		 	Hpointsto (Var 11, ptr_size, Var 10);
+			Hpointsto (Var 40, ptr_size, Var 41);
+			];
+		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
+		 BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 24)));
+		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
+		 BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 24)));
+		 BinOp ( Peq, Var 40, UnOp ( Base, Var 40));
+		 BinOp ( Peq, Var 3, BinOp(Pplus, UnOp ( Base, Var 3), ptr_size));
+		 BinOp ( Peq, UnOp ( Len, Var 3), Const (Int (Int64.of_int 8)));
+		 BinOp ( Peq, Var 11,  BinOp(Pplus, UnOp ( Base, Var 11), ptr_size));
+		 BinOp ( Peq, UnOp ( Len, Var 11), Const (Int (Int64.of_int 8)));
+		 ]
+
+	    }
+	 in
+
 
 	(*let x=biabduction solv form3 form1 [10] in
 	match x with
 	| Bok (x1,x2,_) ->
 		print_with_lambda x1; print_string "************\n";
 		print_with_lambda x2; *)
-	let form_to_process=form9 in
+	let form_to_process=form10 in
 	 print_with_lambda form_to_process;
 
 	Z3.Solver.add solv.solv (formula_to_solver solv.ctx form_to_process);
-	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 0 2 [1] in
+	 let res=Abstraction.try_abstraction_to_lseg solv form_to_process 4 0 [10] in
 	 match res with
 	 | AbstractionApply x -> print_with_lambda x
 	 | _ -> ()
