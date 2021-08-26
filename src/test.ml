@@ -270,9 +270,9 @@ let () =
 			Hpointsto (Var 40, ptr_size, Var 41);
 			];
 		 pi = [BinOp ( Peq, Var 1, UnOp ( Base, Var 1));
-		 BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 24)));
+		 BinOp ( Peq, UnOp ( Len, Var 1), Const (Int (Int64.of_int 32)));
 		 BinOp ( Peq, Var 10, UnOp ( Base, Var 10));
-		 BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 24)));
+		 BinOp ( Peq, UnOp ( Len, Var 10), Const (Int (Int64.of_int 32)));
 		 BinOp ( Peq, Var 40, UnOp ( Base, Var 40));
 		 BinOp ( Peq, Var 3, BinOp(Pplus, UnOp ( Base, Var 3), ptr_size));
 		 BinOp ( Peq, UnOp ( Len, Var 3), Const (Int (Int64.of_int 8)));

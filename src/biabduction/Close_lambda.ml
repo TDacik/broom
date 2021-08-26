@@ -9,6 +9,8 @@ open Formula
 open Z3wrapper
 open Z3
 
+exception Error_in_lambda_closing
+
 let close_lambda lambda =
 	print_endline "Closing lambda:";
 	print_with_lambda lambda.form;
@@ -50,9 +52,12 @@ let close_lambda lambda =
 		match b1,b2 with
 		| (Hpointsto (a,_,_)), (Hpointsto (b,_,_)) ->
 			let query=[BitVector.mk_slt ctx (expr_to_solver_only_exp ctx z3_names a) (expr_to_solver_only_exp ctx z3_names b)] in
-			if (Solver.check solv query)=SATISFIABLE
-			then -1
-			else 1
+			(match (Solver.check solv query) with
+			| SATISFIABLE -> -1
+			| UNSATISFIABLE -> 1
+			| _ -> raise Error_in_lambda_closing
+			)
+		| _ -> raise Error_in_lambda_closing
 	in
 	let sorted_blocks=List.map (List.sort order_in_block) blocks in
 	(* close blocks by missing pointsto *)
@@ -60,6 +65,7 @@ let close_lambda lambda =
 		(* first check that there is no space before the first points-to *)
 		let beg=match List.nth block 0 with
 			| (Hpointsto (a,_,_)) -> a
+			| _ -> raise Error_in_lambda_closing
 		in
 		let base_beg=(Expr.mk_app ctx z3_names.base [expr_to_solver_only_exp ctx z3_names beg]) in
 		let query_beg=[Boolean.mk_not ctx 
@@ -67,9 +73,9 @@ let close_lambda lambda =
 				(expr_to_solver_only_exp ctx z3_names beg) 
 				base_beg)]
 		in
-		let res1= if (Solver.check solv query_beg)=UNSATISFIABLE 
-			then []
-			else (
+		let res1= match (Solver.check solv query_beg) with
+			| UNSATISFIABLE -> []
+			| SATISFIABLE ->
 				let size=(Exp.BinOp (Pminus, beg, UnOp ( Base, beg))) in
 				let size2=
 					match (try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=[]} size) with
@@ -78,20 +84,21 @@ let close_lambda lambda =
       				in
 
 				[Hpointsto (UnOp ( Base, beg),size2 ,Undef)]
-			)
+			| _ -> raise Error_in_lambda_closing
 		in
 		(* check that there is no space between particular pointsto *)
 		let check_intermediate index =
 			let p1,p2=match (List.nth block index),(List.nth block (index+1)) with
 				| (Hpointsto (a,l,_)),(Hpointsto (b,_,_)) ->  (Exp.BinOp (Pplus, a, l)),b
+				| _ -> raise Error_in_lambda_closing
 			in
 			let query=[Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx 
 				(expr_to_solver_only_exp ctx z3_names p1)
 				(expr_to_solver_only_exp ctx z3_names p2))]
 			in
-			if (Solver.check solv query)=SATISFIABLE
-			then (
+			match (Solver.check solv query) with
+			| SATISFIABLE ->
 				let size=(Exp.BinOp (Pminus, p2, p1 )) in
 				let size2=
 					match (try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=[]} size) with
@@ -99,8 +106,8 @@ let close_lambda lambda =
 					| Some a -> Exp.Const (Int a)
       				in
 				[Hpointsto (p1,size2 ,Undef)]
-			     )
-			else []
+			| UNSATISFIABLE -> []
+			| _ -> raise Error_in_lambda_closing
 		in
 		let rec close_intermediate index =
 			if index=((List.length block)-1) 
@@ -108,32 +115,28 @@ let close_lambda lambda =
 			else (check_intermediate index)@ close_intermediate (index+1)
 		in
 		
-
-
-
 		(* check that there is no space after the last points-to *)
 		let fin=match List.nth block ((List.length block)-1) with
 			| (Hpointsto (a,b,_)) -> Exp.BinOp (Pplus, a, b)
+			| _ -> raise Error_in_lambda_closing
 		in
-		let query_beg=[Boolean.mk_not ctx 
+		let query_fin=[Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx 
 				(BitVector.mk_add ctx base_beg (Expr.mk_app ctx z3_names.len [base_beg]))
 				(expr_to_solver_only_exp ctx z3_names fin))] 
 				
 		in
-		let res2= if (Solver.check solv query_beg)=UNSATISFIABLE 
-			then []
-			else (
+		let res2= match (Solver.check solv query_fin) with
+			| UNSATISFIABLE -> []
+			| SATISFIABLE ->
 				let size_to_end=(Exp.BinOp (Pminus, UnOp(Len, UnOp(Base,beg)), BinOp(Pminus,fin,UnOp(Base,beg)))) in
 				let size_to_end2=
 					match (try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} {sigma=[]; pi=[]} size_to_end) with
 					| None -> size_to_end
 					| Some a -> Exp.Const (Int a)
       				in
-
-
-			[Hpointsto (fin,size_to_end2,Undef)]
-			)
+				[Hpointsto (fin,size_to_end2,Undef)]
+			| _ -> raise Error_in_lambda_closing
 		in
 		res1@block@(close_intermediate 0)@res2
 					
