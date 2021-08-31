@@ -81,7 +81,7 @@ let main () = "main"
 
 (* if true summery of function will be rerun when abstraction happend or go
    through the loops *)
-let rerun () = true
+let rerun () = false
 
 (* --oom / --out-of-memory unsuccesful heap allocation *)
 let oom = false
@@ -118,6 +118,7 @@ let entailment_limit () = 5
 let abduction_strategy = 0
 
 (* Solver timeout (in miliseconds) : 0 - no timeout *)
-let solver_timeout = 1000
+let solver_timeout = 2000
 let solver_timeout_simplify = 100
+let solver_timeout_abstraction = 200
                    

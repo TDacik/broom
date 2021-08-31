@@ -8,6 +8,8 @@ open Z3wrapper
 
 exception ErrorInAbstraction of string
 
+exception Get_eq_base_TO
+
 (* since ocaml 4.12.0 there is __FUNCTION__ *)
 let to_hpointsto_unsafe hpred = match hpred with
   | Slseg _ | Dlseg _ -> raise (Invalid_argument "to_hpointsto_unsafe: Received list instead of points-to")
@@ -23,6 +25,8 @@ type res =
    skip --- a list of poinsto which are skipped within the test
    dir (in case of DLLs) -- 0: all, 1: from beginning, 2: from end (Hpointsto and Slseg are igneored)
 *) 
+
+(* in the case of solver timeout within get_eq_base, we raise an exception to avoid unsound result *)
 
 let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 	let ff = Boolean.mk_false ctx in
@@ -44,24 +48,60 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 	let query=[ 
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2])))
 	] in
-	let query_res=if (dir=2) then false else ((Solver.check solv query)=UNSATISFIABLE) in
+	let query_res=
+		if (dir=2) 
+		then false 
+		else (
+			match (Solver.check solv query) with
+			| UNSATISFIABLE -> true
+			| SATISFIABLE -> false
+			| _ -> raise Get_eq_base_TO
+		)
+	in
 	(* form -> base(a1) = base(a2end) *)
 	let queryend=if a2end=ff then [ff] else
 		[ 
 		(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2end])))
 	] in
-	let queryend_res= if ((a2end=ff) || (dir=1)) then false else ((Solver.check solv queryend)=UNSATISFIABLE) in
+	let queryend_res= 
+		if ((a2end=ff) || (dir=1)) 
+		then false 
+		else (
+			match (Solver.check solv queryend) with
+			| UNSATISFIABLE -> true
+			| SATISFIABLE -> false
+			| _ -> raise Get_eq_base_TO
+		)
+	in
 	(* form -> a1 != a2 *)
 	let query2= [ 
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2)))
 	] in
-	let query2_res= if ((dir=2)||(include_a1=1)) then true else ((Solver.check solv query2)=UNSATISFIABLE) in
+	let query2_res= 
+		if ((dir=2)||(include_a1=1)) 
+		then true 
+		else (
+			match (Solver.check solv query2) with
+			| UNSATISFIABLE -> true
+			| SATISFIABLE -> false
+			| _ -> raise Get_eq_base_TO
+		)
+	in
 	(* form -> a1 != a2end *)
 	let query2end=if a2end=ff then [ff] else
 		[  
 		(Boolean.mk_not ctx (Boolean.mk_not ctx (Boolean.mk_eq ctx a1 a2end)))
 	] in
-	let query2end_res= if (include_a1=1 || a2end=ff || dir=1) then true else ((Solver.check solv query2end)=UNSATISFIABLE) in
+	let query2end_res= 
+		if (include_a1=1 || a2end=ff || dir=1) 
+		then true 
+		else (
+			match (Solver.check solv query2end) with
+			| UNSATISFIABLE -> true
+			| SATISFIABLE -> false
+			| _ -> raise Get_eq_base_TO
+		)
+	in
 	match query_res,query2_res,queryend_res, query2end_res with 
 	| true, true, _,_ -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
 	| false, _, true, true -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
@@ -965,7 +1005,10 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 let rec lseg_abstraction_ll solver form pvars =
 	let rec f i j =
 		(*Printf.printf "%d,%d\n" i j; *)
-		let result = try_abstraction_to_lseg solver form i j pvars in
+		let result = 
+			try try_abstraction_to_lseg solver form i j pvars 
+			with Get_eq_base_TO -> AbstractionFail
+		in
 		match result with
 		| AbstractionApply new_form ->
 			lseg_abstraction_ll solver new_form pvars
@@ -986,8 +1029,9 @@ let rec lseg_abstraction_ll solver form pvars =
 	(* assert (n>1); *)
 	if (n<2) then form else f (n-1) (n-2) 
 
-let lseg_abstraction solver form pvars=
+let lseg_abstraction _ form pvars=
 	(* form is a common part of all SMT queries. Add it now to improve efficiency. *)
+	let solver=config_solver_to Config.solver_timeout_abstraction in
 	Solver.add solver.solv (formula_to_solver solver.ctx form);
 	let res=lseg_abstraction_ll solver form pvars in
 	Solver.reset solver.solv; res

@@ -280,6 +280,8 @@ size_t PL_SizeOfArenaPoolExcludingPool(const PLArenaPool * pool, PLMallocSizeFn 
 }
 */
 
+#define TEST
+
 #ifdef TEST
 // TODO: simple test
 int main() {
