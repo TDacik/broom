@@ -67,10 +67,10 @@ let add_rerun st c = st.rerun <- c::st.rerun
 let reset st = Hashtbl.reset st.tbl; st.fst_run <- true; st.rerun <- []
 
 let start_rerun st =
-	let rm_rhs c =
-		{Contract.lhs = c.Contract.lhs; rhs = Formula.empty; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
+	let rw_rhs c =
+		{Contract.lhs = c.Contract.lhs; rhs = c.Contract.lhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
 	in
 
-	let rerun_contracts = List.map rm_rhs st.rerun in
+	let rerun_contracts = List.map rw_rhs st.rerun in
 	reset st; st.fst_run <- false;
 	rerun_contracts
