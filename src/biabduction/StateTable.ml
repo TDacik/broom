@@ -15,7 +15,7 @@ type st_tbl = (cl_uid, st_value) Hashtbl.t
 type t = {
 	fuid: cl_uid; (** for which function *)
 	mutable fst_run: bool;
-	mutable rerun: State.t list; (** states that need to be rerun *)
+	mutable rerun: Contract.t list; (** contracts that need to be rerun *)
 	tbl: st_tbl
 }
 
@@ -62,6 +62,15 @@ let add st uid states =
 			Hashtbl.replace st.tbl uid value;
 			List.map State.set_through_loop new_states )
 
-let add_rerun st state = st.rerun <- state::st.rerun
+let add_rerun st c = st.rerun <- c::st.rerun
 
 let reset st = Hashtbl.reset st.tbl; st.fst_run <- true; st.rerun <- []
+
+let start_rerun st =
+	let rw_rhs c =
+		{Contract.lhs = c.Contract.lhs; rhs = c.Contract.lhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
+	in
+
+	let rerun_contracts = List.map rw_rhs st.rerun in
+	reset st; st.fst_run <- false;
+	rerun_contracts

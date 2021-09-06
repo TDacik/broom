@@ -191,3 +191,5 @@ let get_accessor_item ac =
 		| TypeStruct elms | TypeUnion elms -> get_type_item elms id
 		| _ -> assert false)
 	| _ -> assert false
+
+let get_NOP () = { Fnc.code=InsnNOP; loc=None; loop_closing_targets=[] }

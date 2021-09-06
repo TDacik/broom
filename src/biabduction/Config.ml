@@ -81,7 +81,7 @@ let main () = "main"
 
 (* if true summery of function will be rerun when abstraction happend or go
    through the loops *)
-let rerun () = false
+let rerun () = true
 
 (* --oom / --out-of-memory unsuccesful heap allocation *)
 let oom = false

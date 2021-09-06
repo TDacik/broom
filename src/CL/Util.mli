@@ -113,3 +113,6 @@ val get_type_item: Type.cl_type_item array -> int -> (string * int * Loc.cl_uid)
 
 (** [get_accessor_item acc] *)
 val get_accessor_item : Operand.cl_accessor -> (string * int * Loc.cl_uid)
+
+(** [get_NOP] returns empty instruction *)
+val get_NOP : unit -> Fnc.insn
