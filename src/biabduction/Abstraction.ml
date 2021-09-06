@@ -1013,7 +1013,10 @@ let rec lseg_abstraction_ll solver form pvars =
 		| AbstractionApply new_form ->
 			lseg_abstraction_ll solver new_form pvars
 		| AbstractionFail -> (
-			let result_rev = try_abstraction_to_lseg solver form j i pvars in
+			let result_rev = 
+				try try_abstraction_to_lseg solver form j i pvars 
+				with Get_eq_base_TO -> AbstractionFail
+			in
 			match result_rev with
 			| AbstractionApply new_form ->
 				lseg_abstraction_ll solver new_form pvars
