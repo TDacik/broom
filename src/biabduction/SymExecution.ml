@@ -17,6 +17,8 @@ exception Split_contract_RHS
 
 exception NoContract of string
 
+exception BadRerun
+
 (*  Checke whether expr should be added to form_z3
      false iff form_z3 => expr (no need to add expr)
      true othervice (incl. timeout)
@@ -230,7 +232,7 @@ let contract_application solver state c pvars =
   match (apply_contract solver state c_rename used_vars) with
   | CAppFail -> CAppFail
   | CAppOk s_applied ->  
-  		(* The post contrat application must be called with pvars. All variables outside pvars are considered to be logical. *)
+  		(* The post contract application must be called with pvars. All variables outside pvars are considered to be logical. *)
   		let postprocess st = post_contract_application st solver c_rename.pvarmap pvars in
 		(* If Config.abduction_strategy=1 then s_applied can contain more then a single result. *)
 		let res=List.concat (List.map postprocess s_applied) in
@@ -267,9 +269,17 @@ let rec add_gvars_moves gvars c =
 	(add_gvars_moves tl new_c)
 
 (* check for abstract object in precondition and through_loop=true *)
-let check_rerun tbl s =
+let check_if_rerun tbl s =
   Config.rerun () && tbl.StateTable.fst_run &&
   (s.through_loop=true || is_abstract s.miss) && s.miss!=Formula.empty
+
+(* check if rerun and if rerun produces new precondition, raise exception
+   BadRerun *)
+let check_rerun tbl s =
+  let status = Config.rerun () && (not tbl.StateTable.fst_run) in
+  if status && s.miss.sigma!=[] then
+    raise BadRerun
+  else status
 
 (* note: error from call of error() *)
 
@@ -293,10 +303,13 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
       through_loop = s.through_loop} in
 
     let c_err = state2contract ~status:Error s_err 0 in
-    if not removed_sigma && check_rerun bb_tbl s_err then (
+    if not removed_sigma && check_if_rerun bb_tbl s_err then (
       StateTable.add_rerun bb_tbl c_err;
       print_endline "need rerun";
       None )
+    else if check_rerun bb_tbl s_err then (
+      None (* do nothing *)
+    )
     else (
       Contract.print c_err;
       Some c_err )
@@ -346,7 +359,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
       try
         let subs = Simplify.state solver fixed nostack_s in
         State.print subs;
-        let need_rerun = check_rerun bb_tbl subs in
+        let need_rerun = check_if_rerun bb_tbl subs in
         if (not(need_rerun) && is_invalid subs.curr.pi) then
           Config.prerr_warn "function returns address of local variable";
         let c = state2contract ~status:status subs 0 in
@@ -355,6 +368,9 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
           StateTable.add_rerun bb_tbl c;
           print_endline "need rerun";
           None )
+        else if check_rerun bb_tbl subs then (
+          None (* do nothing *)
+        )
         else (
           Contract.print new_c;
           Some new_c )
@@ -602,15 +618,30 @@ let exec_fnc fnc_tbl f =
       let run1 = exec_block fnc_tbl bb_tbl init_states (List.hd f.cfg) in
       if Config.rerun () && bb_tbl.rerun!=[]
       then (
-        (* let init_s = (List.hd init_states) in *)
-        (* TODO ignore if s.miss=init_s.miss *)
 
         let rerun_contracts = StateTable.start_rerun bb_tbl in
         print_endline (">>> executing reruns for function "^fnc_decl_str^":");
         let nop = CL.Util.get_NOP () in
-        let rerun_states = new_states_for_insn false solver fnc_tbl bb_tbl nop init_states rerun_contracts in
-        (* CL.Util.print_list_endline State.to_string rerun_states; *)
-        run1 @ exec_block fnc_tbl bb_tbl rerun_states (List.hd f.cfg) )
+
+        let rec rerun_for_contracts rcontracts =
+          match rcontracts with
+          | [] -> []
+          | rc::rtl -> (
+            let rc_init = Contract.rw_rhs rc in
+            let rstates = new_states_for_insn false solver fnc_tbl bb_tbl nop init_states [rc_init] in
+            let states2 = (try
+              let run2 = exec_block fnc_tbl bb_tbl rstates (List.hd f.cfg) in
+              (* add contract after 2nd run *)
+              SpecTable.add fnc_tbl bb_tbl.fuid [rc];
+              run2
+            with BadRerun ->
+              Config.prerr_note "Discard contract after 2nd run"; []
+            ) in
+            states2 @ rerun_for_contracts rtl )
+        in
+
+        run1 @ rerun_for_contracts rerun_contracts)
+
       else run1
     with
       | StateTable.EntailmentLimit ->

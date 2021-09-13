@@ -23,6 +23,9 @@ type t = {
 
 val empty : t
 
+(** [rw_rhs c] rewrites rhs with lhs and removes lhs *)
+val rw_rhs : t -> t
+
 (** [to_string not_unfinished c ] ctreates string representing contract c; if not_unfinished is true,
     unfinished contract isn't printed *)
 val to_string : ?not_unfinished:bool -> t -> string
