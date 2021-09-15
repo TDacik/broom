@@ -303,16 +303,8 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
       through_loop = s.through_loop} in
 
     let c_err = state2contract ~status:Error s_err 0 in
-    if not removed_sigma && check_if_rerun bb_tbl s_err then (
-      StateTable.add_rerun bb_tbl c_err;
-      print_endline "need rerun";
-      None )
-    else if check_rerun bb_tbl s_err then (
-      None (* do nothing *)
-    )
-    else (
-      Contract.print c_err;
-      Some c_err )
+    Contract.print c_err;
+    Some c_err
   in
   let c_errs = List.filter_map get_err_contract states in
   SpecTable.add fnc_tbl bb_tbl.fuid c_errs
