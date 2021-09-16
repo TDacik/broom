@@ -319,7 +319,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			] in
 		(* check entailment between l1 and l2
 		   we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		let entailment_res=Abduction.check_lambda_entailment (config_solver ()) l1 l2 in
+		let entailment_res=Abduction.check_lambda_entailment (config_solver ()) l1 l2 0 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
@@ -364,7 +364,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			] in
 		(* check entailment between l1 and l2 *)
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		let entailment_res=Abduction.check_lambda_entailment (config_solver ()) l1 l2 in
+		let entailment_res=Abduction.check_lambda_entailment (config_solver ()) l1 l2 0 in
 		if entailment_res=0 then CheckFail
 		else
 		let new_lambda=if (entailment_res=1) then l2 else l1 in
@@ -922,7 +922,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		in
 			
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) with
+		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) 0 with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail
@@ -949,7 +949,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 		in
 			
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) with
+		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) 0 with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l2) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail

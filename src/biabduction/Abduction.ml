@@ -35,6 +35,9 @@ let to_hpointsto_unsafe hpred = match hpred with
 let to_dlseg_unsafe hpred = match hpred with
   | Hpointsto _ | Slseg _ -> raise (Invalid_argument "to_dlseg_unsafe: Received points-to instead of dll list")
   | Dlseg (a,b,c,d,l) -> (a,b,c,d,l)
+let get_lambda_unsafe hpred = match hpred with
+  | Hpointsto _ -> raise (Invalid_argument "get_lambda_unsafe: Received Slseg or Dlseg")
+  | Dlseg (_,_,_,_,l) | Slseg (_,_,l) -> l
 
 (**** LEARN - pointsto ****)
 
@@ -653,7 +656,13 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
   if (List.length form1.sigma)>0 then -1
   else
   (
-  (*print_endline (lvariables_to_string evars);*)
+  (*print_endline "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";
+  print_endline (lvariables_to_string evars);
+  print_string "Form1:";
+  Formula.print form1;
+  print_string "Form2:";
+  Formula.print form2;
+  print_endline "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$";*)
   (* First all Slseg(a,b,_) are replaced by a=b 
      and Dlseg(a,b,c,d,_) are prelaced by a=d and b=c --- i.e. empty lists *)
   let rec remove_lseg_form2 f2 =
@@ -694,11 +703,83 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
 (**** MATCH rules ****)
 (* The level parameter gives the level of match, the only difference is in check_match function *)
 
+type apply_match_res =
+| ApplyOK of Formula.t * Formula.t * variable list
+| ApplyFail
+
+(* apply the match rule to i=(i1,i2)
+   pred_type=0 --- pointsto x pointsto
+   pred_type=1 --- pointsto x Slseg
+   pred_type=2 --- Slseg x pointsto
+   pred_type=3 --- Slseg x Slseg
+*)
+
+let apply_match solver i pred_type form1 form2 pvars dir =
+  let nequiv a b = not (a=b) in
+  let remove k form =
+    { pi=form.pi;
+      sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
+  in
+  let check_eq p1 p2 =
+  	if p1=p2 then true
+	else
+	let p1_solv=expr_to_solver_only_exp solver.ctx solver.z3_names p1 in
+	let p2_solv=expr_to_solver_only_exp solver.ctx solver.z3_names p2 in
+	let query=[Boolean.mk_not solver.ctx (Boolean.mk_eq solver.ctx p1_solv p2_solv)]
+		@(formula_to_solver solver.ctx form1)@(formula_to_solver solver.ctx form2) in
+	(Solver.check solver.solv query)=UNSATISFIABLE
+  in
+  match i with
+  | (i1,i2) ->
+    match pred_type with
+    | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
+    | 1 | 10 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) dir in
+      ApplyOK (form1, new_form2, new_lvars)
+    | 2 | 20 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) dir in
+      ApplyOK (new_form1, form2, new_lvars)
+    | 3 ->
+      let _,y1,_ = to_slseg_unsafe  (List.nth form1.sigma i1) in
+      let _,y2,ls2 = to_slseg_unsafe (List.nth form2.sigma i2) in
+      let lhs=(remove i1 form1) in
+      let rhs_tmp=(remove i2 form2) in
+      (* We do not add empty SLL if y1 and y2 are equal *)
+      let rhs=if (check_eq y1 y2)
+      		then rhs_tmp
+		else {sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
+      in
+      ApplyOK (lhs, rhs, [])
+	
+    | 30 ->
+      let a1,b1,c1,d1,_ = to_dlseg_unsafe  (List.nth form1.sigma i1) in
+      let a2,b2,c2,d2,ls2 = to_dlseg_unsafe (List.nth form2.sigma i2) in
+      let lhs_tmp=(remove i1 form1) in
+      let rhs_tmp=(remove i2 form2) in
+      (match dir with
+      | 1 ->
+      		let lhs,rhs=if (check_eq d1 d2)
+			then {sigma=lhs_tmp.sigma; pi=lhs_tmp.pi@[(Exp.BinOp (Peq,c1,c2))]}, rhs_tmp
+			else lhs_tmp,{sigma=(Dlseg (d1,c1,c2,d2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
+		in
+        	ApplyOK (lhs, rhs, [])
+      | 2 ->
+		let lhs,rhs=if (check_eq b1 b2)
+			then {sigma=lhs_tmp.sigma; pi=lhs_tmp.pi@[(Exp.BinOp (Peq,a1,a2))]}, rhs_tmp
+			else lhs_tmp, {sigma=(Dlseg (a2,b2,b1,a1,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi}
+		in
+        	ApplyOK (lhs, rhs, [])
+      | _ -> ApplyFail
+      )
+    (*| _ -> raise (TempExceptionBeforeApiCleanup "apply_match")*)
+    | _ -> ApplyFail
+
+(* NOTE that check_match, find_match, find_match_ll, try_match, entailment_ll, entailment and check_lambda_entailment are in mutual recursion *)
+(* To break the mutual recursion, you can replace entailment call in apply_match by equality of lambdas *)
+
 (* Check whether match (of the given level) can be applied on i1^th pointsto on LHS and i2^th points-to on RHS *)
 (* dir - direction of Dlseg vs. (Hpointsto/Slseg) match: 1 from the beginning 2 from the end. 
    When applied to something else then Dlseg on one side, false is returned. *)
 
-let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level dir =
+let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level dir =
   let ff = Boolean.mk_false ctx in
   let ff_noZ3 = Exp.Const (Bool false)in
   let lhs_ll,lhs_noZ3,flag_l =
@@ -738,77 +819,89 @@ let check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 level 
     then (Expr.mk_app ctx z3_names.base [rhs_ll])
     else rhs_ll
   in
-  match level with
-  | 0 -> (* static checks - no solver calls *)
-  	(match lhs_noZ3,rhs_noZ3 with
-	| Exp.Var l,Exp.Var r ->
-		let l_cl = l::(get_equiv_vars [l] form1.pi) in
-		let r_cl = r::(get_equiv_vars [r] form2.pi) in
-		let mem lst x =
-		    let eq y= (x=y) in
-		    List.exists eq lst
-	  	in
-		let rec intersect l1 l2 =
-			match l1 with
-			| [] -> false
-			| first::rest -> if (mem l2 first) then true else (intersect rest l2)
-		in
+  let res_base_eq=
+	  match level with
+	  | 0 -> (* static checks - no solver calls *)
+	  	(match lhs_noZ3,rhs_noZ3 with
+		| Exp.Var l,Exp.Var r ->
+			let l_cl = l::(get_equiv_vars [l] form1.pi) in
+			let r_cl = r::(get_equiv_vars [r] form2.pi) in
+			let mem lst x =
+			    let eq y= (x=y) in
+			    List.exists eq lst
+		  	in
+			let rec intersect l1 l2 =
+				match l1 with
+				| [] -> false
+				| first::rest -> if (mem l2 first) then true else (intersect rest l2)
+			in
+	
+			(intersect l_cl r_cl)&&((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
+		| _ -> (lhs_noZ3=rhs_noZ3) && ((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
+		)
+	  | 1 ->
+	    let query_size =
+	      if ((lhs_size=ff)||(rhs_size=ff)) then true
+	      else
+	        let qq1 =[
+	          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)]
+	        in
+	      ((Solver.check solv qq1)=UNSATISFIABLE)
+	    in
+	    let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
+	    in
+	    query_size && ((Solver.check solv query1)=UNSATISFIABLE)
+	  | 2 ->
+	    let query_size =
+	      if ((lhs_size=ff)||(rhs_size=ff)) then true
+	      else
+	        let qq =[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)] in
+	      (Solver.check solv qq)=UNSATISFIABLE
+	    in
+	    let query = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
+	    in
+	    query_size && ((Solver.check solv query)=UNSATISFIABLE)
+	  | 3 ->
+	    let query_size =
+	      if ((lhs_size=ff)||(rhs_size=ff)) then true
+	      else
+	        let qq1 =[
+	          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size) ]
+	        in
+	      ((Solver.check solv qq1)=UNSATISFIABLE)
+	    in
+	    let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form2));
+	        (Boolean.mk_eq ctx lhs rhs)
+	      ]
+	    in
+	    let query2=[Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]))] in
+	    query_size
+	    && ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
+	  | 4 ->
+	    let query_size =
+	      if ((lhs_size=ff)||(rhs_size=ff)) then true
+	      else
+	        let qq =[
+	          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)] in
+	      (Solver.check solv qq)=UNSATISFIABLE
+	    in
+	    let query=[(Boolean.mk_eq ctx lhs rhs)] in
+	    query_size && ((Solver.check solv query)=SATISFIABLE)
+	  | _ -> false
+  in
+  (* if both sides are spatial predicates then we have to check entailment of lambdas to confirm match *)
+  match res_base_eq, ((flag_l+flag_r)=2 || (flag_l+flag_r)=10) with
+  | false,_ -> false
+  | true,false -> true
+  | true, true ->
+  	let l1=get_lambda_unsafe (List.nth form1.sigma i1) in
+  	let l2=get_lambda_unsafe (List.nth form2.sigma i2) in
+        (* (l1=l2) *) (* Use this line to break the mutual recursion. *)
+	(check_lambda_entailment (Z3wrapper.config_solver ()) l1 l2 1)=1
 
-		(intersect l_cl r_cl)&&((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
-	| _ -> (lhs_noZ3=rhs_noZ3) && ((lhs_size=ff)||(rhs_size=ff)||(lhs_size_noZ3=rhs_size_noZ3))
-	)
-  | 1 ->
-    let query_size =
-      if ((lhs_size=ff)||(rhs_size=ff)) then true
-      else
-        let qq1 =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)]
-        in
-      ((Solver.check solv qq1)=UNSATISFIABLE)
-    in
-    let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
-    in
-    query_size && ((Solver.check solv query1)=UNSATISFIABLE)
-  | 2 ->
-    let query_size =
-      if ((lhs_size=ff)||(rhs_size=ff)) then true
-      else
-        let qq =[Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)] in
-      (Solver.check solv qq)=UNSATISFIABLE
-    in
-    let query = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
-    in
-    query_size && ((Solver.check solv query)=UNSATISFIABLE)
-  | 3 ->
-    let query_size =
-      if ((lhs_size=ff)||(rhs_size=ff)) then true
-      else
-        let qq1 =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size) ]
-        in
-      ((Solver.check solv qq1)=UNSATISFIABLE)
-    in
-    let query1=[(Boolean.mk_and ctx (formula_to_solver ctx form2));
-        (Boolean.mk_eq ctx lhs rhs)
-      ]
-    in
-    let query2=[Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]))] in
-    query_size
-    && ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
-  | 4 ->
-    let query_size =
-      if ((lhs_size=ff)||(rhs_size=ff)) then true
-      else
-        let qq =[
-          Boolean.mk_not ctx (Boolean.mk_eq ctx lhs_size rhs_size)] in
-      (Solver.check solv qq)=UNSATISFIABLE
-    in
-    let query=[(Boolean.mk_eq ctx lhs rhs)] in
-    query_size && ((Solver.check solv query)=SATISFIABLE)
-  | _ -> false
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *)
-let rec find_match_ll solver form1 i1 form2 level  =
+and find_match_ll solver form1 i1 form2 level  =
   let rec try_with_rhs i2 =
     if (List.length form2.sigma) <= i2
     then -1,-1
@@ -826,7 +919,7 @@ let rec find_match_ll solver form1 i1 form2 level  =
     | -1,_ -> (find_match_ll solver form1 (i1+1) form2 level)
     | x,dir -> (i1,x,dir)
 
-let find_match solver form1 form2 level =
+and find_match solver form1 form2 level =
   let ctx=solver.ctx in
   let common_part=match level with
   | 1 | 3 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
@@ -840,62 +933,6 @@ let find_match solver form1 form2 level =
   Solver.pop solver.solv 1; res
 
 
-
-(* apply the match rule to i=(i1,i2)
-   pred_type=0 --- pointsto x pointsto
-   pred_type=1 --- pointsto x Slseg
-   pred_type=2 --- Slseg x pointsto
-   pred_type=3 --- Slseg x Slseg
-*)
-type apply_match_res =
-| ApplyOK of Formula.t * Formula.t * variable list
-| ApplyFail
-
-(* NOTE that apply_match, try_match, entailment_ll, entailment and check_lambda_entailment are in mutual recursion *)
-(* To break the mutual recursion, you can replace entailment call in apply_match by equality of lambdas *)
-
-let rec apply_match solver i pred_type form1 form2 pvars dir =
-  let nequiv a b = not (a=b) in
-  let remove k form =
-    { pi=form.pi;
-      sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
-  in
-  match i with
-  | (i1,i2) ->
-    match pred_type with
-    | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
-    | 1 | 10 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) dir in
-      ApplyOK (form1, new_form2, new_lvars)
-    | 2 | 20 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) dir in
-      ApplyOK (new_form1, form2, new_lvars)
-    | 3 ->
-      let _,y1,ls1 = to_slseg_unsafe  (List.nth form1.sigma i1) in
-      let _,y2,ls2 = to_slseg_unsafe (List.nth form2.sigma i2) in
-      (*if (ls1=ls2) then *) (* Use this line to break the mutual recursion. *)
-      if (check_lambda_entailment solver ls1 ls2)=1 then
-        let lhs=(remove i1 form1) in
-        let rhs_tmp=(remove i2 form2) in
-        let rhs={sigma=(Slseg (y1,y2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
-        ApplyOK (lhs, rhs, [])
-	
-      else  ApplyFail
-    | 30 ->
-      let a1,b1,c1,d1,ls1 = to_dlseg_unsafe  (List.nth form1.sigma i1) in
-      let a2,b2,c2,d2,ls2 = to_dlseg_unsafe (List.nth form2.sigma i2) in
-      (*if (ls1=ls2) then *) (* Use this line to break the mutual recursion. *)
-      let lhs=(remove i1 form1) in
-      let rhs_tmp=(remove i2 form2) in
-      (match (check_lambda_entailment solver ls1 ls2),dir with
-      | 1,1 ->
-      		let rhs={sigma=(Dlseg (d1,c1,c2,d2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
-        	ApplyOK (lhs, rhs, [])
-      | 1,2 ->
-      		let rhs={sigma=(Dlseg (a2,b2,b1,a1,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} in
-        	ApplyOK (lhs, rhs, [])
-      | _ -> ApplyFail
-      )
-    (*| _ -> raise (TempExceptionBeforeApiCleanup "apply_match")*)
-    | _ -> ApplyFail
 
 
 (* Try to apply match rule. The result is:
@@ -955,10 +992,11 @@ and try_match solver form1 form2 level pvars  =
 (****************************************************)
 (* use entailment to check entailment between lambdas 
   results: 0: no entailment, 1: lambda1 |= lambda2, 2: lambda2 |= lambda1 
+  dir: 0: both directions, 1:  lambda1 |= lambda2
 *)
 
 
-and check_lambda_entailment solver lambda1 lambda2 =
+and check_lambda_entailment solver lambda1 lambda2 dir =
 	if not ((List.length lambda1.param) = (List.length lambda2.param)) then 0
 	else
 	let variables= (find_vars lambda1.form) @ (find_vars lambda2.form) in
@@ -981,21 +1019,22 @@ and check_lambda_entailment solver lambda1 lambda2 =
 	in
 	let lambda1_new= rename_params lambda1.form lambda1.param new_params in
 	let lambda2_new= rename_params lambda2.form lambda2.param new_params in
-	print_endline "LAMBDA entailment:";
+	(*print_endline "LAMBDA entailment:";
 	Formula.print lambda1_new;
-	Formula.print lambda2_new;
-	match (entailment solver lambda1_new lambda2_new variables), 
-		(entailment solver lambda2_new lambda1_new variables)
-	with
-	| true,_ -> 1
-	| false,true -> 2
-	| _ -> 0
+	Formula.print lambda2_new;*)
+	let ent_forward_res=(entailment solver lambda1_new lambda2_new variables) in
+	match dir,ent_forward_res with 
+	| _,true -> 1
+	| 1,false -> 0
+	| _ -> (if (entailment solver lambda2_new lambda1_new variables)
+		then 2
+		else 0)
 
 
 (****************************************************)
 (* ENTAILMENT using match1 rules *)
 
-and entailment_ll solver form1 form2 evars=
+and entailment_ll solver form1 form2 evars =
 (* check entailment between form1 and form2 using match1 rules *)
   match (check_entailment_finish solver form1 form2 evars) with
   | 0 -> false
@@ -1004,10 +1043,10 @@ and entailment_ll solver form1 form2 evars=
      (match (try_match solver form1 form2 0 []),(try_match solver form1 form2 2 []) with
      | Apply (f1,f2,_,_,_),_ ->
   		print_string "Match, "; flush stdout;
-  		(entailment_ll solver f1 f2 evars)
+  		(entailment_ll solver f1 f2 evars )
      | Fail,Apply (f1,f2,_,_,_) ->
   		print_string "Match2, "; flush stdout;
-  		(entailment_ll solver f1 f2 evars)
+  		(entailment_ll solver f1 f2 evars )
      | Fail,Fail -> false)
   | _ -> raise (TempExceptionBeforeApiCleanup "entailment_ll")
 
@@ -1015,12 +1054,13 @@ and entailment solver form1 form2 evars=
   (* get fresh names for the evars to avoid conflicts in the entailment query *)
   let form1_s=Formula.simplify form1 evars in
   let form2_s=Formula.simplify form2 evars in
-  (*
-  print_string "XXXXXXXXXXXXXXXXXXXXXX\nFORM1: ";
+  
+  (*let ent_id=string_of_int (Random.int 100) in
+  print_string ("XXXXXXXXXXXXXXXXXXXXXX\nNo:"^ ent_id ^"\nFORM1: ");
   Formula.print_with_lambda form1_s;
   print_string "FORM2: ";
   Formula.print_with_lambda form2_s;
-  print_endline (lvariables_to_string evars); *)
+  print_endline ("LVARS:"^(lvariables_to_string evars)); *)
   let conflicts1=find_vars form1_s in
   let form2_rename,evars2=match (rename_ex_variables form2_s evars conflicts1) with
     | f -> f
@@ -1033,7 +1073,7 @@ and entailment solver form1 form2 evars=
   let res=
   	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
   in
-  if res then print_endline "ENT VALID" else print_endline "ENT INVALID"; flush stdout;
+  if res then print_endline ("ENT VALID") else print_endline ("ENT INVALID"); flush stdout;
   res
 
 (****************************************************)
