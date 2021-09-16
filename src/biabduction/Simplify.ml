@@ -128,6 +128,8 @@ let rec subformula solver vars f =
     (flag,all_vars, disjoint_union new_f tl_f)
 
 exception RemovedSpatialPartFromMiss
+exception RemovedSpatialPartFromCurr
+
 
 (* [substate solver fixed_vars state] contains in miss and curr only clauses
    with variables from [fixed_vars] and related variables
@@ -151,8 +153,10 @@ let substate solver fixed_vars state =
   (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) miss_vars ^ "AFTER MISS\n"); *)
   let (curr_removed_sigma,curr_vars,new_curr) =
     subformula solver miss_vars state.curr in
-  if (curr_removed_sigma)
-  then (Config.prerr_warn "MEMORY LEAK");
+  if (curr_removed_sigma) then (
+    if Config.memory_leaks_as_errors ()
+    then raise_notrace RemovedSpatialPartFromCurr
+    else (Config.prerr_warn "MEMORY LEAK") );
     (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) curr_vars ^ "AFTER curr\n"); *)
   let all_vars = List.filter_map get_lvar (curr_vars) in
   {State.miss = new_miss;

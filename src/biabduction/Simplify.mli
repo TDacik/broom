@@ -6,6 +6,9 @@ exception Conflict_between_freed_and_lseg
 (** Raise in case of ... *)
 exception RemovedSpatialPartFromMiss
 
+(** Raise in case of ... *)
+exception RemovedSpatialPartFromCurr
+
 (** [remove_freed_and_invalid_parts solver form] returns formula without
     spetial parts related to freed (on heap) and invalid (on stack) predicates
 *)
@@ -31,7 +34,10 @@ val formula : Z3wrapper.solver -> FExp.variable list -> Formula.t ->
     is reported.
     fixed_vars - variables can't be removed
     state - expect satisfiable state only
-    @raise RemovedSpatialPartFromMiss if part of spatial part is not accesible
-    by [fixed_vars] and related variables *)
+    @raise RemovedSpatialPartFromMiss if part of spatial part in state.miss is
+           not accesible by [fixed_vars] and related variables
+    @raise RemovedSpatialPartFromCurr if part of spatial part in state.curr is
+           not accesible by [fixed_vars] and related variables and if
+           memory_leaks_as_errors is true *)
 (* FIXME may be more variables in lvars than are in state *)
 val state : Z3wrapper.solver -> FExp.variable list -> State.t -> State.t

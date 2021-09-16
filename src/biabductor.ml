@@ -11,4 +11,6 @@ let () =
 	exec fnc_tbl CL.Util.stor.fncs;
 	print_endline "===============================================";
 	print_endline ("VERSION: "^Version.curr);
-	Biabd.SpecTable.print fnc_tbl
+	Biabd.SpecTable.print fnc_tbl;
+	print_endline "===============================================";
+	Biabd.Config.display_stats ();

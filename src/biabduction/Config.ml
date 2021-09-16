@@ -23,19 +23,48 @@ let steps = Finish (* --steps=n|s|f *)
 
 end
 
+
+type stat = {
+  abstracts : int ref;
+  entailments : int ref;
+  sat_fail : int ref;
+  internals : int ref;
+  errs : int ref;
+  warns : int ref;
+}
+
+let statistics = {abstracts = ref 0; entailments = ref 0; sat_fail = ref 0; internals = ref 0; errs = ref 0; warns = ref 0 }
+
+(* --stats *)
+let stats () = false
+
+let display_stats () =
+  if stats () then (
+    Printf.printf "Number of abstractions: %i\n" !(statistics.abstracts);
+    Printf.printf "Number of successful entailments: %i\n" !(statistics.entailments);
+    Printf.printf "Number of unsatisfiable states: %i\n" !(statistics.sat_fail);
+    Printf.printf "Number of internals: %i\n" !(statistics.internals);
+    Printf.printf "Number of errors: %i\n" !(statistics.errs);
+    Printf.printf "Number of warnings: %i\n" !(statistics.warns);
+  )
+
+
 (* errors handling *)
 (* TODO: location *)
 let prerr_internal str =
+  incr statistics.internals;
   if (Unix.isatty Unix.stderr)
     then prerr_endline ("\027[1;31m!!! internal error: "^str^"\027[0m")
     else prerr_endline ("!!! internal error: "^str)
 
 let prerr_error str =
+  incr statistics.errs;
   if (Unix.isatty Unix.stderr)
     then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
     else prerr_endline ("!!! error: "^str)
 
 let prerr_warn str =
+  incr statistics.warns;
   if (Unix.isatty Unix.stderr)
     then prerr_endline ("\027[1;35m!!! warning: "^str^"\027[0m")
     else prerr_endline ("!!! warning: "^str)
@@ -44,29 +73,6 @@ let prerr_note str =
   if (Unix.isatty Unix.stderr)
     then prerr_endline ("\027[1;35m!!! note: "^str^"\027[0m")
     else prerr_endline ("!!! note: "^str)
-
-
-type stat = {
-	abstracts : int;
-	entailments : int;
-	sat_fail : int;
-	errs : int;
-	warns : int;
-}
-
-let stats = true (* --stats *)
-
-(* let errs = ref 0
-incr errs; *)
-
-let display_stats stat = 
-  if stats then (
-    Printf.printf "Number of abstractions: %i\n" !stat.abstracts;
-    Printf.printf "Number of successful entailments: %i\n" !stat.entailments;
-    Printf.printf "Number of unsatisfiable states: %i\n" !stat.sat_fail;
-    Printf.printf "Number of errors: %i\n" !stat.errs;
-	Printf.printf "Number of warnings: %i\n" !stat.warns;
-  )
 
 (* 0x0 no debug
    0x1 debug contracts
@@ -90,7 +96,8 @@ let oom = false
    (while executing a no-return function or main) *)
 let exit_leaks () = true
 
-let memory_leaks_as_errors = false
+(* --memory_leaks_as_errors report memory leaks as errors otherwise warnings *)
+let memory_leaks_as_errors () = false
 
 (* do not use Slseg (Singly-linked List Segment) abstraction *)
 let disable_sls = false

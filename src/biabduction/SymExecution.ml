@@ -278,7 +278,7 @@ let check_if_rerun tbl s =
 let check_rerun tbl s =
   let status = Config.rerun () && (not tbl.StateTable.fst_run) in
   if status && s.miss.sigma!=[] then
-    raise BadRerun
+    raise_notrace BadRerun
   else status
 
 (* note: error from call of error() *)
@@ -366,7 +366,12 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         else (
           Contract.print new_c;
           Some new_c )
-      with Simplify.RemovedSpatialPartFromMiss -> (
+      with
+      | Simplify.RemovedSpatialPartFromMiss -> (
+        set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
+        None
+      )
+      | Simplify.RemovedSpatialPartFromCurr -> (
         set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
         None
       )
@@ -411,9 +416,17 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
                   empty_is_err_ref := false;
                   process_new_states atl
 
-              with Simplify.RemovedSpatialPartFromMiss -> (
+              with
+              | Simplify.RemovedSpatialPartFromMiss -> (
                 State.print a;
                 set_fnc_error_contract solver tbl bb_tbl [s] insn;
+                empty_is_err_ref := false;
+                process_new_states atl
+              )
+              | Simplify.RemovedSpatialPartFromCurr -> (
+                State.print a;
+                set_fnc_error_contract solver tbl bb_tbl [s] insn;
+                empty_is_err_ref := false;
                 process_new_states atl
               )
           in (* end of process_new_states *)
