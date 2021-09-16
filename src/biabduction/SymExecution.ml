@@ -278,7 +278,7 @@ let check_if_rerun tbl s =
 let check_rerun tbl s =
   let status = Config.rerun () && (not tbl.StateTable.fst_run) in
   if status && s.miss.sigma!=[] then
-    raise BadRerun
+    raise_notrace BadRerun
   else status
 
 (* note: error from call of error() *)
@@ -303,16 +303,8 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
       through_loop = s.through_loop} in
 
     let c_err = state2contract ~status:Error s_err 0 in
-    if not removed_sigma && check_if_rerun bb_tbl s_err then (
-      StateTable.add_rerun bb_tbl c_err;
-      print_endline "need rerun";
-      None )
-    else if check_rerun bb_tbl s_err then (
-      None (* do nothing *)
-    )
-    else (
-      Contract.print c_err;
-      Some c_err )
+    Contract.print c_err;
+    Some c_err
   in
   let c_errs = List.filter_map get_err_contract states in
   SpecTable.add fnc_tbl bb_tbl.fuid c_errs
@@ -374,7 +366,12 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         else (
           Contract.print new_c;
           Some new_c )
-      with Simplify.RemovedSpatialPartFromMiss -> (
+      with
+      | Simplify.RemovedSpatialPartFromMiss -> (
+        set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
+        None
+      )
+      | Simplify.RemovedSpatialPartFromCurr -> (
         set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
         None
       )
@@ -419,9 +416,17 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
                   empty_is_err_ref := false;
                   process_new_states atl
 
-              with Simplify.RemovedSpatialPartFromMiss -> (
+              with
+              | Simplify.RemovedSpatialPartFromMiss -> (
                 State.print a;
                 set_fnc_error_contract solver tbl bb_tbl [s] insn;
+                empty_is_err_ref := false;
+                process_new_states atl
+              )
+              | Simplify.RemovedSpatialPartFromCurr -> (
+                State.print a;
+                set_fnc_error_contract solver tbl bb_tbl [s] insn;
+                empty_is_err_ref := false;
                 process_new_states atl
               )
           in (* end of process_new_states *)
