@@ -27,22 +27,22 @@ end
 type stat = {
   abstracts : int ref;
   entailments : int ref;
-  sat_fail : int ref;
+  badrerun : int ref;
   internals : int ref;
   errs : int ref;
   warns : int ref;
 }
 
-let statistics = {abstracts = ref 0; entailments = ref 0; sat_fail = ref 0; internals = ref 0; errs = ref 0; warns = ref 0 }
+let statistics = {abstracts = ref 0; entailments = ref 0; badrerun = ref 0; internals = ref 0; errs = ref 0; warns = ref 0 }
 
 (* --stats *)
-let stats () = false
+let stats () = true
 
 let display_stats () =
   if stats () then (
-    Printf.printf "Number of abstractions: %i\n" !(statistics.abstracts);
+    (* Printf.printf "Number of abstractions: %i\n" !(statistics.abstracts); *)
     Printf.printf "Number of successful entailments: %i\n" !(statistics.entailments);
-    Printf.printf "Number of unsatisfiable states: %i\n" !(statistics.sat_fail);
+    Printf.printf "Number of discard contracts after rerun : %i\n" !(statistics.badrerun);
     Printf.printf "Number of internals: %i\n" !(statistics.internals);
     Printf.printf "Number of errors: %i\n" !(statistics.errs);
     Printf.printf "Number of warnings: %i\n" !(statistics.warns);
