@@ -78,9 +78,9 @@ let get_storage_with_size ptr var =
 
 let constant_to_exformula data accs ef =
 	let simple_constant exp =
+		if (accs != []) then assert false;
 		{f=ef.f; cnt_cvars = ef.cnt_cvars; root = exp}
 	in
-	if (accs != []) then assert false;
 	match data with
 	| CstPtr i -> simple_constant (Exp.Const (Ptr i))
 	| CstInt i -> simple_constant (Const (Int i))
@@ -89,6 +89,7 @@ let constant_to_exformula data accs ef =
 	| CstBool b -> simple_constant (Const (Bool b))
 	| CstReal r -> simple_constant (Const (Float r))
 	| CstString str ->
+		if (accs != []) then assert false;
 		let new_cvar = ef.cnt_cvars + 1 in
 		let str_size = (String.length str) + 1 in
 		let exp_str_size = Exp.Const (Int (Int64.of_int str_size)) in
@@ -98,7 +99,8 @@ let constant_to_exformula data accs ef =
 		{f={sigma = ef.f.sigma @ sig_add; pi = ef.f.pi @ pi_add};
 		cnt_cvars=new_cvar;
 		root=(CVar new_cvar)}
-	| CstStruct | CstUnion | CstArray | CstFnc _ -> assert false
+	| CstStruct | CstUnion | CstArray -> assert false
+	| CstFnc _ -> raise_notrace (ErrorInContract "function as operand unsupported")
 
 let rec operand_to_exformula op ef =
 	match op.data with
