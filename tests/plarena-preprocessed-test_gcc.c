@@ -138,7 +138,7 @@ void PL_InitArenaPool(PLArenaPool * pool, const char *name, PRUint32 size, PRUin
         align = sizeof(double);  // default alignment
     }
 
-    if (align < sizeof(pmasks) / sizeof(pmasks[0])) {
+    if (align < /*sizeof(pmasks) / sizeof(pmasks[0])*/ 33) {
         pool->mask = pmasks[align];
     } else {
         abort();
