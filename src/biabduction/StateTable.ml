@@ -38,6 +38,7 @@ let rec entailment_states old_states states =
 				then
 					if (Abduction.entailment solver s2.curr s1.curr evars)
 					then (
+						incr Config.statistics.entailments;
 						prerr_endline ">>> entailment_check: discard state";
 						[]) (* not add new state, covered by old state *)
 					else entailment_one tl1

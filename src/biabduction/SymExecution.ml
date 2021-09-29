@@ -640,6 +640,7 @@ let exec_fnc fnc_tbl f =
               SpecTable.add fnc_tbl bb_tbl.fuid [rc];
               run2
             with BadRerun ->
+              incr Config.statistics.badrerun;
               Config.prerr_note "Discard contract after 2nd run"; []
             ) in
             states2 @ rerun_for_contracts rtl )
