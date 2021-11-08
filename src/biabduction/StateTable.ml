@@ -72,21 +72,19 @@ let add ?(entailment=false) st uid states =
 	| None -> (* first entry *)
 		Hashtbl.add st.tbl uid {cnt=1; states=states}; states
 	| Some {cnt=old_cnt; states=old_states} ->
-		if (Config.entailment_limit () = old_cnt) then (
-			prerr_endline ">>> entailment_check: limit";
-			raise_notrace EntailmentLimit
-		) else (
-			if entailment
+		if entailment
+		then (
+			if (Config.entailment_limit () = old_cnt)
 			then (
+				prerr_endline ">>> entailment_check: limit";
+				raise_notrace EntailmentLimit
+			) else (
 				prerr_endline ">>> entailment_check: next";
 				let new_states = entailment_states st.fuid old_states states in
 				let value={cnt=(old_cnt+1); states=(old_states @ new_states)} in
 				Hashtbl.replace st.tbl uid value;
 				List.map State.set_through_loop new_states )
-			else (
-				states (* nothing *)
-			)
-		)
+		) else states (* nothing TODO bound *)
 
 let add_rerun st c = st.rerun <- c::st.rerun
 
