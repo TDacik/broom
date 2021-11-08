@@ -452,24 +452,6 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
   )
 
 
-(* Try abstraction on each miss anad act of each state,
-   for now only list abstraction *)
-let try_abstraction_on_states solver fuid states =
-  let pvars = CL.Util.get_pvars fuid in
-  let rec try_abstraction states =
-    match states with
-    | [] -> []
-    | s::tl ->
-      let new_miss = Abstraction.lseg_abstraction solver s.miss pvars in
-      let new_curr = Abstraction.lseg_abstraction solver s.curr pvars in
-      let abstract_state = {miss = new_miss; curr = new_curr; lvars=s.lvars; through_loop = s.through_loop} in
-      (* TODO: update lvars *)
-      abstract_state :: (try_abstraction tl)
-  in
-  print_endline ">>> trying list abstraction";
-  try_abstraction states
-
-
 (* FIND CONTRACT FOR CALLING FUNCTION *)
 
 (* @raise NoContract if no contract in tbl for function [fuid] becouse of wrong
@@ -499,7 +481,11 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
   then states
   else (
     Printf.printf ">>> executing block L%i:\n%!" uid;
-    let new_states = StateTable.add bb_tbl uid states in
+    let new_states = (if not (Config.entailment_on_loop_edges_only ())
+      then (* entailemt on each basic block entry *)
+        StateTable.add ~entailment:true bb_tbl uid states
+      else (* no entailment *)
+        StateTable.add bb_tbl uid states ) in
     exec_insns tbl bb_tbl new_states bb.CL.Fnc.insns
   )
 
@@ -507,22 +493,23 @@ and exec_insn tbl bb_tbl states insn =
   let get_new_states ?(empty_is_err=true) c =
     new_states_for_insn empty_is_err solver tbl bb_tbl insn states c
   in
-  let abstract_if_end_loop bb_uid ss =
-    if (CL.Util.is_loop_closing_block bb_uid insn)
-      then try_abstraction_on_states solver bb_tbl.fuid ss
+  let entailment_if_end_loop bb_uid ss =
+    if (Config.entailment_on_loop_edges_only () &&
+       CL.Util.is_loop_closing_block bb_uid insn)
+      then StateTable.add ~entailment:true bb_tbl bb_uid ss
       else ss
   in
   CL.Printer.print_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
-    let s_jmp = abstract_if_end_loop uid states in
+    let s_jmp = entailment_if_end_loop uid states in
     exec_block tbl bb_tbl s_jmp bb
   | InsnCOND (_,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
     let s_then = get_new_states ~empty_is_err:false [(List.hd c)] in
     let s_else = get_new_states ~empty_is_err:false [(List.nth c 1)] in
-    let ss_then = abstract_if_end_loop uid_then s_then in
-    let ss_else = abstract_if_end_loop uid_else s_else in
+    let ss_then = entailment_if_end_loop uid_then s_then in
+    let ss_else = entailment_if_end_loop uid_else s_else in
     let bb_then = CL.Util.get_block uid_then in
     let bb_else = CL.Util.get_block uid_else in
     (exec_block tbl bb_tbl ss_then bb_then) @ (exec_block tbl bb_tbl ss_else bb_else)

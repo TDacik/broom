@@ -23,10 +23,12 @@ exception EntailmentLimit
 
 val create : cl_uid -> t
 
-(** [add tbl uid states] returns subset of [states] not covered by previous
-    runs, where [uid] is basic block at the beginning of which we add [states]
+(** [add entailment tbl uid states] if entailment is true, returns subset of
+    [states] not covered by previous runs, where [uid] is basic block at the
+    beginning of which we add [states]
+    otherwise joint [states] with all from previous runs
  *)
-val add : t -> cl_uid -> State.t list -> State.t list
+val add : ?entailment:bool -> t -> cl_uid -> State.t list -> State.t list
 
 (** [add_rerun tbl contract] adds [contract] which needs to be rerun *)
 val add_rerun : t -> Contract.t -> unit

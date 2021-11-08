@@ -100,21 +100,26 @@ let exit_leaks () = true
 let memory_leaks_as_errors () = false
 
 (* do not use Slseg (Singly-linked List Segment) abstraction *)
-let disable_sls = false
+(* let disable_sls = false *)
 
 (* do not use Dlseg (Double-linked List Segment) abstraction *)
-let disable_dls = false
+(* let disable_dls = false *)
+
+(* if true do not use Slseg (Singly-linked List Segment) and Dlseg
+  (Double-linked List Segment) abstraction when looping after entailment
+  unsucced *)
+let disable_list_abstract () = false
 
 (* do not perform abstraction on each end of basic blocks, but only when
    looping *)
-let abstract_on_loop_edges_only = true
+(* let abstract_on_loop_edges_only = true *)
 
 (* perform abstraction after each just completed call on caller's side *)
 let abstract_on_call_done = false
 
 (* if true entailment states when traversing a loop-closing edge,
    else on each basic block entry *)
-let entailment_on_loop_edges_only = false
+let entailment_on_loop_edges_only () = true
 
 (* max number of entailment calls for one loop : 0 - no limit *)
 let entailment_limit () = 5

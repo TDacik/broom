@@ -23,15 +23,34 @@ exception EntailmentLimit
 
 let create fuid = let (bb_tbl : st_tbl) = Hashtbl.create 1 in {fuid=fuid; fst_run=true; rerun=[]; tbl=bb_tbl}
 
+(* Try abstraction on each miss anad act of each state,
+   for now only list abstraction *)
+let try_abstraction_on_states solver fuid states =
+	let pvars = CL.Util.get_pvars fuid in
+	let rec try_abstraction states =
+		match states with
+		| [] -> []
+		| s::tl ->
+			let new_miss = Abstraction.lseg_abstraction solver s.State.miss pvars in
+			let new_curr = Abstraction.lseg_abstraction solver s.curr pvars in
+			let abstract_state = {State.miss = new_miss; curr = new_curr; lvars=s.lvars; through_loop = s.through_loop} in
+			(* TODO: update lvars *)
+			abstract_state :: (try_abstraction tl)
+	in
+	print_endline ">>> trying list abstraction";
+	try_abstraction states
+
 (* entailment check miss1 <= miss2 and curr1 <= curr2 *)
-let rec entailment_states old_states states =
+let rec entailment_states fuid old_states states =
 	let solver = Z3wrapper.config_solver () in
 	match states with
 	| [] -> []
 	| s2::tl2 ->
 		let rec entailment_one old_states =
 			match old_states with
-			| [] -> [s2] (* add new state *)
+			| [] -> if Config.disable_list_abstract ()
+				then [s2] (* add new state *)
+				else try_abstraction_on_states solver fuid [s2] (* try abstraction before add new state *)
 			| s1::tl1 ->
 				let evars = CL.Util.list_join_unique s2.State.lvars s1.State.lvars in
 				if (Abduction.entailment solver s2.miss s1.miss evars)
@@ -44,10 +63,10 @@ let rec entailment_states old_states states =
 					else entailment_one tl1
 				else entailment_one tl1
 		in
-		(entailment_one old_states) @ (entailment_states old_states tl2)
+		(entailment_one old_states) @ (entailment_states fuid old_states tl2)
 
 (* return added states *)
-let add st uid states =
+let add ?(entailment=false) st uid states =
 	let found = Hashtbl.find_opt st.tbl uid in
 	match found with
 	| None -> (* first entry *)
@@ -57,11 +76,17 @@ let add st uid states =
 			prerr_endline ">>> entailment_check: limit";
 			raise_notrace EntailmentLimit
 		) else (
-			prerr_endline ">>> entailment_check: next";
-			let new_states = entailment_states old_states states in
-			let value = {cnt=(old_cnt + 1); states=(old_states @ new_states)} in
-			Hashtbl.replace st.tbl uid value;
-			List.map State.set_through_loop new_states )
+			if entailment
+			then (
+				prerr_endline ">>> entailment_check: next";
+				let new_states = entailment_states st.fuid old_states states in
+				let value={cnt=(old_cnt+1); states=(old_states @ new_states)} in
+				Hashtbl.replace st.tbl uid value;
+				List.map State.set_through_loop new_states )
+			else (
+				states (* nothing *)
+			)
+		)
 
 let add_rerun st c = st.rerun <- c::st.rerun
 
