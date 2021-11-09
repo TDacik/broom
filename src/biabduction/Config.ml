@@ -122,7 +122,7 @@ let abstract_on_call_done = false
 let entailment_on_loop_edges_only () = true
 
 (* max number of entailment calls for one loop : 0 - no limit *)
-let entailment_limit () = 5
+let entailment_limit () = 6
 
 (* Abduction strategy: 0 - single strategy = one result,
                        1 - more strategies = possible more restults
