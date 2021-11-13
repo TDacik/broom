@@ -37,7 +37,7 @@ let try_abstraction_on_states solver fuid states =
 			(* TODO: update lvars *)
 			abstract_state :: (try_abstraction tl)
 	in
-	print_endline ">>> trying list abstraction";
+	prerr_endline ">>> trying list abstraction";
 	try_abstraction states
 
 (* entailment check miss1 <= miss2 and curr1 <= curr2 *)
@@ -48,9 +48,9 @@ let rec entailment_states fuid old_states states =
 	| s2::tl2 ->
 		let rec entailment_one old_states =
 			match old_states with
-			| [] -> if Config.disable_list_abstract ()
-				then [s2] (* add new state *)
-				else try_abstraction_on_states solver fuid [s2] (* try abstraction before add new state *)
+			| [] -> if Config.abstraction_mode () = 1
+				then try_abstraction_on_states solver fuid [s2] (* try abstraction before add new state *)
+				else [s2] (* add new state *)
 			| s1::tl1 ->
 				let evars = CL.Util.list_join_unique s2.State.lvars s1.State.lvars in
 				if (Abduction.entailment solver s2.miss s1.miss evars)
@@ -79,8 +79,13 @@ let add ?(entailment=false) st uid states =
 				prerr_endline ">>> entailment_check: limit";
 				raise_notrace EntailmentLimit
 			) else (
+				let astates = (if Config.abstraction_mode () = 2
+					then ( (* try abstraction before entailment is called *)
+						let solver = Z3wrapper.config_solver () in
+						try_abstraction_on_states solver st.fuid states )
+					else states (* nothing *) ) in
 				prerr_endline ">>> entailment_check: next";
-				let new_states = entailment_states st.fuid old_states states in
+				let new_states = entailment_states st.fuid old_states astates in
 				let value={cnt=(old_cnt+1); states=(old_states @ new_states)} in
 				Hashtbl.replace st.tbl uid value;
 				List.map State.set_through_loop new_states )

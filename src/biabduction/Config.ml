@@ -105,16 +105,15 @@ let memory_leaks_as_errors () = false
 (* do not use Dlseg (Double-linked List Segment) abstraction *)
 (* let disable_dls = false *)
 
-(* if true do not use Slseg (Singly-linked List Segment) and Dlseg
-  (Double-linked List Segment) abstraction when looping after entailment
-  unsucced *)
-let disable_list_abstract () = false
+(* using of Slseg (Singly-linked List Segment) and Dlseg (Double-linked List
+  Segment) abstraction:
+  0 - disabeled
+  1 - after entailment unssucced
+  2 - before entailment *)
+let abstraction_mode () = 1
 
-(* do not perform abstraction on each end of basic blocks, but only when
-   looping *)
-(* let abstract_on_loop_edges_only = true *)
-
-(* perform abstraction after each just completed call on caller's side *)
+(* additionally perform abstraction after each just completed call on caller's
+   side *)
 let abstract_on_call_done = false
 
 (* if true entailment states when traversing a loop-closing edge,
