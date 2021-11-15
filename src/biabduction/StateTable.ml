@@ -84,7 +84,7 @@ let add ?(entailment=false) st uid states =
 						let solver = Z3wrapper.config_solver () in
 						try_abstraction_on_states solver st.fuid states )
 					else states (* nothing *) ) in
-				prerr_endline ">>> entailment_check: next";
+				prerr_endline (">>> entailment_check: next "^(string_of_int old_cnt));
 				let new_states = entailment_states st.fuid old_states astates in
 				let value={cnt=(old_cnt+1); states=(old_states @ new_states)} in
 				Hashtbl.replace st.tbl uid value;

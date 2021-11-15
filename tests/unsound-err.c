@@ -7,7 +7,7 @@ struct item {
 };
 
 struct item *f(struct item *x) {
-	if (__VERIFIER_nondet_int())
+	if (random())
 		return x;
 	else {
 		struct item * y = x->next;
