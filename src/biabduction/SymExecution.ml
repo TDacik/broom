@@ -15,7 +15,7 @@ type contract_app_res =
 *)
 exception Split_contract_RHS
 
-exception NoContract of string
+exception NoContract of (string * Config.src_pos)
 
 exception BadRerun
 
@@ -289,12 +289,12 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
   let get_err_contract s =
     let (removed_sigma,new_miss) = Simplify.formula solver fixed s.miss in
     if (removed_sigma) then
-      Config.prerr_error "impossible precondition";
+      Config.prerr_error "impossible precondition" insn.CL.Fnc.loc;
     let msg = "error from call of "^(CL.Printer.insn_to_string insn) in
     if (status=Error) then (* already reported error *)
-      Config.prerr_note msg
+      Config.prerr_note msg insn.loc
     else
-      Config.prerr_error msg;
+      Config.prerr_error msg insn.loc;
     let removed_vars = CL.Util.list_diff (find_vars new_miss) fixed in
     let s_err =
       {miss = new_miss;
@@ -341,6 +341,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
       | _ -> gvars
     else gvars ) in
   let fixed = 0::(anchors @ memcheck_gvars) in
+  let loc = insn.CL.Fnc.loc in
   let get_contract s =
       let removed_vars = tmp_vars @ s.lvars in
       let nostack_s = {
@@ -349,11 +350,11 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         lvars = removed_vars;
         through_loop = s.through_loop} in
       try
-        let subs = Simplify.state solver fixed nostack_s in
+        let subs = Simplify.state solver fixed nostack_s loc in
         State.print subs;
         let need_rerun = check_if_rerun bb_tbl subs in
         if (not(need_rerun) && is_invalid subs.curr.pi) then
-          Config.prerr_warn "function returns address of local variable";
+          Config.prerr_warn "function returns address of local variable" loc;
         let c = state2contract ~status:status subs 0 in
         let new_c = add_gvars_moves gvars c in
         if need_rerun then (
@@ -371,7 +372,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
         None
       )
-      | Simplify.RemovedSpatialPartFromCurr -> (
+      | Simplify.RemovedSpatialPartFromCurr -> ( (* TODO error: memory leak *)
         set_fnc_error_contract solver fnc_tbl bb_tbl [nostack_s] insn;
         None
       )
@@ -403,7 +404,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
             | [] -> []
             | a::atl ->
               try
-                let simple_a = Simplify.state solver pvars a in
+                let simple_a = Simplify.state solver pvars a insn.CL.Fnc.loc in
                 State.print simple_a;
                 match c.s with
                 | OK | Unfinished -> simple_a::(process_new_states atl)
@@ -424,7 +425,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
                 process_new_states atl
               )
               | Simplify.RemovedSpatialPartFromCurr -> (
-                State.print a;
+                State.print a; (* TODO error: memory leak *)
                 set_fnc_error_contract solver tbl bb_tbl [s] insn;
                 empty_is_err_ref := false;
                 process_new_states atl
@@ -459,7 +460,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
 let find_fnc_contract tbl dst args fuid =
   let patterns = SpecTable.find_opt tbl fuid in
   match patterns with
-  | None -> raise_notrace (NoContract "No contract (wrong functions order or recursion)")
+  | None -> raise_notrace (NoContract ("No contract (wrong functions order or recursion)",__POS__))
   | Some p ->
     let rec rename_fnc_contract c =
       match c with
@@ -558,7 +559,7 @@ let exec_zeroinitializer _(* fuid *) s (uid, var) =
   | TypeReal -> assign (Const (Float 0.0))
   | TypeStruct _ | TypeUnion _ | TypeArray _ ->
     (* l1 -(type.size)-> 0 & static(l1,var) & len(l1)=type.size & base(l1)=l1 *)
-    raise_notrace (Contract.ErrorInContract "static object unsupported")
+    raise_notrace (Contract.ErrorInContract ("static object unsupported",__POS__))
     (* let fresh_var = State.get_fresh_lvar fuid s.lvars in
     let size, stor = Contract.get_storage_with_size (Var fresh_var) (Var uid) in
     let sig_add = Hpointsto ((Var fresh_var), size, Exp.zero) in
@@ -628,7 +629,7 @@ let exec_fnc fnc_tbl f =
               run2
             with BadRerun ->
               incr Config.statistics.badrerun;
-              Config.prerr_note "Discard contract after 2nd run"; []
+              Config.prerr_note "Discard contract after 2nd run" (CL.Util.get_fnc_loc f); []
             ) in
             states2 @ rerun_for_contracts rtl )
         in
@@ -637,20 +638,20 @@ let exec_fnc fnc_tbl f =
 
       else run1
     with
-      | StateTable.EntailmentLimit ->
-        Config.prerr_internal "Limit reached (increase 'entailment_limit')";
+      | StateTable.EntailmentLimit loc ->
+        Config.prerr_internal "Limit reached (increase 'entailment_limit')" loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
-      | Abduction.NoApplicableRule ->
-        Config.prerr_internal "No applicable abduction rule";
+      | Abduction.NoApplicableRule loc ->
+        Config.prerr_internal "No applicable abduction rule" loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
-      | Abstraction.ErrorInAbstraction msg ->
-        Config.prerr_internal (msg^" (abstraction)");
+      | Abstraction.ErrorInAbstraction (msg,loc) ->
+        Config.prerr_internal (msg^" (abstraction)") loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
-      | Contract.ErrorInContract msg | NoContract msg ->
-        Config.prerr_internal msg;
+      | Contract.ErrorInContract (msg,loc) | NoContract (msg,loc) ->
+        Config.prerr_internal msg loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
     ) in

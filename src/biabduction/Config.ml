@@ -49,30 +49,28 @@ let display_stats () =
   )
 
 
-(* errors handling *)
+(** Errors handling *)
+
+(** type for location in source code: __POS__ *)
+type src_pos = CL.Msg.src_pos
+
 (* TODO: location *)
-let prerr_internal str =
+let prerr_internal str loc =
   incr statistics.internals;
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;31m!!! internal error: "^str^"\027[0m")
-    else prerr_endline ("!!! internal error: "^str)
+  CL.Msg.internal (str,loc)
 
-let prerr_error str =
+let prerr_error str loc =
   incr statistics.errs;
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;31m!!! error: "^str^"\027[0m")
-    else prerr_endline ("!!! error: "^str)
+  CL.Msg.error (str,loc)
 
-let prerr_warn str =
+let prerr_warn str loc =
   incr statistics.warns;
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;35m!!! warning: "^str^"\027[0m")
-    else prerr_endline ("!!! warning: "^str)
+  CL.Msg.warn (str,loc)
 
-let prerr_note str =
-  if (Unix.isatty Unix.stderr)
-    then prerr_endline ("\027[1;35m!!! note: "^str^"\027[0m")
-    else prerr_endline ("!!! note: "^str)
+let prerr_note str loc =
+  CL.Msg.note (str,loc)
+
+(** Options *)
 
 (* 0x0 no debug
    0x1 debug contracts

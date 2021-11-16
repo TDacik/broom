@@ -6,20 +6,10 @@ open Fnc
 
 (* TODO: use exceptions *)
 
-(* internal location *)
-#define ILOC (Printf.sprintf "%s:%i:" __FILE__ __LINE__)
-
 
 let empty_output = ()
 
 
-
-
-let loc_to_string loc =
-	match loc with
-	| Some (file, line, column, _) ->
-		Printf.sprintf "%s:%i:%i: " file line column
-	| None -> ""
 
 (* TODO type *)
 let type_to_string _ (* uid *) = ""
@@ -76,8 +66,8 @@ and back_accessors accs =
 			and id_str = string_of_int off
 			and sign = (if off >= 0 then "+" else "") in
 			".<" ^ sign ^ id_str ^ ">" ^ rest
-		| Ref -> Util.error ILOC "invalid reference accessor"; ""
-		| _ -> Util.error ILOC "unsupported accessor"; "")
+		| Ref -> Msg.internal ("invalid reference accessor",__POS__); ""
+		| _ -> Msg.internal ("unsupported accessor",__POS__); "")
 
 and middle_var uid accs =
 	let var = var_to_string uid in
@@ -106,18 +96,18 @@ and const_ptr_to_string ptr accs =
 		| [] -> ""
 		| ac::[] -> ( match ac.acc_data with
 			| Deref -> "*"
-			| _ -> Util.error ILOC "unexpected accessor by constant pointer"; "" )
-		| _ -> Util.error ILOC "too much accessors by constant pointer"; "" ) in
+			| _ -> Msg.internal ("unexpected accessor by constant pointer",__POS__); "" )
+		| _ -> Msg.internal ("too much accessors by constant pointer",__POS__); "" ) in
 	if ptr==0 then "NULL" else Printf.sprintf "%s0x%x" str_acc ptr
 
 and constant_to_string data accs =
 	match data with
 	| CstPtr ptr -> const_ptr_to_string ptr accs
 	| CstStruct | CstUnion | CstArray ->
-		Util.error ILOC "unsupported compound literal"; "?"
+		Msg.internal ("unsupported compound literal",__POS__); "?"
 	| CstFnc fnc -> ( match fnc.name with
 		| Some x -> x
-		| None -> Util.error ILOC "anonymous function"; "" )
+		| None -> Msg.internal ("anonymous function",__POS__); "" )
 	| CstInt i -> Int64.to_string i                 (* TODO: test unsigned *)
 	| CstEnum e -> Printf.sprintf "%i" e            (* TODO: test unsigned *)
 	| CstChar c -> "\'" ^ Printf.sprintf "%c" c ^ "\'"
@@ -194,7 +184,7 @@ let call_insn_to_string ops =
 			else "") in
 		let str_args = Util.list_to_string operand_to_string args in
 		str_dst^str_called^"("^str_args^")"
-	| _ -> Util.error ILOC "wrong call instruction"; ""
+	| _ -> Msg.internal ("wrong call instruction",__POS__); ""
 
 let cond_insn_to_string ?indent:(indent=false) cond tg_then tg_else =
 	let (beg,goto,els) = (if (indent)
@@ -224,7 +214,7 @@ let insn_to_string ?indent:(indent=false) insn =
 	| InsnBINOP (code, dst, src1, src2) ->
 		ind ^ (binary_insn_to_string code dst src1 src2)
 	| InsnCALL ops -> ind ^ (call_insn_to_string ops)
-	| InsnSWITCH _ -> Util.error ILOC "unsupported switch instruction"; ""
+	| InsnSWITCH _ -> Msg.internal ("unsupported switch instruction",__POS__); ""
 	| InsnLABEL _ -> "" (* unused *)
 
 (* Print CL instruction *)
@@ -232,6 +222,11 @@ let print_insn insn =
 	let str_insn = insn_to_string ~indent:true insn in
 	if (str_insn = "") then ()
 	else print_endline str_insn
+
+let prerr_insn insn =
+	let str_insn = insn_to_string ~indent:true insn in
+	if (str_insn = "") then ()
+	else prerr_endline str_insn
 
 let print_block apply_on (uid, bb) =
 	print_endline ("\tL" ^ (string_of_int uid) ^ ":");

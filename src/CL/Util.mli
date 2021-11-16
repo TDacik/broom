@@ -1,11 +1,4 @@
-(** Interface for useful functions for Code Listener Storage and error output *)
-
-(** [error loc msg] *)
-val error: string -> string -> unit
-
-(** [internal_error loc msg] *)
-val internal_error: string -> string -> 'a
-
+(** Interface for useful functions for Code Listener Storage *)
 
 val stor : Storage.t
 
@@ -67,6 +60,8 @@ val is_fnc_nonreturn: Fnc.t -> bool
 val get_fnc_uid_from_op: Operand.t -> Loc.cl_uid
 
 val get_fnc_uid: Fnc.t -> Loc.cl_uid
+
+val get_fnc_loc: Fnc.t -> Loc.t option
 
 (** [get_fnc_vars uid] gets uids of varables used in function given by uid *)
 val get_fnc_vars: Loc.cl_uid -> Loc.cl_uid list

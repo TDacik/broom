@@ -43,14 +43,13 @@ let init fuid =
   {miss = f; curr = f; lvars = []; through_loop = false}
 
 (* check if main is called with int argc and char **argv *)
-(* TODO warnings handling *)
-let check_main_args_type args =
+let check_main_args_type args loc =
   let arg1 = CL.Util.get_var (List.nth args 0) in
   let arg2 = CL.Util.get_var (List.nth args 1) in
   let arg1_typ = CL.Util.get_type arg1.typ in
   let arg1_ok = (match arg1_typ.code with
   | TypeInt -> true
-  | _ -> Config.prerr_warn "first argument of 'main' should be 'int'"; false) in
+  | _ -> Config.prerr_warn "first argument of 'main' should be 'int'" loc; false) in
   let arg2_typ = CL.Util.get_type arg2.typ in
   let arg2_ok = (match arg2_typ.code with
     | TypePtr typ2 -> (let arg2_typ2 = CL.Util.get_type typ2 in
@@ -58,9 +57,9 @@ let check_main_args_type args =
       | TypePtr typ3 -> (let arg2_typ3 = CL.Util.get_type typ3 in
         match arg2_typ3.code with
         | TypeChar | TypeInt when arg2_typ3.size=1 -> true
-        | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'"; false)
-      | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'"; false)
-    | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'"; false) in
+        | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'" loc; false)
+      | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'" loc; false)
+    | _ -> Config.prerr_warn "second argument of 'main' should be 'char **'" loc; false) in
   (arg1_ok && arg2_ok)
 
 (* add anchors into LHS, if main(int argc, char **argv)
@@ -70,11 +69,12 @@ let check_main_args_type args =
 let init_main fuid =
   let args = CL.Util.get_fnc_args fuid in
   let num_args = List.length args in
+  let loc = CL.Util.get_fnc_loc (CL.Util.get_fnc fuid) in
   match num_args with
   | 0 -> empty
   | 2 -> (
     let anchor_state = init fuid in
-    if not (check_main_args_type args) then
+    if not (check_main_args_type args loc) then
       anchor_state
     else
       let new_var = get_fresh_lvar fuid [] in
@@ -91,7 +91,7 @@ let init_main fuid =
         sigma = sig_add :: anchor_state.miss.sigma} in
       let s = {miss = new_f; curr = new_f; lvars = [new_var]; through_loop = false} in
       print s; s)
-  | _ -> Config.prerr_warn  "'main' takes only zero or two arguments";
+  | _ -> Config.prerr_warn  "'main' takes only zero or two arguments" loc;
     init fuid (* handling as with an ordinary function *)
 
 let remove_equiv_vars gvars evars s =

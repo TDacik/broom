@@ -2,7 +2,7 @@
 open Z3
 open Z3wrapper *)
 
-exception ErrorInAbstraction of string
+exception ErrorInAbstraction of (string * Config.src_pos)
 
 (** [lseg_abstaction solver form pvars] tries list abstraction on formula [form] - first tries the last added, at least 2 predicates in sigma *)
 val lseg_abstraction : Z3wrapper.solver ->

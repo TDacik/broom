@@ -28,16 +28,18 @@ val remove_stack : ?replaced:bool -> Z3wrapper.solver -> Formula.t -> Formula.t
 val formula : Z3wrapper.solver -> FExp.variable list -> Formula.t ->
               bool * Formula.t
 
-(** [state solver fixed_vars state] simplifies state. If something left in
+(** [state solver fixed_vars state loc] simplifies state. If something left in
     spatial of miss not related to [fixed_vars], the RemovedSpatialPartFromMiss
     exception is raised. If something left in spatial part of curr, memory leak
     is reported.
     fixed_vars - variables can't be removed
     state - expect satisfiable state only
+    loc - location of state in code
     @raise RemovedSpatialPartFromMiss if part of spatial part in state.miss is
            not accesible by [fixed_vars] and related variables
     @raise RemovedSpatialPartFromCurr if part of spatial part in state.curr is
            not accesible by [fixed_vars] and related variables and if
            memory_leaks_as_errors is true *)
 (* FIXME may be more variables in lvars than are in state *)
-val state : Z3wrapper.solver -> FExp.variable list -> State.t -> State.t
+val state : Z3wrapper.solver -> FExp.variable list -> State.t ->
+            CL.Loc.t option -> State.t

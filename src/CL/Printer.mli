@@ -1,8 +1,5 @@
 (** Interface of Pretty printer for Code Listener Storage *)
 
-(** [loc_to_string loc] gets CL code location as string *)
-val loc_to_string: Loc.t option -> string
-
 (** [type_to_string uid] gets CL type as string *)
 val type_to_string: Loc.cl_uid -> string
 
@@ -24,6 +21,9 @@ val insn_to_string: ?indent:bool -> Fnc.insn -> string
 
 (** [print_insn insn] prints CL instruction *)
 val print_insn: Fnc.insn -> unit
+
+(** [prerr_insn insn] prints CL instruction on stderr *)
+val prerr_insn: Fnc.insn -> unit
 
 (** [print_block apply_on_insn bb] prints basic block of function and applies
 	'apply_on_insn' on each instruction *)

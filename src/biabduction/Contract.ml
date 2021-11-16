@@ -7,7 +7,7 @@ open Formula
 type formula = Formula.t
 type variable = Exp.variable
 
-exception ErrorInContract of string
+exception ErrorInContract of (string * Config.src_pos)
 
 type extend_formula = {
 	f: formula;
@@ -100,7 +100,7 @@ let constant_to_exformula data accs ef =
 		cnt_cvars=new_cvar;
 		root=(CVar new_cvar)}
 	| CstStruct | CstUnion | CstArray -> assert false
-	| CstFnc _ -> raise_notrace (ErrorInContract "function as operand unsupported")
+	| CstFnc _ -> raise_notrace (ErrorInContract ("function as operand unsupported",__POS__))
 
 let rec operand_to_exformula op ef =
 	match op.data with
@@ -136,7 +136,7 @@ and variable_to_exformula end_typ var accs ef =
 			(* let ptr_size = CL.Util.get_type_size ac.acc_typ in
 			let exp_ptr_size = Exp.Const (Int (Int64.of_int ptr_size)) in *)
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise_notrace (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract ("stack/static object unsupported",__POS__))
 			);
 			let (dbg, ef_new) = var_to_exformula ptr tl
 				{f={sigma = new_sigma; pi = ef.f.pi};
@@ -163,7 +163,7 @@ and variable_to_exformula end_typ var accs ef =
 			assert (idx.accessor = []);
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise_notrace (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract ("stack/static object unsupported",__POS__))
 			);
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
@@ -196,7 +196,7 @@ and variable_to_exformula end_typ var accs ef =
 		| Item _ ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise_notrace (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract ("stack/static object unsupported",__POS__))
 			);
 
 			(* let cvar_ptr = ef.cnt_cvars + 1 in (* find var in sigma *) *)
@@ -224,7 +224,7 @@ and variable_to_exformula end_typ var accs ef =
 		| Offset off ->
 			let (ptr,new_sigma,cvars_ptr) = find_and_remove_var_pointsto var ef.f.sigma ef.cnt_cvars in
 			(if (ef.cnt_cvars != cvars_ptr) then (* TODO *)
-				raise_notrace (ErrorInContract "stack/static object unsupported")
+				raise_notrace (ErrorInContract ("stack/static object unsupported",__POS__))
 			);
 			let cvar_elm = cvars_ptr + 1 in
 			let cvar_last = cvar_elm + 1 in
@@ -567,7 +567,7 @@ let contract_for_clobber var =
 			pvarmap = [];
 			s = OK}
 	| _ ->
-		raise_notrace (ErrorInContract "stack object unsupported")
+		raise_notrace (ErrorInContract ("stack object unsupported",__POS__))
 
 (* dst = memcpy(dstm, srcm, size)
    PRE: dstm-size->l1 * srcm-size->l2 & 0<=size & size<=len(dstm) &
@@ -666,7 +666,7 @@ let contract_skip fnc_name =
 (* unrecognized built-in/extern function *)
 let contract_unknown_fnc dst = contract_nondet dst
 
-let contract_for_builtin dst called args =
+let contract_for_builtin dst called args loc =
 	let fnc_name = CL.Printer.operand_to_string called in
 	match fnc_name, args with
 	| "abort", [] -> (contract_fail)::[]
@@ -691,7 +691,7 @@ let contract_for_builtin dst called args =
 	| "rand", [] -> contract_nondet ~unsign:true dst
 	| "random", [] -> contract_nondet ~unsign:true dst
 	| _,_ ->
-		Config.prerr_warn ("ignoring call of undefined function: "^fnc_name);
+		Config.prerr_warn ("ignoring call of undefined function: "^fnc_name) loc;
 		contract_unknown_fnc dst
 
 (****** CONTRACTS CALLED FUNCTIONS ******)
@@ -757,7 +757,7 @@ let get_contract insn =
 	| InsnBINOP (code, dst, src1, src2) -> contract_for_binop code dst src1 src2
 	| InsnCALL ops -> ( match ops with
 		| dst::called::args -> if (CL.Util.is_extern called)
-			then contract_for_builtin dst called args
+			then contract_for_builtin dst called args insn.loc
 			else []
 		| _ -> assert false )
 	| InsnCLOBBER var -> (contract_for_clobber var)::[]

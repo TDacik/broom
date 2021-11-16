@@ -19,7 +19,7 @@ type t = {
 	tbl: st_tbl
 }
 
-exception EntailmentLimit
+exception EntailmentLimit of Config.src_pos
 
 let create fuid = let (bb_tbl : st_tbl) = Hashtbl.create 1 in {fuid=fuid; fst_run=true; rerun=[]; tbl=bb_tbl}
 
@@ -77,7 +77,7 @@ let add ?(entailment=false) st uid states =
 			if (Config.entailment_limit () = old_cnt)
 			then (
 				prerr_endline ">>> entailment_check: limit";
-				raise_notrace EntailmentLimit
+				raise_notrace (EntailmentLimit __POS__)
 			) else (
 				let astates = (if Config.abstraction_mode () = 2
 					then ( (* try abstraction before entailment is called *)

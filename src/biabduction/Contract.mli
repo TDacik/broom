@@ -4,7 +4,7 @@ open Formula
 type formula = Formula.t
 type variable = Exp.variable
 
-exception ErrorInContract of string
+exception ErrorInContract of (string * Config.src_pos)
 
 type status = OK | Error | Aborted | Unfinished (* | Unreached *)
 

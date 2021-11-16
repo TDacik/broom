@@ -139,7 +139,7 @@ exception RemovedSpatialPartFromCurr
    miss_vars = fixed_vars + related
    curr_vars = fixed_vars + related from miss + related from curr *)
 (* TODO errors/warnings handling *)
-let substate solver fixed_vars state =
+let substate solver fixed_vars state loc =
   let get_lvar var =
     match var with
     | FExp.Var v when (List.mem v state.State.lvars) -> Some v
@@ -156,7 +156,7 @@ let substate solver fixed_vars state =
   if (curr_removed_sigma) then (
     if Config.memory_leaks_as_errors ()
     then raise_notrace RemovedSpatialPartFromCurr
-    else (Config.prerr_warn "MEMORY LEAK") );
+    else (Config.prerr_warn "memory leak" loc) );
     (* print_string ("\n" ^ CL.Util.list_to_string (Formula.Exp.to_string ~lvars:state.lvars) curr_vars ^ "AFTER curr\n"); *)
   let all_vars = List.filter_map get_lvar (curr_vars) in
   {State.miss = new_miss;
@@ -181,9 +181,9 @@ let formula solver fixed_vars form =
    state - expect satisfiable state only *)
 (* FIXME may be more variables in lvars than are in state *)
 (* TODO if found invalid(var) put var into lvars and remove from fixed_vars *)
-let state solver fixed_vars state =
+let state solver fixed_vars state loc =
   let fixed_vars_exp = FExp.get_list_vars fixed_vars in
   let rems = State.remove_equiv_vars fixed_vars state.State.lvars state in
-  let subs = substate solver fixed_vars_exp rems in
+  let subs = substate solver fixed_vars_exp rems loc in
   (* (find_vars rems.miss) @ (find_vars rems.curr) in *)
   subs

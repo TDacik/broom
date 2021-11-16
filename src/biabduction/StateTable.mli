@@ -19,7 +19,7 @@ type t = {
 	tbl: st_tbl
 }
 
-exception EntailmentLimit
+exception EntailmentLimit of Config.src_pos
 
 val create : cl_uid -> t
 

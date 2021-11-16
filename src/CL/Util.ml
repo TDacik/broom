@@ -5,12 +5,6 @@ module AGU = Atdgen_runtime.Util
 open Type
 open Operand
 
-let error loc msg = Printf.eprintf "%s error: %s\n%!" loc msg
-
-(* TODO: only if develop mode *)
-let internal_error loc msg = failwith (loc ^ " " ^ msg)
-
-
 (* FIXME: read-only global variable? *)
 let stor = AGU.Json.from_channel Storage.read_t stdin
 
@@ -114,6 +108,15 @@ let get_fnc_uid_from_op op =
 	| _ -> assert false
 
 let get_fnc_uid f = get_fnc_uid_from_op f.Fnc.def
+
+let get_fnc_loc_from_op op =
+	match op.Operand.data with
+	| OpCst { cst_data } -> ( match cst_data with
+		| CstFnc fnc -> fnc.loc
+		| _ -> assert false )
+	| _ -> assert false
+
+let get_fnc_loc f = get_fnc_loc_from_op f.Fnc.def
 
 let get_fnc_vars uid =
 	match (get_fnc_opt uid) with
