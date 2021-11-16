@@ -11,9 +11,8 @@ type abduction_res =
   | BFail
 
 (** Raise in case of ... *)
+(* TODO perhaps ErrorInAbdaction ? *)
 exception TempExceptionBeforeApiCleanup of string
-
-exception NoApplicableRule of Config.src_pos
 
 (** [biabduction solver form1 form2] is main biabduction function
     The result is:  "missing, frame, added_lvars"

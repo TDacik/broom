@@ -11,7 +11,6 @@ open Z3wrapper
 type variable = Formula.Exp.variable
 
 exception TempExceptionBeforeApiCleanup of string
-exception NoApplicableRule of Config.src_pos
 
 (** result of the rule application
     form1 * form2 * M * added_local_vars
