@@ -115,7 +115,7 @@ let abstraction_mode () = 1
 
 (* additionally perform abstraction after each just completed call on caller's
    side *)
-let abstract_on_call_done = false
+let abstract_on_call_done () = true
 
 (* if true entailment states when traversing a loop-closing edge,
    else on each basic block entry *)

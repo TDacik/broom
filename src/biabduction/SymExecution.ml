@@ -525,11 +525,18 @@ and exec_insn tbl bb_tbl states insn =
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
     | dst::called::args ->
-      let c = ( if (CL.Util.is_extern called)
-        then Contract.get_contract insn
-        else find_fnc_contract tbl dst args
-                               (CL.Util.get_fnc_uid_from_op called) ) in
-      get_new_states c
+      if (CL.Util.is_extern called)
+      then (
+        let c = Contract.get_contract insn in
+        get_new_states c
+      ) else (
+        let c = find_fnc_contract tbl dst args
+                                  (CL.Util.get_fnc_uid_from_op called) in
+        let s_call = get_new_states c in
+        if Config.abstract_on_call_done ()
+        then StateTable.try_abstraction_on_states solver bb_tbl.fuid s_call
+        else s_call
+      )
     | _ -> assert false )
   | _ -> let c = Contract.get_contract insn in get_new_states c
 
