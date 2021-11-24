@@ -203,9 +203,8 @@ let post_contract_application state solver pvarmap pvars =
   else (
     (*prerr_endline "------------";
     prerr_endline (State.to_string final_state);
-    prerr_endline "SAT Fail (Contract application)";*) 
-    [])
-
+    prerr_endline "SAT Fail (Contract application)"; *)
+    [] )
 (* Do
    1) rename conflicting contract variables
    2) apply the contract using biabduction
@@ -239,6 +238,7 @@ let contract_application solver state c pvars =
 		match res with
 		| [] -> CAppFail
 		| _ -> CAppOk res
+		
 
 
 (* PREPARE STATE FOR CONTRACT

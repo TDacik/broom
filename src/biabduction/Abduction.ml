@@ -241,7 +241,29 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
       (Solver.check solv query)=SATISFIABLE
     | _ -> raise (TempExceptionBeforeApiCleanup "check_learn_slseg")
 
-(* try to apply learn rule for slseg *)
+
+(**** REMOVE - Slseg ****)
+(* check whether we can apply remove on the form2.sigma[i2].
+   The result is false: imposible
+     true: possible
+*)
+let check_remove_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form2 i =
+  let ff = Boolean.mk_false ctx in
+  let b,e=match (List.nth form2.sigma i) with
+	  | Hpointsto (_,_,_) ->  ff,ff
+	  | Slseg (a,b,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
+	  | Dlseg (a,_,_,b,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
+  in
+  if (b==ff) then false
+  else
+  	if (b=e) 
+	then true (* no need to call solver *)
+	else
+	let query=[Boolean.mk_not ctx (Boolean.mk_eq ctx b e) ] in
+	(Solver.check solv query)==UNSATISFIABLE
+
+
+(* try to apply remove and learn rule for slseg *)
 let try_learn_slseg solver form1 form2 level _=
   let ctx=solver.ctx in
   let common_part=match level with
@@ -255,11 +277,14 @@ let try_learn_slseg solver form1 form2 level _=
   (* first find index of the rule on RHS, which can be learned on LHS *)
   let rec get_index i =
     if (List.length form2.sigma) <= i
-    then -1
+    then (false,-1)
     else
-      if (check_learn_slseg solver form1 form2 i level)
-      then i
-      else get_index (i+1)
+      if (check_remove_slseg solver form2 i)
+      then (true,i)
+      else
+	      if (check_learn_slseg solver form1 form2 i level)
+	      then (false,i)
+	      else get_index (i+1)
   in
   let nequiv a b = not (a=b) in
   let remove k form =
@@ -267,10 +292,17 @@ let try_learn_slseg solver form1 form2 level _=
       sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
   in
   match (get_index 0) with
-  | -1 -> Solver.pop solver.solv 1; Fail
-  | i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
+  | _,-1 -> Solver.pop solver.solv 1; Fail
+  (* learn *)
+  | false,i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
       (remove i form2),
       {sigma=[List.nth form2.sigma i]; pi=[]},
+      [],
+      NoRecord)
+  (* remove *)
+  | true,i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
+      (remove i form2),
+      {sigma=[]; pi=[]},
       [],
       NoRecord)
 
