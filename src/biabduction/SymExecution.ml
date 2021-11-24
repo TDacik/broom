@@ -533,7 +533,7 @@ and exec_insn tbl bb_tbl states insn =
         let c = find_fnc_contract tbl dst args
                                   (CL.Util.get_fnc_uid_from_op called) in
         let s_call = get_new_states c in
-        if Config.abstract_on_call_done ()
+        if s_call != [] && Config.abstract_on_call_done ()
         then StateTable.try_abstraction_on_states solver bb_tbl.fuid s_call
         else s_call
       )
