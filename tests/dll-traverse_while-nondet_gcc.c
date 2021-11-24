@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 #include <alloca.h>
-extern int __VERIFIER_nondet_int(void);
+// extern int __VERIFIER_nondet_int(void);
 
 struct item {
     struct item *next;
@@ -35,7 +35,7 @@ struct item* create_dll(void)
 
     // NOTE: running this on bare metal may cause the machine to swap a bit
     int i;
-    while(__VERIFIER_nondet_int()) {
+    while(random()) {
         now->next = alloc_and_zero();
         now->next->prev = now;
         now = now->next;
@@ -107,8 +107,6 @@ int main()
 
     // destroy the list, starting from the "begin"
     destroy_from_beg(*p_dll);
-    
-    void* p = (*p_dll)->next; // error
 
     // acquire a fresh instance of DLL
     *p_dll = create_dll();
