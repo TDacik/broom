@@ -19,6 +19,14 @@ type res =
 | AbstractionApply of Formula.t
 | AbstractionFail
 
+ 
+(* if the option is set to true, close the created lambdas *)
+let lambda_close lambda =
+	if Config.close_lambda
+	then Close_lambda.close_lambda lambda
+	else lambda
+
+
 (* for a given pointer expression a1 find all spacial predicates with an equal base adress 
    include_a1=0 --- pointsto "a1 -> _" is skipped
    include_a1=1 --- pointsto "a1 -> _" is included
@@ -614,12 +622,12 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		let lambda={param=[a_lambda;b_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda))]}
 	| [a],[b],[c],[d],[a_lambda],[b_lambda],[c_lambda],_ -> (*Dlseg*)
 		let lambda={param=[a_lambda;b_lambda;c_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda;c_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, (lambda_close lambda))]}
 	| _ -> AbstractionFail
 	
 
@@ -830,21 +838,21 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		let lambda={param=[a;d_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)) [d_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, lambda)]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda))]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
 		let lambda={param=[a;d_lambda;b_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
 						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
 						[d_lambda;b_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, lambda)]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, (lambda_close lambda))]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
 		let lambda={param=[a;b_lambda;d_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
 					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
 					[d_lambda;b_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, lambda)]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, (lambda_close lambda))]}
 	| _ -> AbstractionFail
 
 

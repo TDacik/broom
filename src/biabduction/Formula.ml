@@ -675,6 +675,8 @@ let rec diffbase_ll sigma x =
    and for each Hpointsto(y,_,_) create base(x) != base(y) 
    *)
 let diffbase form pnum dir =
+  if Config.close_lambda then [] (* skip if we use closed lambdas *)
+  else
   match (List.nth form.sigma pnum),dir with
   | Slseg (x,_,_),1 | Dlseg(x,_,_,_,_),1 | Dlseg (_,_,x,_,_),2 ->
     let nequiv a b = not (a=b) in
