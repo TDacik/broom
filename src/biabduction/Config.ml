@@ -89,6 +89,9 @@ let disable_sls = false
 (* do not use Dlseg (Double-linked List Segment) abstraction *)
 let disable_dls = false
 
+(* Enable lambda closure *)
+let close_lambda=true
+
 (* do not perform abstraction on each end of basic blocks, but only when
    looping *)
 let abstract_on_loop_edges_only = true

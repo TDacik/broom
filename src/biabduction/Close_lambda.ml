@@ -12,9 +12,9 @@ open Z3
 exception Error_in_lambda_closing
 
 let close_lambda lambda =
-	print_endline "Closing lambda:";
+	(*print_endline "Closing lambda:";
 	print_with_lambda lambda.form;
-	print_endline "-------------";
+	print_endline "-------------";*)
 	(* create a fresh solver --  the main one contains asserted "form" but we need to assert unfolded form *)
 	let solver=Z3wrapper.config_solver () in
 	let ctx=solver.ctx in
@@ -153,13 +153,13 @@ let close_lambda lambda =
 
 
 	let closed_blocks=List.map close_block sorted_blocks in
-
+	(*
 	let rec print_blocks bl =
 		match bl with
 		| [] -> print_endline "END"
 		| first::rest -> print_string "BLOCK:"; print {sigma=first; pi=[]}; print_blocks rest
 	in
-	print_blocks closed_blocks;
+	print_blocks closed_blocks;*)
 	let res_form={sigma=(List.concat closed_blocks)@(get_lseg lambda.form.sigma); pi=lambda.form.pi} in
 	{form=res_form; param=lambda.param}
 
