@@ -103,6 +103,9 @@ let memory_leaks_as_errors () = false
 (* do not use Dlseg (Double-linked List Segment) abstraction *)
 (* let disable_dls = false *)
 
+(* EXPERIMENTAL: close lambdas within the abstraction *)
+let close_lambda () = false
+
 (* using of Slseg (Singly-linked List Segment) and Dlseg (Double-linked List
   Segment) abstraction:
   0 - disabeled
@@ -119,7 +122,7 @@ let abstract_on_call_done = false
 let entailment_on_loop_edges_only () = true
 
 (* max number of entailment calls for one loop : 0 - no limit *)
-let entailment_limit () = 6
+let entailment_limit () = 5
 
 (* Abduction strategy: 0 - single strategy = one result,
                        1 - more strategies = possible more restults
