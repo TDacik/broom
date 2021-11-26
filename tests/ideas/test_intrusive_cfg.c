@@ -1,5 +1,9 @@
+// SPDX-License-Identifier: MIT
+// based on test_intrusive.c
+
+
 #include "minunit.h"
-#include "intrusive_cfg.h"
+#include "intrusive-list.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

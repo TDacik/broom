@@ -1,4 +1,7 @@
-#include "intrusive_cfg.h"
+// SPDX-License-Identifier: MIT
+// based on intrusive.{c,h}
+
+#include "intrusive-list.h"
 #include <stddef.h> /* size_t */
 #include <stdlib.h>
 
@@ -81,7 +84,7 @@ int test_1() {
   list_insert_head(l, p);
 
   free(p);
-  free(l);
+  //free(l);
 
   return 0;
 }

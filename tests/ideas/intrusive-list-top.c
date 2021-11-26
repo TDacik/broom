@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// based on intrusive.{c,h}
+
 //#include "intrusive.h"
 //#include <stddef.h> /* size_t */ 
 #include <stdlib.h>
