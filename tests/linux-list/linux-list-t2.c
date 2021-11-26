@@ -135,7 +135,3 @@ struct list_head* test2 ()
     return head;
 }
 
-/**
- * @original file: predator regre: test-0156.c
- * Added functions to remove elements
- */
