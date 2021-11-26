@@ -36,6 +36,8 @@ struct dll_item {
 
 extern void dll_die(const char *msg);
 
+static dll_item_t* create_item(const dll_data_t *data);
+
 void dll_init(dll_t *list)
         __attribute((__nonnull__(1)));
 
