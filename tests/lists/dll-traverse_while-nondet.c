@@ -1,8 +1,7 @@
 // Creating a DLL and destroying it forwards, then creating another one and deleting it backwards.
 
 #include <stdlib.h>
-#include <alloca.h>
-extern int __VERIFIER_nondet_int(void);
+// extern int __VERIFIER_nondet_int(void);
 
 struct item {
     struct item *next;
@@ -35,7 +34,7 @@ struct item* create_dll(void)
 
     // NOTE: running this on bare metal may cause the machine to swap a bit
     int i;
-    while(__VERIFIER_nondet_int()) {
+    while(random()) {
         now->next = alloc_and_zero();
         now->next->prev = now;
         now = now->next;
@@ -68,11 +67,9 @@ void traverse_from_beg(struct item *dll)
 
 void traverse_from_end(struct item *dll)
 {
-    struct item **p_node = alloca(sizeof(struct item *));
-    *p_node = dll;
+    struct item *node = dll;
     // jump to the "end"
-    fast_forward(p_node);
-    struct item *node = *p_node;
+    fast_forward(&node);
     while (node) {
         node = node->prev;
     }
@@ -105,17 +102,15 @@ int main()
 
     // destroy the list, starting from the "begin"
     destroy_from_beg(dll);
-    
-    void* p = dll->next; // error
 
-//     acquire a fresh instance of DLL
-//     dll = create_dll();
-// 
-//     jump to the "end"
-//     fast_forward(&dll);
-// 
-//     destroy the list, starting from the "end"
-//     destroy_from_end(dll);
+    // acquire a fresh instance of DLL
+    dll = create_dll();
+
+    // jump to the "end"
+    fast_forward(&dll);
+
+    // destroy the list, starting from the "end"
+    destroy_from_end(dll);
 
     return 0;
 }

@@ -659,6 +659,15 @@ let contract_nondet ?unsign:(unsign=false) dst =
 		let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
 		{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}::[]
 
+let contract_expect dst src =
+	let ef_dst = operand_to_exformula dst empty_exformula in
+	let ef_src = operand_to_exformula src {f=ef_dst.f; cnt_cvars=ef_dst.cnt_cvars; root=Undef} in
+	let lhs = ef_src.f in
+	let (new_dst, pvarmap) = rewrite_root {f=ef_src.f; cnt_cvars=ef_src.cnt_cvars; root=ef_dst.root} in
+	let assign = Exp.BinOp ( Peq, new_dst.root, ef_src.root) in
+	let rhs = {pi = assign :: new_dst.f.pi; sigma = new_dst.f.sigma} in
+	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
+
 let contract_skip fnc_name =
 	prerr_endline ("debug: ignoring call to "^fnc_name^"()");
 	[]
@@ -688,6 +697,7 @@ let contract_for_builtin dst called args loc =
 	| "__VERIFIER_nondet_int", [] -> contract_nondet dst
 	| "__VERIFIER_nondet_unsigned", [] -> contract_nondet ~unsign:true dst
 	| "__builtin_object_size", _::_::[] -> (* gcc *) contract_skip fnc_name
+	| "__builtin_expect", src::_::[] -> (contract_expect dst src)::[]
 	| "rand", [] -> contract_nondet ~unsign:true dst
 	| "random", [] -> contract_nondet ~unsign:true dst
 	| _,_ ->

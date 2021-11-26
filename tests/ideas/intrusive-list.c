@@ -1,4 +1,8 @@
-#include "intrusive_cfg.h"
+// SPDX-License-Identifier: MIT
+// based on intrusive.c
+
+
+#include "intrusive-list.h"
 #include <stddef.h> /* size_t */
 #include <stdlib.h>
 

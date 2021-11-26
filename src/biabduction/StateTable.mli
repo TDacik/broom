@@ -36,3 +36,8 @@ val add_rerun : t -> Contract.t -> unit
 val start_rerun : t -> Contract.t list
 
 val reset : t -> unit
+
+(** [try_abstraction_on_states solver fuid states] tries abstraction on each
+    miss anad act of each state, for now only list abstraction *)
+val try_abstraction_on_states : Z3wrapper.solver -> cl_uid -> State.t list ->
+                                State.t list

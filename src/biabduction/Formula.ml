@@ -403,12 +403,12 @@ let rec subsigma vars sigma =
       (tl_vars,subtl)
   | Dlseg (a,b,c,d,l)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
-    let (c_vars,c_found) = find_expr_contains_vars vars a in
+    let (c_vars,c_found) = find_expr_contains_vars vars c in
     let (tl_vars,subtl) = subsigma vars tl in
     if (a_found)||(c_found) (* must be reach from source pointer *)
     then
       let (b_vars,_) = find_expr_contains_vars vars b in
-      let (d_vars,_) = find_expr_contains_vars vars b in
+      let (d_vars,_) = find_expr_contains_vars vars d in
       let new_vars = CL.Util.list_diff (a_vars @ b_vars @ c_vars @ d_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Dlseg (a,b,c,d,l)::subtl)
     else
