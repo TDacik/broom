@@ -1,15 +1,17 @@
 (* Close lambda
-   - for each allocate block within lambda add pointsto(s) to fill the whole block (if needed) 
+   - for each allocate block within lambda add pointsto(s) to fill the whole
+     block (if needed) 
    - the lambda then contains whole blocks only
-   - INPUT example: x -(8) -> _ * x+16 - (8) -> _ & base(x)=x
-   - OUTPUT example:  x -(8) -> _ * x+8 - (8) -> _ * x+16 - (8) -> _ * x+24 -(len(x)-24)-> _ & base(x)=x 
+   - INPUT example: x -(8) -> _ * x+16 -(8)-> _ & base(x)=x
+   - OUTPUT example: x -(8) -> _ * x+8 -(8)-> _ * x+16 -(8)-> _ *
+                     x+24 -(len(x)-24)-> _ & base(x)=x 
 *)
 
 open Formula
 open Z3wrapper
 open Z3
 
-exception Error_in_lambda_closing
+exception ErrorInLambdaClosing of Config.src_pos
 
 let close_lambda lambda =
 	(*print_endline "Closing lambda:";
@@ -55,9 +57,9 @@ let close_lambda lambda =
 			(match (Solver.check solv query) with
 			| SATISFIABLE -> -1
 			| UNSATISFIABLE -> 1
-			| _ -> raise Error_in_lambda_closing
+			| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 			)
-		| _ -> raise Error_in_lambda_closing
+		| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 	in
 	let sorted_blocks=List.map (List.sort order_in_block) blocks in
 	(* close blocks by missing pointsto *)
@@ -65,7 +67,7 @@ let close_lambda lambda =
 		(* first check that there is no space before the first points-to *)
 		let beg=match List.nth block 0 with
 			| (Hpointsto (a,_,_)) -> a
-			| _ -> raise Error_in_lambda_closing
+			| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 		in
 		let base_beg=(Expr.mk_app ctx z3_names.base [expr_to_solver_only_exp ctx z3_names beg]) in
 		let query_beg=[Boolean.mk_not ctx 
@@ -84,13 +86,13 @@ let close_lambda lambda =
       				in
 
 				[Hpointsto (UnOp ( Base, beg),size2 ,Undef)]
-			| _ -> raise Error_in_lambda_closing
+			| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 		in
 		(* check that there is no space between particular pointsto *)
 		let check_intermediate index =
 			let p1,p2=match (List.nth block index),(List.nth block (index+1)) with
 				| (Hpointsto (a,l,_)),(Hpointsto (b,_,_)) ->  (Exp.BinOp (Pplus, a, l)),b
-				| _ -> raise Error_in_lambda_closing
+				| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 			in
 			let query=[Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx 
@@ -107,7 +109,7 @@ let close_lambda lambda =
       				in
 				[Hpointsto (p1,size2 ,Undef)]
 			| UNSATISFIABLE -> []
-			| _ -> raise Error_in_lambda_closing
+			| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 		in
 		let rec close_intermediate index =
 			if index=((List.length block)-1) 
@@ -118,7 +120,7 @@ let close_lambda lambda =
 		(* check that there is no space after the last points-to *)
 		let fin=match List.nth block ((List.length block)-1) with
 			| (Hpointsto (a,b,_)) -> Exp.BinOp (Pplus, a, b)
-			| _ -> raise Error_in_lambda_closing
+			| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 		in
 		let query_fin=[Boolean.mk_not ctx 
 				(Boolean.mk_eq ctx 
@@ -136,7 +138,7 @@ let close_lambda lambda =
 					| Some a -> Exp.Const (Int a)
       				in
 				[Hpointsto (fin,size_to_end2,Undef)]
-			| _ -> raise Error_in_lambda_closing
+			| _ -> raise_notrace (ErrorInLambdaClosing __POS__)
 		in
 		res1@block@(close_intermediate 0)@res2
 					

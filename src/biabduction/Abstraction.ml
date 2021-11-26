@@ -22,8 +22,8 @@ type res =
  
 (* if the option is set to true, close the created lambdas *)
 let lambda_close lambda =
-	if Config.close_lambda
-	then Close_lambda.close_lambda lambda
+	if Config.close_lambda ()
+	then CloseLambda.close_lambda lambda
 	else lambda
 
 

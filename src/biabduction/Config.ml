@@ -103,8 +103,8 @@ let memory_leaks_as_errors () = false
 (* do not use Dlseg (Double-linked List Segment) abstraction *)
 (* let disable_dls = false *)
 
-(* iEXPERIMENTAL: close lambdas within the abstraction *)
-let close_lambda=false
+(* EXPERIMENTAL: close lambdas within the abstraction *)
+let close_lambda () = false
 
 (* using of Slseg (Singly-linked List Segment) and Dlseg (Double-linked List
   Segment) abstraction:
