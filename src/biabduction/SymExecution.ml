@@ -327,11 +327,14 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
   let tmp_vars = CL.Util.list_diff fvars gvars in
   if (3 <= Config.verbose ()) then (
     prerr_string "PVARS:";
-    CL.Util.print_list_endline ~oc:stderr Exp.variable_to_string fvars;
+    CL.Util.print_list ~oc:stderr Exp.variable_to_string fvars;
+	prerr_endline "";
     prerr_string "ANCHORS:";
-    CL.Util.print_list_endline ~oc:stderr Exp.variable_to_string anchors;
+    CL.Util.print_list ~oc:stderr Exp.variable_to_string anchors;
+	prerr_endline "";
     prerr_string "GVARS:";
-    CL.Util.print_list_endline ~oc:stderr Exp.variable_to_string gvars;);
+    CL.Util.print_list ~oc:stderr Exp.variable_to_string gvars;
+	prerr_endline "";);
 
   let memcheck_gvars = (
     if (Config.exit_leaks ()) then
