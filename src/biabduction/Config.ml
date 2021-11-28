@@ -42,7 +42,7 @@ let display_stats () =
   if stats () then (
     (* Printf.printf "Number of abstractions: %i\n" !(statistics.abstracts); *)
     Printf.printf "Number of successful entailments: %i\n" !(statistics.entailments);
-    Printf.printf "Number of discard contracts after rerun : %i\n" !(statistics.badrerun);
+    Printf.printf "Number of discard preconditions after rerun : %i\n" !(statistics.badrerun);
     Printf.printf "Number of internals: %i\n" !(statistics.internals);
     Printf.printf "Number of errors: %i\n" !(statistics.errs);
     Printf.printf "Number of warnings: %i\n" !(statistics.warns);
@@ -54,7 +54,6 @@ let display_stats () =
 (** type for location in source code: __POS__ *)
 type src_pos = CL.Msg.src_pos
 
-(* TODO: location *)
 let prerr_internal str loc =
   incr statistics.internals;
   CL.Msg.internal (str,loc)
@@ -72,20 +71,39 @@ let prerr_note str loc =
 
 (** Options *)
 
-(* 0x0 no debug
-   0x1 debug contracts
-   0x2 debug abduction
-   0x4 debug abstraction
-   0x8 stats? *)
-let verbose = 0xD
+(* describe verbose level as follow:
+  0 no debug information
+  1 print name of analysed function
+  2 + print information about expensive operations: abstraction/entailment
+  3 + print contract, abduction info, and current state for every instruction
+  information are printing on stderr
+*)
+let verbose () = 3
+
+let debug1 str =
+  if 1 <= verbose () then prerr_endline str
+
+let debug2 str =
+  if 2 <= verbose () then prerr_endline str
+
+let debug3 str =
+  if 3 <= verbose () then prerr_endline str
+
+let debug3_string str =
+  if 3 <= verbose () then (prerr_string str; flush stderr;)
+
 
 (* --main=<name> set name of entry function - initializing global variables and
    expecting 0 or 2 arguments (argv, argc) *)
 let main () = "main"
 
+(* --only-fnc=<name> set the name of the function that will be the only one to
+  be analyzed, except for the functions called by this function *)
+(* let only_fnc () = "main" *)
+
 (* if true summery of function will be rerun when abstraction happend or go
    through the loops *)
-let rerun () = true
+let rerun () = false
 
 (* --oom / --out-of-memory unsuccesful heap allocation *)
 let oom = false

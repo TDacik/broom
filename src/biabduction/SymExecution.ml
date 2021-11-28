@@ -284,7 +284,7 @@ let check_rerun tbl s =
 (* note: error from call of error() *)
 
 let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states insn =
-  print_endline ">>> final error contract";
+  Config.debug2 ">>> final error contract";
   let fixed = (CL.Util.get_anchors_uid bb_tbl.StateTable.fuid) @ CL.Util.stor.global_vars in
   let get_err_contract s =
     let (removed_sigma,new_miss) = Simplify.formula solver fixed s.miss in
@@ -303,16 +303,16 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
       through_loop = s.through_loop} in
 
     let c_err = state2contract ~status:Error s_err 0 in
-    Contract.print c_err;
+    Config.debug3 (Contract.to_string c_err);
     Some c_err
   in
   let c_errs = List.filter_map get_err_contract states in
   SpecTable.add fnc_tbl bb_tbl.fuid c_errs
 
 let set_fnc_unfinished_contract fnc_tbl fuid =
-  print_endline ">>> final unfinished contract";
+  Config.debug2 ">>> final unfinished contract";
   let c = Contract.contract_for_unfinished_fnc (CL.Util.get_fnc fuid) in
-  Contract.print c;
+  Config.debug3 (Contract.to_string c);
   SpecTable.only_add fnc_tbl fuid (c::[])
 
 (* anchors - existential vars representing arguments of function and original
@@ -320,17 +320,18 @@ let set_fnc_unfinished_contract fnc_tbl fuid =
    gvars - global variables (may appear after calling function)
    tmp_vars - local program variables *)
 let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states insn =
-  print_endline ">>> final contract";
+  Config.debug2 ">>> final contract";
   let anchors = CL.Util.get_anchors_uid bb_tbl.StateTable.fuid in
   let gvars = CL.Util.stor.global_vars in
   let fvars = CL.Util.get_fnc_vars bb_tbl.fuid in
   let tmp_vars = CL.Util.list_diff fvars gvars in
-  print_string "PVARS:";
-  CL.Util.print_list Exp.variable_to_string fvars; print_newline ();
-  print_string "ANCHORS:";
-  CL.Util.print_list Exp.variable_to_string anchors; print_newline ();
-  print_string "GVARS:";
-  CL.Util.print_list Exp.variable_to_string gvars; print_newline ();
+  if (3 <= Config.verbose ()) then (
+    prerr_string "PVARS:";
+    CL.Util.print_list_endline ~oc:stderr Exp.variable_to_string fvars;
+    prerr_string "ANCHORS:";
+    CL.Util.print_list_endline ~oc:stderr Exp.variable_to_string anchors;
+    prerr_string "GVARS:";
+    CL.Util.print_list_endline ~oc:stderr Exp.variable_to_string gvars;);
 
   let memcheck_gvars = (
     if (Config.exit_leaks ()) then
@@ -351,7 +352,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         through_loop = s.through_loop} in
       try
         let subs = Simplify.state solver fixed nostack_s loc in
-        State.print subs;
+        Config.debug3 (State.to_string subs);
         let need_rerun = check_if_rerun bb_tbl subs in
         if (not(need_rerun) && is_invalid subs.curr.pi) then
           Config.prerr_warn "function returns address of local variable" loc;
@@ -359,13 +360,13 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         let new_c = add_gvars_moves gvars c in
         if need_rerun then (
           StateTable.add_rerun bb_tbl c;
-          print_endline "need rerun";
+          Config.debug3 "need rerun";
           None )
         else if check_rerun bb_tbl subs then (
           None (* do nothing *)
         )
         else (
-          Contract.print new_c;
+          Config.debug3 (Contract.to_string new_c);
           Some new_c )
       with
       | Simplify.RemovedSpatialPartFromMiss -> (
@@ -397,7 +398,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
       let rec solve_contract contracts =
         match contracts with
         | [] -> []
-        | c::tl -> Contract.print c;
+        | c::tl -> Config.debug3 (Contract.to_string c);
 
           let rec process_new_states abd_states =
             match abd_states with
@@ -405,7 +406,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
             | a::atl ->
               try
                 let simple_a = Simplify.state solver pvars a insn.CL.Fnc.loc in
-                State.print simple_a;
+                Config.debug3 (State.to_string simple_a);
                 match c.s with
                 | OK | Unfinished -> simple_a::(process_new_states atl)
                 | Error ->
@@ -419,13 +420,13 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
 
               with
               | Simplify.RemovedSpatialPartFromMiss -> (
-                State.print a;
+                Config.debug3 (State.to_string a);
                 set_fnc_error_contract solver tbl bb_tbl [s] insn;
                 empty_is_err_ref := false;
                 process_new_states atl
               )
               | Simplify.RemovedSpatialPartFromCurr -> (
-                State.print a; (* TODO error: memory leak *)
+                Config.debug3 (State.to_string a); (* TODO error: memory leak *)
                 set_fnc_error_contract solver tbl bb_tbl [s] insn;
                 empty_is_err_ref := false;
                 process_new_states atl
@@ -481,7 +482,7 @@ let rec exec_block tbl bb_tbl states (uid, bb) =
   if (states = [])
   then states
   else (
-    Printf.printf ">>> executing block L%i:\n%!" uid;
+    Config.debug3 (">>> executing block L"^(string_of_int uid )^":");
     let new_states = (if not (Config.entailment_on_loop_edges_only ())
       then (* entailemt on each basic block entry *)
         StateTable.add ~entailment:true bb_tbl uid states
@@ -500,7 +501,7 @@ and exec_insn tbl bb_tbl states insn =
       then StateTable.add ~entailment:true bb_tbl bb_uid ss
       else ss
   in
-  CL.Printer.print_insn insn;
+  if (3 <= Config.verbose ()) then CL.Printer.prerr_insn insn;
   match insn.CL.Fnc.code with
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
     let s_jmp = entailment_if_end_loop uid states in
@@ -593,20 +594,20 @@ let init_state_main tbl bb_tbl =
         match states with (* implicit initialization *)
         | [s] -> (
           let new_s = exec_zeroinitializer bb_tbl.StateTable.fuid s (uid,gv) in
-          State.print new_s;
+          Config.debug3 (State.to_string new_s);
           exec_init_global_var [new_s] tl )
         | _ -> assert false (* expect exactly 1 init state *)
       else (* explicit initialization *)
         exec_init_global_var (exec_insns tbl bb_tbl states gv.initials) tl
   in
   let init_state = State.init_main bb_tbl.fuid in
-  print_endline ">>> initializing global variables";
+  Config.debug2 ">>> initializing global variables";
   (exec_init_global_var (init_state::[]) CL.Util.stor.global_vars)
 
 let exec_fnc fnc_tbl f =
   if (CL.Util.is_extern f.CL.Fnc.def) then () else (
     let fnc_decl_str = CL.Printer.fnc_declaration_to_string f in
-    print_endline (">>> executing function "^fnc_decl_str^":");
+    Config.debug1 (">>> executing function "^fnc_decl_str^":");
     let fuid = CL.Util.get_fnc_uid f in
     let bb_tbl = StateTable.create fuid in (* for states on basic block entry *)
     let fname = CL.Printer.get_fnc_name f in
@@ -620,7 +621,7 @@ let exec_fnc fnc_tbl f =
       then (
 
         let rerun_contracts = StateTable.start_rerun bb_tbl in
-        print_endline (">>> executing reruns for function "^fnc_decl_str^":");
+        Config.debug2 (">>> executing reruns for function "^fnc_decl_str^":");
         let nop = CL.Util.get_NOP () in
 
         let rec rerun_for_contracts rcontracts =
@@ -636,7 +637,8 @@ let exec_fnc fnc_tbl f =
               run2
             with BadRerun ->
               incr Config.statistics.badrerun;
-              Config.prerr_note "Discard contract after 2nd run" (CL.Util.get_fnc_loc f); []
+              Config.prerr_note "Discard precondition after 2nd run" (CL.Util.get_fnc_loc f);
+			  (* Config.debug3 print precondition; *) []
             ) in
             states2 @ rerun_for_contracts rtl )
         in

@@ -31,13 +31,16 @@ val list_join_unique: 'a list -> 'a list -> 'a list
 	[to_string] on each elm *)
 val list_to_string: ('a -> string) -> 'a list -> string
 
-(** [print_list ~delim:delim to_string args] prints list of elms separated by
-    [delim] (default ', ') [to_string] on each elm *)
-val print_list: ?delim:string -> ('a -> string) -> 'a list -> unit
+(** [print_list ~delim:delim ~oc:oc to_string args] prints list of elms
+    separated by [delim] (default ', ') [to_string] on each elm to the output
+    defined by [oc] (default stdout) *)
+val print_list: ?delim:string -> ?oc:out_channel -> ('a -> string) -> 'a list
+                -> unit
 
-(** [print_list to_string args] prints list of elms on new line, calling
-    [to_string] on each elm *)
-val print_list_endline: ('a -> string) -> 'a list -> unit
+(** [print_list ~oc:oc to_string args] prints list of elms on new line, calling
+    [to_string] on each elm; prints to the output defined by [oc] (default
+    stdout) *)
+val print_list_endline: ?oc:out_channel -> ('a -> string) -> 'a list -> unit
 
 (** [is_loop_closing_block bb_uid insn] *)
 val is_loop_closing_block: Loc.cl_uid -> Fnc.insn -> bool

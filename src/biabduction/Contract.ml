@@ -107,7 +107,7 @@ let rec operand_to_exformula op ef =
 		| OpVar uid ->
 			let (dbg, ef_new) = variable_to_exformula op.typ (Exp.Var uid) op.accessor ef in
 			(if (dbg <> "")
-			then print_string ("OP \""^(CL.Printer.operand_to_string op)^"\": "^dbg));
+			then Config.debug3_string ("OP \""^(CL.Printer.operand_to_string op)^"\": "^dbg));
 			ef_new
 		| OpCst { cst_data } -> constant_to_exformula cst_data op.accessor ef
 		| OpVoid -> ef

@@ -49,18 +49,18 @@ let rec list_to_string to_string args =
 
 (* Print list of elms separated by delim (default ', ') calling 'to_string' on
    each elm *)
-let rec print_list ?delim:(delim=", ") to_string args =
+let rec print_list ?delim:(delim=", ") ?oc:(oc=stdout) to_string args =
 	match args with
 	| [] -> ()
 	| lst::[] -> let str_arg = to_string lst in
-		print_string str_arg
+		output_string oc str_arg
 	| hd::tl ->  let str_arg = to_string hd in
-		print_string str_arg; print_string delim; flush stdout;
-		print_list ~delim:delim to_string tl
+		output_string oc str_arg; output_string oc delim; flush oc;
+		print_list ~delim:delim ~oc:oc to_string tl
 
-let print_list_endline to_string args =
+let print_list_endline ?oc:(oc=stdout) to_string args =
 	if (args=[]) then ()
-	else (print_list ~delim:"\n" to_string args; print_newline ())
+	else (print_list ~delim:"\n" ~oc:oc to_string args; output_char oc '\n';)
 
 let is_loop_closing_block bb_uid insn =
 	List.mem bb_uid insn.Fnc.loop_closing_targets

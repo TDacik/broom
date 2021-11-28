@@ -37,7 +37,7 @@ let try_abstraction_on_states solver fuid states =
 			(* TODO: update lvars *)
 			abstract_state :: (try_abstraction tl)
 	in
-	prerr_endline ">>> trying list abstraction";
+	Config.debug2 ">>> trying list abstraction";
 	try_abstraction states
 
 (* entailment check miss1 <= miss2 and curr1 <= curr2 *)
@@ -58,7 +58,7 @@ let rec entailment_states fuid old_states states =
 					if (Abduction.entailment solver s2.curr s1.curr evars)
 					then (
 						incr Config.statistics.entailments;
-						prerr_endline ">>> entailment_check: discard state";
+						Config.debug2 ">>> entailment_check: discard state";
 						[]) (* not add new state, covered by old state *)
 					else entailment_one tl1
 				else entailment_one tl1
@@ -76,7 +76,7 @@ let add ?(entailment=false) st uid states =
 		then (
 			if (Config.entailment_limit () = old_cnt)
 			then (
-				prerr_endline ">>> entailment_check: limit";
+				Config.debug2 ">>> entailment_check: limit";
 				raise_notrace (EntailmentLimit __POS__)
 			) else (
 				let astates = (if Config.abstraction_mode () = 2
@@ -84,7 +84,7 @@ let add ?(entailment=false) st uid states =
 						let solver = Z3wrapper.config_solver () in
 						try_abstraction_on_states solver st.fuid states )
 					else states (* nothing *) ) in
-				prerr_endline (">>> entailment_check: next "^(string_of_int old_cnt));
+				Config.debug2 (">>> entailment_check: next "^(string_of_int old_cnt));
 				let new_states = entailment_states st.fuid old_states astates in
 				let value={cnt=(old_cnt+1); states=(old_states @ new_states)} in
 				Hashtbl.replace st.tbl uid value;
