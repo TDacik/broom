@@ -140,6 +140,10 @@ val find_vars : t -> Exp.variable list
     from [vars] *)
 val subformula_only : Exp.t list -> t -> (Exp.t list * t)
 
+(** [var_is_reachable f var vars] returns true, if [var] depends on at least
+    one vraiable from [vars] in formula [f] *)
+val var_is_reachable : t -> Exp.variable -> Exp.variable list -> bool
+
 (** [get_equiv_vars a pi] get all variables equivalent with [a] from pure part
     by computing a transitive closure *)
 val get_equiv_vars : Exp.variable list -> pi -> Exp.variable list

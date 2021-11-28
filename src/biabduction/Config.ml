@@ -101,9 +101,9 @@ let main () = "main"
   be analyzed, except for the functions called by this function *)
 (* let only_fnc () = "main" *)
 
-(* if true summery of function will be rerun when abstraction happend or go
-   through the loops *)
-let rerun () = false
+(* if true preconditions of function will be rerun when nondeterminismus or
+   abstraction happend or go through the loops *)
+let rerun () = true
 
 (* --oom / --out-of-memory unsuccesful heap allocation *)
 let oom = false

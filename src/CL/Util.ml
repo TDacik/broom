@@ -147,6 +147,11 @@ let get_pvars_for_fnc uid =
 
 let find_block uid fnc = List.assoc_opt uid fnc.Fnc.cfg
 
+let get_var_uid_from_op op =
+	match op.Operand.data with
+	| OpVar uid -> uid
+	| _ -> assert false
+
 let rec check_fncs uid fncs =
 	match fncs with
 	| [] -> assert false

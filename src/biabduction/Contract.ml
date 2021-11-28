@@ -32,6 +32,9 @@ let empty = {lhs = Formula.empty; rhs = Formula.empty; cvars = 0; pvarmap = []; 
 let rw_rhs c =
 	{lhs = Formula.empty; rhs = c.lhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
 
+let rw_lhs lhs c =
+	{lhs = lhs; rhs = c.rhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
+
 let pvarmap_to_string pvarmap =
 	CL.Util.list_to_string (fun (x,y) ->
 		(Exp.variable_to_string x) ^ "->" ^ (Exp.cvariable_to_string y) )

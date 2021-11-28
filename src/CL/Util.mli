@@ -92,6 +92,8 @@ val get_pvars: Loc.cl_uid -> int list
     for return of function *)
 val get_pvars_for_fnc: Loc.cl_uid -> int list
 
+val get_var_uid_from_op: Operand.t -> Loc.cl_uid
+
 (** [get_insns_from_block uid] *)
 val get_insns_from_block: Loc.cl_uid -> Fnc.insn list
 

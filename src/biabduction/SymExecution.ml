@@ -328,13 +328,13 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
   if (3 <= Config.verbose ()) then (
     prerr_string "PVARS:";
     CL.Util.print_list ~oc:stderr Exp.variable_to_string fvars;
-	prerr_endline "";
+    prerr_endline "";
     prerr_string "ANCHORS:";
     CL.Util.print_list ~oc:stderr Exp.variable_to_string anchors;
-	prerr_endline "";
+    prerr_endline "";
     prerr_string "GVARS:";
     CL.Util.print_list ~oc:stderr Exp.variable_to_string gvars;
-	prerr_endline "";);
+    prerr_endline "";);
 
   let memcheck_gvars = (
     if (Config.exit_leaks ()) then
@@ -361,12 +361,14 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
           Config.prerr_warn "function returns address of local variable" loc;
         let c = state2contract ~status:status subs 0 in
         let new_c = add_gvars_moves gvars c in
-        if need_rerun then (
+        if need_rerun then ( (* add contract which need to be rerun *)
           StateTable.add_rerun bb_tbl c;
           Config.debug3 "need rerun";
           None )
         else if check_rerun bb_tbl subs then (
-          None (* do nothing *)
+          (* add possible final contract after 2nd run *)
+          StateTable.add_rerun bb_tbl c;
+          None
         )
         else (
           Config.debug3 (Contract.to_string new_c);
@@ -509,15 +511,27 @@ and exec_insn tbl bb_tbl states insn =
   | InsnJMP uid -> let bb = CL.Util.get_block uid in
     let s_jmp = entailment_if_end_loop uid states in
     exec_block tbl bb_tbl s_jmp bb
-  | InsnCOND (_,uid_then,uid_else) ->
+  | InsnCOND (op,uid_then,uid_else) ->
     let c = Contract.get_contract insn in
-    let s_then = get_new_states ~empty_is_err:false [(List.hd c)] in
-    let s_else = get_new_states ~empty_is_err:false [(List.nth c 1)] in
-    let ss_then = entailment_if_end_loop uid_then s_then in
-    let ss_else = entailment_if_end_loop uid_else s_else in
-    let bb_then = CL.Util.get_block uid_then in
-    let bb_else = CL.Util.get_block uid_else in
-    (exec_block tbl bb_tbl ss_then bb_then) @ (exec_block tbl bb_tbl ss_else bb_else)
+    let cond_var = CL.Util.get_var_uid_from_op op in
+	let known_vars = CL.Util.get_anchors_uid bb_tbl.StateTable.fuid @ CL.Util.stor.global_vars in
+
+    let set_nondet s =
+      if s.through_loop = false && not(var_is_reachable s.miss cond_var known_vars)
+      then State.set_through_loop s
+      else s
+    in
+
+    let get_branch uid c_one =
+        let new_s = get_new_states ~empty_is_err:false [c_one] in
+        let ss = entailment_if_end_loop uid new_s in
+        let sss = List.map set_nondet ss in
+        let bb = CL.Util.get_block uid in
+        (sss,bb)
+    in
+    let (s_then,bb_then) = get_branch uid_then (List.hd c) in
+    let (s_else,bb_else) = get_branch uid_else (List.nth c 1) in
+    (exec_block tbl bb_tbl s_then bb_then) @ (exec_block tbl bb_tbl s_else bb_else)
   | InsnSWITCH _ -> assert false
   | InsnRET _ ->
     let c = Contract.get_contract insn in
@@ -635,10 +649,13 @@ let exec_fnc fnc_tbl f =
             let rstates = new_states_for_insn false solver fnc_tbl bb_tbl nop init_states [rc_init] in
             let states2 = (try
               let run2 = exec_block fnc_tbl bb_tbl rstates (List.hd f.cfg) in
-              (* add contract after 2nd run *)
-              SpecTable.add fnc_tbl bb_tbl.fuid [rc];
+              (* add contracts after 2nd run *)
+              let rerun_contracts2 = StateTable.start_rerun bb_tbl in
+              let final_contracts = List.map (Contract.rw_lhs rc.lhs) rerun_contracts2 in
+              SpecTable.add fnc_tbl bb_tbl.fuid final_contracts;
               run2
             with BadRerun ->
+              StateTable.reset_rerun bb_tbl;
               incr Config.statistics.badrerun;
               Config.prerr_note "Discard precondition after 2nd run" (CL.Util.get_fnc_loc f);
 			  (* Config.debug3 print precondition; *) []

@@ -294,7 +294,7 @@ let rec find_and_remove_var_pointsto obj sigma cvars =
     let (ptr0,sig0,cvars0) = find_and_remove_var_pointsto obj rest cvars in
     ptr0, exp::sig0, cvars0
 
-(* exexcept contract variables *)
+(* except contract variables *)
 let rec find_vars_expr expr =
   match expr with
   | Exp.Var a -> [a]
@@ -421,6 +421,12 @@ let subformula_only vars ff =
   let (sigma_vars,sigma_f) = subsigma vars ff.sigma in
   ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
 
+let var_is_reachable f uid depend_uids =
+  let (subvars,subf) = subformula_only [(Var uid)] f in
+  let depend_vars = Exp.get_list_vars depend_uids in
+  Config.debug3 ("subformula: "^(to_string subf));
+  Config.debug3 ("sub: "^ (CL.Util.list_to_string Exp.to_string subvars)^" depends: "^ (CL.Util.list_to_string Exp.variable_to_string depend_uids));
+  if (CL.Util.list_inter subvars depend_vars) = [] then (prerr_endline "F";false) else (prerr_endline "T";true)
 
 (**** FORMULA SIMPLIFICATION ****)
 (* Function to simplify formula by removing equivalent existential variables *)

@@ -15,7 +15,9 @@ type st_tbl = (cl_uid, st_value) Hashtbl.t
 type t = {
 	fuid: cl_uid; (** for which function *)
 	mutable fst_run: bool;
-	mutable rerun: Contract.t list; (** contracts that need to be rerun *)
+	mutable rerun: Contract.t list;
+	(** if [fst_run], contracts that need to be rerun
+	    else possible final contracts of one of rerun at the time *)
 	tbl: st_tbl
 }
 
@@ -93,9 +95,14 @@ let add ?(entailment=false) st uid states =
 
 let add_rerun st c = st.rerun <- c::st.rerun
 
-let reset st = Hashtbl.reset st.tbl; st.fst_run <- true; st.rerun <- []
+let reset ?(fst=true) st =
+	Hashtbl.reset st.tbl;
+	st.fst_run <- fst;
+	st.rerun <- []
+
+let reset_rerun st = reset ~fst:false st
 
 let start_rerun st =
 	let rerun_contracts = st.rerun in
-	reset st; st.fst_run <- false;
+	reset_rerun st;
 	rerun_contracts
