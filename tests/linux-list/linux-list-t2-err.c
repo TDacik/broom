@@ -110,7 +110,6 @@ void init_dll(struct list_head *head)
     head->next = head;
 }
 
-
 struct list_head* test1()
 {
     struct list_head *head=malloc(sizeof(struct list_head));
@@ -121,7 +120,7 @@ struct list_head* test1()
     return head;
 }
 
-// 3 times unroll clear list
+// 1 time unroll clear list
 struct list_head* test2 () 
 {
     struct list_head *head=test1();
@@ -132,25 +131,11 @@ struct list_head* test2 ()
         list_del(&now->link);
         free(now);
     }
-    now = (struct my_item *)(
-            (char *)head->next - __builtin_offsetof (struct my_item, link)
-            );
-    if (head != &now->link) {
-        list_del(&now->link);
-        free(now);
-    }
-    now = (struct my_item *)(
-            (char *)head->next - __builtin_offsetof (struct my_item, link)
-            ); // pointing to the unallocated memory
-    if (head != &now->link) {
-        list_del(&now->link);
-        free(now);
-    }
     return head;
 }
 
 int main() {
 	struct list_head*p = test2();
-	free(p);
+	free(p); // memory leak
 }
 
