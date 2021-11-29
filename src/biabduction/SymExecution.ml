@@ -194,17 +194,18 @@ let post_contract_application state solver pvarmap pvars =
     curr=(* Simplify.remove_freed_and_invalid_parts solver  *)step1.curr;
     lvars=new_lvars;
     through_loop = step1.through_loop} in
-  (* check that both parts of the resulting state are satisfiable *)
+  (* check that both parts of the resulting state are satisfiable, if timeout
+   apper, we just try it *)
   let sat_query_curr=formula_to_solver solver.ctx final_state.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_state.miss in
-  if ((Solver.check solver.solv sat_query_curr)=SATISFIABLE) &&
-     ((Solver.check solver.solv sat_query_missing)=SATISFIABLE)
-  then [final_state]
-  else (
+  if ((Solver.check solver.solv sat_query_curr)=UNSATISFIABLE) ||
+     ((Solver.check solver.solv sat_query_missing)=UNSATISFIABLE)
+  then (
     (*prerr_endline "------------";
     prerr_endline (State.to_string final_state);
     prerr_endline "SAT Fail (Contract application)"; *)
     [] )
+  else [final_state]
 (* Do
    1) rename conflicting contract variables
    2) apply the contract using biabduction, if not fst_run, skip learn rules
