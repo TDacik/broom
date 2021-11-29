@@ -30,7 +30,7 @@ let empty_exformula = {f = Formula.empty; cnt_cvars = 0; root = Undef}
 let empty = {lhs = Formula.empty; rhs = Formula.empty; cvars = 0; pvarmap = []; s=OK}
 
 let rw_rhs c =
-	{lhs = Formula.empty; rhs = c.lhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
+	{lhs = c.lhs; rhs = c.lhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}
 
 let rw_lhs lhs c =
 	{lhs = lhs; rhs = c.rhs; cvars = c.cvars; pvarmap = c.pvarmap; s=OK}

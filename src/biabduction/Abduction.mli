@@ -14,16 +14,17 @@ type abduction_res =
 (* TODO perhaps ErrorInAbdaction ? *)
 exception TempExceptionBeforeApiCleanup of string
 
-(** [biabduction solver form1 form2] is main biabduction function
+(** [biabduction solver fst_run form1 form2] is main biabduction function
     The result is:  "missing, frame, added_lvars"
     First test SAT of form1 and form2.
     Postponing SAT to the end of biabduction may lead to hidden conflicts.
     The conflicts may be removed by application of a match rule.
     Then is a given list of possible rules and the order in which they are
     going to be applied. Trying the rules till an applicable if founded
+    if not [fst_run] learn rules are omitted
 *)
-val biabduction : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
-    -> abduction_res
+val biabduction : Z3wrapper.solver -> bool -> Formula.t -> Formula.t ->
+                  variable list -> abduction_res
 
 
 (** [entailment solver form1 form2 evars] checks entailment form1 |= form2 using
@@ -32,5 +33,6 @@ val biabduction : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
 val entailment : Z3wrapper.solver -> Formula.t -> Formula.t -> variable list
     -> bool
 
-val check_lambda_entailment : Z3wrapper.solver -> Formula.lambda -> Formula.lambda -> int -> int
+val check_lambda_entailment : Z3wrapper.solver -> Formula.lambda ->
+	                          Formula.lambda -> int -> int
 

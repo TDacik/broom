@@ -1151,7 +1151,7 @@ type abduction_res =
 | Bok of (Formula.t * Formula.t * variable list * split_record list) list
 | BFail
 
-let rec biabduction solver form1 form2 pvars  =
+let rec biabduction solver fst_run form1 form2 pvars  =
   (* try the rules till an applicable if founded *)
   let rec try_rules todo=
     match todo with
@@ -1186,7 +1186,7 @@ let rec biabduction solver form1 form2 pvars  =
   (* Here is a given list of possible rules and the order in which they are going to be applied *)
   (* Match4 and Split4 is applied only in case that nothing else can be applied *)
   (* The lase argument specify, whether another rule can be applied to get more abduction results. *)
-  let rules=[
+  let rules= if fst_run then [
     (try_match,0,"Match0",false);
     (try_split,0,"Split0",false);
     (*(try_match,1,"Match1",false);*)
@@ -1200,6 +1200,14 @@ let rec biabduction solver form1 form2 pvars  =
     (try_learn_slseg,2,"Learn3-Slseg",true);
     (try_match,4,"Match4",false);
     (try_split,4,"Split4",false);
+  ] else [
+    (try_match,0,"Match0",false);
+    (try_split,0,"Split0",false);
+    (*(try_match,1,"Match1",false);*)
+    (*(try_split,1,"Split1",false);*)
+    (try_match,2,"Match2",false);
+    (try_split,2,"Split2",false);
+    (* (try_match,3,"Match3",false); *)
   ] in
   let app_result=try_rules rules in
   Solver.pop  solver.solv 1;
@@ -1210,7 +1218,7 @@ let rec biabduction solver form1 form2 pvars  =
     		| Record _ -> [rule_split_rec ]
 	    	| NoRecord -> []
     	in
-    	(match biabduction solver f1 f2 pvars with
+    	(match biabduction solver fst_run f1 f2 pvars with
     	| BFail -> []
     	| Bok res ->
 		let create_result (miss,fr,l_vars,split_rec) =

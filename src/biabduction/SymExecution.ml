@@ -76,8 +76,8 @@ let rec split_contract_rhs rhs rec_splits =
 		else split_contract_rhs rhs rest
 
 
-let apply_contract solver state c pvars =
-  match (Abduction.biabduction solver state.curr c.Contract.lhs pvars) with
+let apply_contract solver fst_run state c pvars =
+  match (Abduction.biabduction solver fst_run state.curr c.Contract.lhs pvars) with
   | BFail -> CAppFail
   | Bok  abd_result ->
 	let process_abd_result (miss, fr, l_vars,rec_splits) =
@@ -207,7 +207,7 @@ let post_contract_application state solver pvarmap pvars =
     [] )
 (* Do
    1) rename conflicting contract variables
-   2) apply the contract using biabduction
+   2) apply the contract using biabduction, if not fst_run, skip learn rules
    3) apply post contract renaming
    pvars - a list of global program variables + local program variables (avoid
            name conflicts)
@@ -215,30 +215,33 @@ let post_contract_application state solver pvarmap pvars =
    thery may be some global/local variables, which are not used within state
    and contract
 *)
-let contract_application solver state c pvars =
+let contract_application solver fst_run state c pvars =
   let c_rename = rename_contract_vars_ll state c 1 pvars in
   let rec get_vars_from_varmoves varmoves =
-  	match varmoves with
-	| [] -> []
-	| (a,b)::rest -> [a;b]@get_vars_from_varmoves rest
+    match varmoves with
+    | [] -> []
+    | (a,b)::rest -> [a;b]@get_vars_from_varmoves rest
   in
   (* Some rules in abduction procedure creates fresh variables.
      Therefore all used variables must be provided to abduction call to 
      avoid creation of a logical variable with the same ID within abduction *)
   let used_vars=pvars @ (get_vars_from_varmoves c_rename.pvarmap)
-  	@(find_vars state.miss) @ (find_vars state.curr) 
-	@(find_vars c_rename.lhs)@(find_vars c_rename.rhs)in
-  match (apply_contract solver state c_rename used_vars) with
+    @ (find_vars state.miss) @ (find_vars state.curr) 
+    @ (find_vars c_rename.lhs) @ (find_vars c_rename.rhs) in
+  match (apply_contract solver fst_run state c_rename used_vars) with
   | CAppFail -> CAppFail
   | CAppOk s_applied ->  
-  		(* The post contract application must be called with pvars. All variables outside pvars are considered to be logical. *)
-  		let postprocess st = post_contract_application st solver c_rename.pvarmap pvars in
-		(* If Config.abduction_strategy=1 then s_applied can contain more then a single result. *)
-		let res=List.concat (List.map postprocess s_applied) in
-		match res with
-		| [] -> CAppFail
-		| _ -> CAppOk res
-		
+    (* The post contract application must be called with pvars. All variables
+    outside pvars are considered to be logical. *)
+    let postprocess st =
+      post_contract_application st solver c_rename.pvarmap pvars
+    in
+    (* If Config.abduction_strategy=1 then s_applied can contain more then
+    a single result. *)
+    let res = List.concat (List.map postprocess s_applied) in
+      match res with
+      | [] -> CAppFail
+      | _ -> CAppOk res
 
 
 (* PREPARE STATE FOR CONTRACT
@@ -273,17 +276,14 @@ let check_if_rerun tbl s =
   Config.rerun () && tbl.StateTable.fst_run &&
   (s.through_loop=true || is_abstract s.miss) && s.miss!=Formula.empty
 
-(* check if rerun and if rerun produces new precondition, raise exception
-   BadRerun *)
-let check_rerun tbl s =
-  let status = Config.rerun () && (not tbl.StateTable.fst_run) in
-  if status && s.miss.sigma!=[] then
-    raise_notrace BadRerun
-  else status
+(* check if rerun *)
+let check_rerun tbl =
+  Config.rerun () && (not tbl.StateTable.fst_run)
 
 (* note: error from call of error() *)
 
 let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states insn =
+  if check_rerun bb_tbl then raise_notrace BadRerun;
   Config.debug2 ">>> final error contract";
   let fixed = (CL.Util.get_anchors_uid bb_tbl.StateTable.fuid) @ CL.Util.stor.global_vars in
   let get_err_contract s =
@@ -365,7 +365,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
           StateTable.add_rerun bb_tbl c;
           Config.debug3 "need rerun";
           None )
-        else if check_rerun bb_tbl subs then (
+        else if check_rerun bb_tbl then (
           (* add possible final contract after 2nd run *)
           StateTable.add_rerun bb_tbl c;
           None
@@ -438,7 +438,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
               )
           in (* end of process_new_states *)
 
-          let res = contract_application solver s c pvars in
+          let res = contract_application solver bb_tbl.fst_run s c pvars in
           match res with
           | CAppFail -> solve_contract tl (* FIXME error handling *)
           | CAppOk abd_s -> (process_new_states abd_s) @ (solve_contract tl)
@@ -639,26 +639,34 @@ let exec_fnc fnc_tbl f =
 
         let rerun_contracts = StateTable.start_rerun bb_tbl in
         Config.debug2 (">>> executing reruns for function "^fnc_decl_str^":");
-        let nop = CL.Util.get_NOP () in
+        let pvars = CL.Util.get_pvars fuid in
+        (* let nop = CL.Util.get_NOP () in *)
+
+        let apply_init_contract init_c = (* allow learn *)
+          let res = contract_application solver true (List.hd init_states)
+                    (Contract.rw_rhs init_c) pvars in
+          match res with
+          | CAppFail -> raise_notrace BadRerun
+          | CAppOk abd_s -> abd_s
+        in
 
         let rec rerun_for_contracts rcontracts =
           match rcontracts with
           | [] -> []
           | rc::rtl -> (
-            let rc_init = Contract.rw_rhs rc in
-            let rstates = new_states_for_insn false solver fnc_tbl bb_tbl nop init_states [rc_init] in
             let states2 = (try
+              let rstates = apply_init_contract rc in
               let run2 = exec_block fnc_tbl bb_tbl rstates (List.hd f.cfg) in
               (* add contracts after 2nd run *)
-              let rerun_contracts2 = StateTable.start_rerun bb_tbl in
-              let final_contracts = List.map (Contract.rw_lhs rc.lhs) rerun_contracts2 in
+              let final_contracts = StateTable.start_rerun bb_tbl in
+              (* let final_contracts = List.map (Contract.rw_lhs rc.lhs) rerun_contracts2 in *)
               SpecTable.add fnc_tbl bb_tbl.fuid final_contracts;
               run2
             with BadRerun ->
               StateTable.reset_rerun bb_tbl;
               incr Config.statistics.badrerun;
               Config.prerr_note "Discard precondition after 2nd run" (CL.Util.get_fnc_loc f);
-			  (* Config.debug3 print precondition; *) []
+              Config.debug3 (Formula.to_string rc.lhs); []
             ) in
             states2 @ rerun_for_contracts rtl )
         in
