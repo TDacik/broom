@@ -525,7 +525,9 @@ and exec_insn tbl bb_tbl states insn =
     let get_branch uid c_one =
         let new_s = get_new_states ~empty_is_err:false [c_one] in
         let ss = entailment_if_end_loop uid new_s in
-        let sss = List.map set_nondet ss in
+        let sss = if Config.rerun () && bb_tbl.fst_run
+          then List.map set_nondet ss
+          else ss in
         let bb = CL.Util.get_block uid in
         (sss,bb)
     in
