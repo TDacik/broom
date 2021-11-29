@@ -78,7 +78,7 @@ let prerr_note str loc =
   3 + print contract, abduction info, and current state for every instruction
   information are printing on stderr
 *)
-let verbose () = 3
+let verbose () = 2
 
 let debug1 str =
   if 1 <= verbose () then prerr_endline str
@@ -133,7 +133,7 @@ let abstraction_mode () = 1
 
 (* additionally perform abstraction after each just completed call on caller's
    side *)
-let abstract_on_call_done () = true
+let abstract_on_call_done () = false
 
 (* if true entailment states when traversing a loop-closing edge,
    else on each basic block entry *)
