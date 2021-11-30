@@ -37,7 +37,7 @@ int main() {
 	struct embeded_dll *item=malloc(sizeof (struct embeded_dll));
 	init_dll(&(item->dll_head));
 	insert_after(&(x->dll_head),&(item->dll_head));
-	remove_item(&(item->dll_head)); // memory leak
+	remove_item(&(item->dll_head));
 	free(item);
 	free(x);
 	return 0;

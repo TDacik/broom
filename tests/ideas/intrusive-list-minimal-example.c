@@ -77,7 +77,7 @@ person* person_create(int id) {
 
 
 
-int test_1() {
+int main() {
   person *p = person_create(1); //Robie
   
   list* l = LIST_CREATE(person, link);
