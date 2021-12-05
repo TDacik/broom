@@ -1,15 +1,19 @@
 opam-version: "2.0"
 
-name: "bi"
+name: "Broom"
 version: "0.0.1"
 
 synopsis: "A static analyzer for C"
+description: """
+Broom is a static analyzer for C written in OCaml.
+"""
 
-maintainer: "Bi team"
+maintainer: "Broom team"
 authors: [
   ""
   ""
 ]
+license: "GPL3"
 
 homepage: "https://pajda.fit.vutbr.cz/rogalew/bi-work"
 bug-reports: "https://pajda.fit.vutbr.cz/rogalew/bi-work/issues"
@@ -20,6 +24,7 @@ depends: [
   "cppo"
   "dune"
   "ocaml" {>="4.08.0"}
+  "odocs"
   "qtest"
   "z3" {= "4.8.8-1"}
   "utop"
