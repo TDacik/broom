@@ -1,4 +1,6 @@
-Incomplete introduction...
+# Broom
+
+Broom is a static analyzer for C written in OCaml.
 
 ## Building from sources
 
@@ -13,14 +15,14 @@ Incomplete introduction...
      - qtest
      - z3              >= 4.8.8-1
 
-For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
+For JSON dumper see [code-listener/README](https://github.com/kdudka/predator/blob/master/README.md)
 
 ### Install dependencies
 
-1. Install opam:
+1. Install code-listener dependencies and opam:
   ```
-  sudo apt install opam                                  # for Ubuntu 20.04
-  brew install cmake boost boost-build gcc@10 coreutils opam    # for MacOS
+  sudo apt install cmake gcc-10-multilib libboost-all-dev opam  # for Ubuntu 20.04
+  brew install cmake gcc@10 boost boost-build coreutils opam    # for MacOS
   ```
 2. Opam setup:
   ```
@@ -58,34 +60,31 @@ make build
   Z3 <=4.8.1 requires a compiler with OpenMP support. The minimum required
   version of Z3 is 4.8.8-1.
 
-* If scripts doesn't work due to Z3, set the search path for shared libraries
-  ```
-  export LD_LIBRARY_PATH=`opam config var z3:lib`
-  export DYLD_LIBRARY_PATH=`opam config var z3:lib`      # for MacOS
-  ```
-  Version Z3 4.8.8-1 uses static libraries. This stap indicates that you use an old version.
-
 To run the tests:
 ```
-dune runtest
+make check
 ```
 ## Usage
 ```
 ./scripts/call_graph file.c            # create DOTs (call graph, CFGs) from C
 ./scripts/json_dumper [-m32] file.c > file.json           # create JSON from C
-./scripts/generator < file.json                           # print contracts
-./scripts/json_dumper file.c | ./scripts/generator
-./scripts/biabductor [-m32] file.c                        # main binary
+./scripts/contract-generator file.c                       # print contracts
+./scripts/broom [OPTs] file.c                             # main binary
 ./scripts/test
 ```
-CL library expects input in json-format. **[Need to be fixed!]**
 
-## See also
+This will show you the available options of the Broom itself
+(detailed description [here](options.md)):
+
+```
+./scripts/broom -h
+```
+
+## See also [for developers]
    * [atd's documentation](http://atd.readthedocs.io/en/latest/)
    * [yojson's documentation](https://docs.mirage.io/yojson/Yojson/index.html)
 
 ## Contact
 For more information send an e-mail to:
 
-* Petr Peringer <peringer@fit.vutbr.cz> (corresponding author of JSON dumper)
-* etc.
+* Anonymous author <anonymus@anonymus.org>
