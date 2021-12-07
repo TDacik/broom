@@ -2,11 +2,11 @@
   (targets Version.ml)
   (action
     (with-stdout-to Version.ml
-     (bash "echo \"let curr=\\\"%{version:bi}-`git describe --always`\\\"\n\""))))
+     (bash "echo \"let curr=\\\"%{version:broom}-`git describe --always`\\\"\n\""))))
 
 (library
   (name biabd)
-  (public_name bi.biabd)
+  (public_name broom.biabd)
   (flags :standard)
   (libraries z3 CL)
   (inline_tests (backend qtest.lib))

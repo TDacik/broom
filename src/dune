@@ -1,24 +1,18 @@
-(executable
-  (name ContractGenerator)
-  (public_name bi)
-  (libraries CL biabd)
-  (modules ContractGenerator))
-
 (library
-  (name bi)
-  (public_name bi)
+  (name broom)
+  (public_name broom)
   (flags :standard)
   (libraries core z3 CL biabd)
-  (modules :standard \ biabductor ContractGenerator test))
+  (modules :standard \ broom test))
 
 (executable
-  (name biabductor)
-  (public_name bi)
-  (libraries bi)
-  (modules biabductor))
+  (name broom)
+  (public_name broom)
+  (libraries broom)
+  (modules broom))
 
 (executable
   (name test)
-  (public_name bi)
+  (public_name broom)
   (libraries core CL z3 biabd)
   (modules test))

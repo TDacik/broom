@@ -5,13 +5,13 @@ Incomplete introduction...
 ### List of dependencies
      - opam            >=  2.0.0
      - ocaml           >= 4.08.0
+     - odoc
      - atdgen
      - core
      - cppo
      - dune
-     - ppx_compare, ppx_deriving
      - qtest
-     - z3              = 4.8.8-1
+     - z3              >= 4.8.8-1
 
 For JSON dumper see [code-listener/README](https://github.com/versokova/predator/blob/json/README)
 

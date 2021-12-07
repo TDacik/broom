@@ -15,8 +15,8 @@ authors: [
 ]
 license: "GPL3"
 
-homepage: "https://pajda.fit.vutbr.cz/rogalew/bi-work"
-bug-reports: "https://pajda.fit.vutbr.cz/rogalew/bi-work/issues"
+homepage: ""
+bug-reports: ""
 
 depends: [
   "atdgen" {>="2.0.0"}
@@ -26,6 +26,6 @@ depends: [
   "ocaml" {>="4.08.0"}
   "odocs"
   "qtest"
-  "z3" {= "4.8.8-1"}
+  "z3" {>= "4.8.8-1"}
   "utop"
 ]

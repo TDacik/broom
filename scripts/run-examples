@@ -1,0 +1,25 @@
+#!/bin/sh
+
+if [ `uname` = Darwin ]; then
+    ABSPATH='realpath'
+#     export DYLD_LIBRARY_PATH=$LIBZ3${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}
+else
+    ABSPATH='readlink -f'
+#     export LD_LIBRARY_PATH=$LIBZ3${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+fi
+
+self="`${ABSPATH} "$0"`"
+self_dir="`dirname "$self"`"
+
+run() {
+	echo "Running $1..."
+	./scripts/broom --print-cl --verbose=3 --display-stats -- $1 > "_build/$1.txt" 2>&1
+	echo "Output in '_build/$1.txt'"
+}
+
+[ -e _build/examples ] || mkdir _build/examples
+cd $self_dir/..
+run "examples/01-circ_dll.c"
+run "examples/02-cond.c"
+run "examples/03-loop.c"
+run "examples/04-nondet_cond.c"

@@ -32,7 +32,7 @@ self_dir="`dirname "$self"`"
 
 if [ -z $@ ]; then
     if [ ! -z $VERSION ] || [ ! -z $HELP ]; then
-        $self_dir/../_build/default/src/biabductor.exe $OPS \
+        $self_dir/../_build/default/src/broom.exe $OPS \
           <<< '{ "types": [],"vars": [],"fncs": [] }'
     else
         echo "$0: error: no input files"
@@ -40,7 +40,7 @@ if [ -z $@ ]; then
 else
     echo "./scripts/json_dumper $CFLAGS $@ | $0 $OPS"
     $self_dir/json_dumper $CFLAGS $@ | \
-      $self_dir/../_build/default/src/biabductor.exe $OPS
+      $self_dir/../_build/default/src/broom.exe $OPS
 fi
 
 # print usage
