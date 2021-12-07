@@ -3,13 +3,13 @@
   (public_name broom)
   (flags :standard)
   (libraries core z3 CL biabd)
-  (modules :standard \ broom test))
+  (modules :standard \ BroomTool test))
 
 (executable
-  (name broom)
+  (name BroomTool)
   (public_name broom)
   (libraries broom)
-  (modules broom))
+  (modules BroomTool))
 
 (executable
   (name test)
