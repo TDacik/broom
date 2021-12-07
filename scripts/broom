@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# Copyright (C) Broom team
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # LIBZ3=`opam config var z3:lib`
 
 if [ `uname` = Darwin ]; then

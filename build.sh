@@ -1,4 +1,10 @@
 #!/bin/bash
+
+# Copyright (C) Broom team
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 export SELF="$0"
 
 # only for gcc, without dependencies
