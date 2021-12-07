@@ -531,8 +531,8 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 	(* new_i2 :: tmp2 (resp. new_i1 :: tmp1) must contain all inceces from (List.length form.sigma)-1 to (List.length unfolded_form.sigma)-2 *)
 	let indeces_to_check=
 		match flag with
-		| 0 |1 -> (new_i2 :: tmp2) (* the indeces of unfolded part of the predicate are new_i2:: tmp2 *)
-		| 2 ->  (new_i1 :: tmp1) (* flag 2 --> the unfolded DLL has indeces new_i1 :: tmp1 *)
+		| 0 -> (new_i2 :: tmp2) (* the indeces of unfolded part of the predicate are new_i2:: tmp2 *)
+		| 1| 2 ->  (new_i1 :: tmp1) (* flag 2 --> the unfolded DLL has indeces new_i1 :: tmp1 *)
 		| _ -> raise_notrace (ErrorInAbstraction ("BAD flag",__POS__))
 	in
 	if not (List.sort compare indeces_to_check = range ((List.length form.sigma)-1) (i_unfolded_slseg-1))
@@ -613,7 +613,7 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 	let p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda=
 		match flag with
 		| 0 -> pto_a,pto_back_b,lseg_c_orig,lseg_d,pto_a,lseg_a_orig,dll_backlink
-		| 1 -> lseg_a_orig,[],[],pto_b,pto_a,pto_b,[]
+		| 1 -> lseg_a_orig,[],[],pto_b2,pto_a,pto_b,[]
 		| 2 -> lseg_a_orig,lseg_b_orig,pto_a2,pto_b2,pto_a,pto_a2,dll_backlink
 		| _ -> raise_notrace (ErrorInAbstraction ("flag is different from 0,1,2",__POS__))
 	in
@@ -713,14 +713,14 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 		let new_i2=find_new_i2 a1 l1 b1 ((List.length form.sigma)-1) in (* try to find i2 in the unfolded part of the formula *)
 		if (new_i2=(-1)) then AbstractionFail
 		else
-		(* swap new_i1 and new_i2 and a1 and a2 in the case of flag=2 --- the part unfolded from dll is "before" the  block which shold be added *)
+		(* swap new_i1 and new_i2 and a1 and a2 in the case of flag=1/2 --- folding on the end of the list *)
 		let a2= match (List.nth unfolded_form.sigma new_i2) with
 			| Hpointsto (aa,_,_) -> (expr_to_solver_only_exp ctx z3_names aa) 
 			| _ -> raise_notrace (ErrorInAbstraction ("This should not happen",__POS__))
 		in
 		let new_i1,new_i2,a1,a2=
 			match flag with
-			| 2 -> new_i2,new_i1,a2,a1
+			| 1 | 2 -> new_i2,new_i1,a2,a1			
 			| _ -> new_i1,new_i2,a1,a2
 		in
 		let a1_block=get_eq_base ctx solv z3_names unfolded_form a1 0 0 [new_i1;new_i2] 0 in
@@ -1045,7 +1045,8 @@ let lseg_abstraction _ form pvars=
 	let solver=config_solver_to Config.solver_timeout_abstraction in
 	Solver.add solver.solv (formula_to_solver solver.ctx form);
 	let res=lseg_abstraction_ll solver form pvars in
-	Solver.reset solver.solv; res
+	Solver.reset solver.solv; 
+	res
 
 (***** Experiments *****)
 (* let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))
