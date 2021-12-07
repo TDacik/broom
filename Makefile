@@ -1,7 +1,7 @@
 .PHONY: build doc clean examples
 
 build:
-	dune build src/BroomTool.exe src/test.exe
+	dune build src/broom.exe src/test.exe
 
 doc: build
 	dune build @doc
