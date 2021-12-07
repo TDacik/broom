@@ -1,11 +1,10 @@
 module Exp : sig
   type t =
-        Var of variable (** lvars - existential local variables in the scope of
-                                    a function
-                                  - spetial cases: var 0 - return, var uid<0
-                                    anchors
-                            pvars - program variables, unique in the scope of
-                                    a file *)
+        Var of variable
+          (** - lvars - existential local variables in the scope of a function
+              - 0 - spetial case for return
+			  - uid<0 - spetial cases for anchors of function
+              - pvars - program variables, unique in the scope of a file *)
       | CVar of int
       | Const of const_val
       (* todo | Interval... *)

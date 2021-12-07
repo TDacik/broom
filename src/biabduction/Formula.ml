@@ -421,11 +421,30 @@ let subformula_only vars ff =
   let (sigma_vars,sigma_f) = subsigma vars ff.sigma in
   ((CL.Util.list_join_unique pi_vars sigma_vars),{pi = pi_f; sigma = sigma_f})
 
+(*  [subformula solver vars form] returns
+    list of all variables that may be in subformula
+    a subformula that contains clauses with variables from [vars] and related
+    variables to them
+    [form] - expect satisfiable formula only
+    [vars] - list of FExp, but expect CVar and Var only *)
+let rec subformula vars f =
+  match vars with
+  | [] ->
+    (* print_string ("END_SUBFORMULA: "); print_endline (to_string f); *)
+    (vars,empty)
+  | _ ->
+    let (new_vars,new_f) = subformula_only vars f in
+    let (tl_vars,tl_f) = subformula new_vars (diff f new_f) in
+    let all_vars = (vars @ tl_vars) in
+    (* print_string ("subformula:"^CL.Util.list_to_string (Exp.to_string) vars ^ "\n");
+    print_string (CL.Util.list_to_string (Exp.to_string) all_vars ^ "ALL\n"); *)
+    (all_vars, disjoint_union new_f tl_f)
+
 let var_is_reachable f uid depend_uids =
-  let (subvars,_(* subf *)) = subformula_only [(Var uid)] f in
+  let (subvars,_(* subf *)) = subformula [(Var uid)] f in
   let depend_vars = Exp.get_list_vars depend_uids in
-  (* Config.debug3 ("subformula: "^(to_string subf));
-  Config.debug3 ("sub: "^ (CL.Util.list_to_string Exp.to_string subvars)^" depends: "^ (CL.Util.list_to_string Exp.variable_to_string depend_uids)); *)
+  (* Config.debug4 ("subformula: "^(to_string subf));
+  Config.debug4 ("sub: "^ (CL.Util.list_to_string Exp.to_string subvars)^" depends: "^ (CL.Util.list_to_string Exp.variable_to_string depend_uids)); *)
   if (CL.Util.list_inter subvars depend_vars) = [] then false else true
 
 (**** FORMULA SIMPLIFICATION ****)

@@ -10,6 +10,41 @@ else
 #     export LD_LIBRARY_PATH=$LIBZ3${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 fi
 
+OPS=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -c|--compiler-options)
+      CFLAGS="$2"; shift 2;;
+    -h|--help|-help)
+      HELP=true; OPS="$OPS $1"; shift;;
+    --version)
+      VERSION=true; OPS="$OPS $1"; shift;;
+    --)
+      shift; break;;
+    *)
+      OPS="$OPS $1"; shift;;
+  esac
+done
+
 self="`${ABSPATH} "$0"`"
 self_dir="`dirname "$self"`"
-$self_dir/json_dumper $@ | $self_dir/../_build/default/src/biabductor.exe
+
+if [ -z $@ ]; then
+    if [ ! -z $VERSION ] || [ ! -z $HELP ]; then
+        $self_dir/../_build/default/src/biabductor.exe $OPS \
+          <<< '{ "types": [],"vars": [],"fncs": [] }'
+    else
+        echo "$0: error: no input files"
+    fi
+else
+    echo "./scripts/json_dumper $CFLAGS $@ | $0 $OPS"
+    $self_dir/json_dumper $CFLAGS $@ | \
+      $self_dir/../_build/default/src/biabductor.exe $OPS
+fi
+
+# print usage
+if [ ! -z "$HELP" ]; then
+    echo "  --compiler-options        Compiler options (e.g. --compiler-options "-m32 -g")";
+    exit 0;
+fi

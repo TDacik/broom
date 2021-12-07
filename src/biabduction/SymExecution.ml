@@ -83,7 +83,7 @@ let apply_contract solver fst_run state c pvars =
 	let process_abd_result (miss, fr, l_vars,rec_splits) =
 	    (* prune useless constrains in miss.pi *)
 	    let solver_for_pruning=
-	    	let solver2=config_solver_to Config.solver_timeout_simplify in
+	    	let solver2=config_solver_to (Config.solver_timeout_simplify ()) in
 		Solver.add solver2.solv (formula_to_solver solver2.ctx state.miss);
 		solver2
 	    in
@@ -326,7 +326,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
   let gvars = CL.Util.stor.global_vars in
   let fvars = CL.Util.get_fnc_vars bb_tbl.fuid in
   let tmp_vars = CL.Util.list_diff fvars gvars in
-  if (3 <= Config.verbose ()) then (
+  if (4 <= Config.verbose ()) then (
     prerr_string "PVARS:";
     CL.Util.print_list ~oc:stderr Exp.variable_to_string fvars;
     prerr_endline "";
@@ -356,7 +356,7 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         through_loop = s.through_loop} in
       try
         let subs = Simplify.state solver fixed nostack_s loc in
-        Config.debug3 (State.to_string subs);
+        Config.debug4 (State.to_string subs);
         let need_rerun = check_if_rerun bb_tbl subs in
         if (not(need_rerun) && is_invalid subs.curr.pi) then
           Config.prerr_warn "function returns address of local variable" loc;
@@ -364,7 +364,8 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         let new_c = add_gvars_moves gvars c in
         if need_rerun then ( (* add contract which need to be rerun *)
           StateTable.add_rerun bb_tbl c;
-          Config.debug3 "need rerun";
+          Config.debug3 ">>> need rerun, candidate:";
+          Config.debug3 ("LHS: "^Formula.to_string c.lhs);
           None )
         else if check_rerun bb_tbl then (
           (* add possible final contract after 2nd run *)
@@ -404,7 +405,7 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
       let rec solve_contract contracts =
         match contracts with
         | [] -> []
-        | c::tl -> Config.debug3 (Contract.to_string c);
+        | c::tl -> Config.debug4 (Contract.to_string c);
 
           let rec process_new_states abd_states =
             match abd_states with
@@ -669,7 +670,7 @@ let exec_fnc fnc_tbl f =
               StateTable.reset_rerun bb_tbl;
               incr Config.statistics.badrerun;
               Config.prerr_note "Discard precondition after 2nd run" (CL.Util.get_fnc_loc f);
-              Config.debug3 (Formula.to_string rc.lhs); []
+              Config.debug3 ("LHS: "^Formula.to_string rc.lhs); []
             ) in
             states2 @ rerun_for_contracts rtl )
         in

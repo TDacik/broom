@@ -506,7 +506,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
     let x2,s2,y2 = to_hpointsto_unsafe (List.nth form2.sigma i2) in
     match leftright with
     | 1 -> (* split left *)
-      Config.debug3_string "Splitleft ";
+      Config.debug4_string "Splitleft ";
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x2,x1)) in
@@ -580,7 +580,7 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
 	NoRecord)
 
     | 2 ->   (* split right *)
-      Config.debug3_string "Split_right ";
+      Config.debug4_string "Split_right ";
       (* Compute size of the first block -- Check form1 /\ form2 -> size_first=0 *)
       let size_first=
         let tmp_size_first=(Exp.BinOp (Pminus,x1,x2)) in
@@ -1073,10 +1073,10 @@ and entailment_ll solver form1 form2 evars =
   | -1 ->
      (match (try_match solver form1 form2 0 []),(try_match solver form1 form2 2 []) with
      | Apply (f1,f2,_,_,_),_ ->
-  		Config.debug3_string "Match, ";
+  		Config.debug4_string "Match, ";
   		(entailment_ll solver f1 f2 evars )
      | Fail,Apply (f1,f2,_,_,_) ->
-  		Config.debug3_string "Match2, ";
+  		Config.debug4_string "Match2, ";
   		(entailment_ll solver f1 f2 evars )
      | Fail,Fail -> false)
   | _ -> raise (TempExceptionBeforeApiCleanup "entailment_ll")
@@ -1104,7 +1104,7 @@ and entailment solver form1 form2 evars=
   let res=
   	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
   in
-  if res then Config.debug3 ("ENT VALID") else Config.debug3 ("ENT INVALID");
+  if res then Config.debug4 ("ENT VALID") else Config.debug4 ("ENT INVALID");
   res
 
 (****************************************************)
@@ -1158,8 +1158,8 @@ let rec biabduction solver fst_run form1 form2 pvars  =
     | (func_name,rule_arg,rule_name,more_results) :: rest ->
       (match (func_name solver form1 form2 rule_arg pvars) with
       | Apply (f1,f2,missing,n_lvars,split_rec) ->
-        	Config.debug3_string (rule_name ^", ");
-		if more_results && Config.abduction_strategy=1 (* try to get more solutions *)
+        	Config.debug4_string (rule_name ^", ");
+		if more_results && Config.abduction_strategy ()=1 (* try to get more solutions *)
 		then (f1,f2,missing,n_lvars,split_rec) :: (try_rules rest)
 		else [ (f1,f2,missing,n_lvars,split_rec) ]
       | Fail ->
@@ -1177,10 +1177,10 @@ let rec biabduction solver fst_run form1 form2 pvars  =
   match (test_sat solver form1 form2) with
   | SatFail ->
     Solver.pop  solver.solv 1;
-    Config.debug3 "SAT fail (biabduction)"; BFail
+    Config.debug4 "SAT fail (biabduction)"; BFail
   | Finish (missing,frame) ->
     Solver.pop  solver.solv 1;
-    Config.debug3 "Finish true";
+    Config.debug4 "Finish true";
     Bok [( missing,frame, [], [])]
   | NoFinish ->
   (* Here is a given list of possible rules and the order in which they are going to be applied *)

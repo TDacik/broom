@@ -12,4 +12,5 @@ fi
 
 self="`${ABSPATH} "$0"`"
 self_dir="`dirname "$self"`"
-$self_dir/../_build/default/src/ContractGenerator.exe
+$self_dir/json_dumper $@ | \
+  $self_dir/../_build/default/src/biabductor.exe --dry-run --print-contracts

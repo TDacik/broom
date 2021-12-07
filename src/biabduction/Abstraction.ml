@@ -1042,7 +1042,7 @@ let rec lseg_abstraction_ll solver form pvars =
 
 let lseg_abstraction _ form pvars=
 	(* form is a common part of all SMT queries. Add it now to improve efficiency. *)
-	let solver=config_solver_to Config.solver_timeout_abstraction in
+	let solver=config_solver_to (Config.solver_timeout_abstraction ()) in
 	Solver.add solver.solv (formula_to_solver solver.ctx form);
 	let res=lseg_abstraction_ll solver form pvars in
 	Solver.reset solver.solv; 
