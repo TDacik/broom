@@ -1,9 +1,3 @@
-(rule
-  (targets Version.ml)
-  (action
-    (with-stdout-to Version.ml
-     (bash "echo \"let curr=\\\"%{version:bi}-`git describe --always`\\\"\n\""))))
-
 (executable
   (name ContractGenerator)
   (public_name bi)

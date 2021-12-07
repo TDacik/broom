@@ -1159,7 +1159,7 @@ let rec biabduction solver fst_run form1 form2 pvars  =
       (match (func_name solver form1 form2 rule_arg pvars) with
       | Apply (f1,f2,missing,n_lvars,split_rec) ->
         	Config.debug4_string (rule_name ^", ");
-		if more_results && Config.abduction_strategy=1 (* try to get more solutions *)
+		if more_results && Config.abduction_strategy ()=1 (* try to get more solutions *)
 		then (f1,f2,missing,n_lvars,split_rec) :: (try_rules rest)
 		else [ (f1,f2,missing,n_lvars,split_rec) ]
       | Fail ->

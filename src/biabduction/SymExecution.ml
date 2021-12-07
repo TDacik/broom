@@ -83,7 +83,7 @@ let apply_contract solver fst_run state c pvars =
 	let process_abd_result (miss, fr, l_vars,rec_splits) =
 	    (* prune useless constrains in miss.pi *)
 	    let solver_for_pruning=
-	    	let solver2=config_solver_to Config.solver_timeout_simplify in
+	    	let solver2=config_solver_to (Config.solver_timeout_simplify ()) in
 		Solver.add solver2.solv (formula_to_solver solver2.ctx state.miss);
 		solver2
 	    in

@@ -6,5 +6,6 @@ src/CL/Storage.ml*
 src/CL/Type.ml*
 src/CL/Var.ml*
 _build/
+doc
 *.merlin
 *.install

@@ -48,7 +48,7 @@ let config_solver_to timeout =
   let z3_names = get_sl_functions_z3 ctx in
   {ctx = ctx; solv = solv; z3_names = z3_names}
 
-let config_solver () = config_solver_to Config.solver_timeout
+let config_solver () = config_solver_to (Config.solver_timeout ())
 
 (* Create existential quantifier
    ctx - Z3context, evars - a list of variables for quantification, form - Z3
