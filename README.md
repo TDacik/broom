@@ -36,14 +36,16 @@ For JSON dumper see [code-listener/README](https://github.com/kdudka/predator/bl
   ```
 3. Install dependencies by opam:
   ```
+  cd broom
   opam install --deps-only broom .
   ```
 
 ### Build
 ```
 cd broom             # continue in this directory
-./build.sh           # for custom installation of gcc, set $GCC_HOST
-make build
+                     # for custom installation of gcc, set $GCC_HOST
+./build.sh           # build code-listener dependency
+make build           # build Broom tool
 ```
 
 ### Troubleshooting
