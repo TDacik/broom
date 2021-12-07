@@ -76,7 +76,8 @@ let prerr_note str loc =
   - 0 no debug information
   - 1 print name of analysed function
   - 2 + print information about expensive operations: abstraction/entailment
-  - 3 + print contract, abduction info, and current state for every instruction
+  - 3 + print current state for every instruction
+  - 4 + print contract and abduction info for every instruction
       information are printing on stderr
 *)
 let verbose () = 1
@@ -90,8 +91,11 @@ let debug2 str =
 let debug3 str =
   if 3 <= verbose () then prerr_endline str
 
-let debug3_string str =
-  if 3 <= verbose () then (prerr_string str; flush stderr;)
+let debug4_string str =
+  if 4 <= verbose () then (prerr_string str; flush stderr;)
+
+let debug4 str =
+  if 4 <= verbose () then prerr_endline str
 
 
 (** --main=<name> set name of entry function - initializing global variables and
