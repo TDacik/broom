@@ -20,7 +20,7 @@ For JSON dumper see [code-listener/README](https://github.com/versokova/predator
 1. Install opam:
   ```
   sudo apt install opam                                  # for Ubuntu 20.04
-  brew install opam                                      # for MacOS
+  brew install cmake boost boost-build gcc@10 coreutils opam    # for MacOS
   ```
 2. Opam setup:
   ```
@@ -34,22 +34,21 @@ For JSON dumper see [code-listener/README](https://github.com/versokova/predator
   ```
 3. Install dependencies by opam:
   ```
-  opam install --deps-only bi .
+  opam install --deps-only broom .
   ```
 
 ### Build
 ```
-git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
-cd bi-work           # continue in this directory
+cd broom             # continue in this directory
 ./build.sh           # for custom installation of gcc, set $GCC_HOST
-dune build src/biabductor.exe src/ContractGenerator.exe src/test.exe
+make build
 ```
 
 ### Troubleshooting
 
 * Empty the `code-listener` directory:
   ```
-  git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/bi-work.git
+  git clone --recurse-submodules https://<URL>/broom.git
   ```
 * `ld: warning: directory not found for option '-L/opt/local/lib'` appears
   during compilation on MacOS. The cause is `zarith` (dependence from Z3).
