@@ -26,7 +26,7 @@ type variable = Exp.variable
 
 exception ErrorInContract of (string * Config.src_pos)
 
-type status = OK | Error | Aborted | Unfinished (* | Unreached *)
+type status = OK | Error | Aborted | Nondet | Unfinished (* | Unreached *)
 
 type t = {
     lhs: formula;

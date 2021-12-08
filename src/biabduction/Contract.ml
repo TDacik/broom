@@ -34,7 +34,7 @@ type extend_formula = {
 	root: Exp.t; (* only Var/CVar *)
 }
 
-type status = OK | Error | Aborted | Unfinished (* | Unreached *)
+type status = OK | Error | Aborted | Nondet | Unfinished (* | Unreached *)
 
 type t = {
 	lhs: formula;
@@ -64,6 +64,7 @@ let status_to_string s =
 	| OK -> ""
 	| Error -> "[error]"
 	| Aborted -> "[aborted]"
+	| Nondet -> "[nondet]"
 	| Unfinished -> "[unfinished]"
 
 let to_string ?not_unfinished:(not_unfinished=false) c =
@@ -463,10 +464,21 @@ let contract_for_malloc dst size =
 	let size_chk = Exp.BinOp ( Plesseq, Exp.zero, ef_size.root) in
 	let sig_add = Hpointsto (new_dst.root, ef_size.root, Undef) in
 	let lhs = { pi= size_chk :: ef_size.f.pi ; sigma = ef_size.f.sigma} in
-	let rhs =
-		{pi = len :: base :: size_chk :: new_dst.f.pi;
+	let rhs = {
+		pi = len :: base :: size_chk :: new_dst.f.pi;
 		sigma = sig_add :: new_dst.f.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK}
+	let c1 = {lhs = lhs; rhs = rhs; cvars = new_dst.cnt_cvars; pvarmap = pvarmap; s = OK} in
+	if Config.oom ()
+	then (
+		let assign = Exp.BinOp ( Peq, new_dst.root, Exp.null) in
+		let c1_nondet = {lhs = c1.lhs; rhs = c1.rhs; cvars = c1.cvars; pvarmap = c1.pvarmap; s = Nondet} in
+		{lhs = Formula.empty;
+		rhs = {
+			pi = assign :: new_dst.f.pi;
+			sigma = new_dst.f.sigma};
+		cvars = new_dst.cnt_cvars;
+		pvarmap = pvarmap; s = Nondet}::c1_nondet::[]
+	) else [c1]
 
 (*
    if size<0 or n<0 or unsuccesful alloc : dst=null
@@ -496,7 +508,18 @@ let contract_for_calloc dst n size =
 	let rhs =
 		{pi = len :: base :: n_chk :: size_chk :: new_dst.f.pi @ pi_add;
 		sigma = sig_add :: new_dst.f.sigma} in
-	{lhs = lhs; rhs = rhs; cvars = cvars; pvarmap = pvarmap; s = OK}
+	let c1 = {lhs = lhs; rhs = rhs; cvars = cvars; pvarmap = pvarmap; s = OK} in
+	if Config.oom ()
+	then (
+		let assign = Exp.BinOp ( Peq, new_dst.root, Exp.null) in
+		let c1_nondet = {lhs = c1.lhs; rhs = c1.rhs; cvars = c1.cvars; pvarmap = c1.pvarmap; s = Nondet} in
+		{lhs = Formula.empty;
+		rhs = {
+			pi = assign :: new_dst.f.pi;
+			sigma = new_dst.f.sigma};
+		cvars = new_dst.cnt_cvars;
+		pvarmap = pvarmap; s = Nondet}::c1_nondet::[]
+	) else [c1]
 
 (* PRE: src-c1->Undef & base(src)=src & c1=len(src)   POS: freed(src)
    PRE: src=NULL      POS:
@@ -703,8 +726,8 @@ let contract_for_builtin dst called args loc =
 	| "abort", [] -> (contract_fail)::[]
 	| "exit", op::[] -> (contract_for_exit op)::[]
 	| "_Exit", op::[] -> (contract_for_exit op)::[]
-	| "malloc", size::[] -> (contract_for_malloc dst size)::[]
-	| "calloc", n::size::[] -> (contract_for_calloc dst n size)::[]
+	| "malloc", size::[] -> contract_for_malloc dst size
+	| "calloc", n::size::[] -> contract_for_calloc dst n size
 	| "free", src::[] -> contract_for_free src
 	| "alloca", size::[] -> (contract_for_alloca dst size)::[]
 	| "__builtin_alloca", size::[] -> (contract_for_alloca dst size)::[]

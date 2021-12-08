@@ -433,6 +433,9 @@ let new_states_for_insn empty_is_err solver tbl bb_tbl insn states c =
                 Config.debug3 (State.to_string simple_a);
                 match c.s with
                 | OK | Unfinished -> simple_a::(process_new_states atl)
+                | Nondet ->
+                  let nondet_s = State.set_through_loop simple_a in
+                  nondet_s::(process_new_states atl)
                 | Error ->
                   set_fnc_error_contract ~status:c.s solver tbl bb_tbl [simple_a] insn;
                   empty_is_err_ref := false;

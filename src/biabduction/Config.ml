@@ -134,6 +134,7 @@ let _rerun = ref true
 let rerun () = !_rerun
 
 (** --oom / --out-of-memory unsuccesful heap allocation *)
+(* TODO fix rerun *)
 let _oom = ref false
 let oom () = !_oom
 
