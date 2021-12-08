@@ -18,7 +18,6 @@
  *)
 
 open Biabd
-(* * * * * * * * * * * * * * * main * * * * * * * * * * * * * * *)
 
 let custom_fnc insn =
 	CL.Printer.print_insn insn;
@@ -35,13 +34,13 @@ let rec print_storage fncs =
 		CL.Printer.print_cfg custom_fnc f.cfg;
 		print_storage tl
 
-let print_program () = print_storage CL.Util.stor.fncs 
+let print_file () = print_storage CL.Util.stor.fncs
 
 (* * * * * * * * * * * * * * * main * * * * * * * * * * * * * * *)
 let () =
 	Config.analyse_cmd_arguments ();
 	if Config.print_cl () || Config.print_contracts () then
-		print_program (); print_newline ();
+		print_file (); print_newline ();
 	if Config.dry_run () then
 		exit 0;
 	let fnc_tbl = SpecTable.create in
@@ -54,5 +53,4 @@ let () =
 	print_endline "===============================================";
 	Biabd.SpecTable.print fnc_tbl;
 	print_endline "===============================================";
-	if Config.stats () then
-		Biabd.Config.display_stats ();
+	Biabd.Config.display_stats ();

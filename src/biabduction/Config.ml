@@ -17,7 +17,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *)
 
-module Debug = struct (* --debug *)
+(* module Debug = struct (* --debug *)
   type t =
       Next
     | Skip
@@ -40,9 +40,9 @@ let steps = Finish (* --steps=n|s|f *)
 (* let printf fmt =
   if debug () then Printf.printf fmt (* else ignore *) *)
 
-end
+end *)
 
-(** {3 Statistics} *)
+(** Statistics *)
 
 type stat = {
   abstracts : int ref;
@@ -70,7 +70,7 @@ let display_stats () =
   )
 
 
-(** {3 Errors handling} *)
+(** Errors handling *)
 
 (** type for location in source code: __POS__ *)
 type src_pos = CL.Msg.src_pos
@@ -90,7 +90,7 @@ let prerr_warn str loc =
 let prerr_note str loc =
   CL.Msg.note (str,loc)
 
-(** {3 Options} *)
+(** Options *)
 
 (** describe verbose level as follow:
   - 0 no debug information

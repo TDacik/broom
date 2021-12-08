@@ -158,8 +158,6 @@ let rec rename_contract_vars_ll state c seed pvars =
          (rename_contract_vars_ll state new_c (new_var+1) pvars)
 
 
-exception State_lhs_contains_forbidden_vars
-
 (* RENAMING AFTER CONTRACT APPLICATION
    for each tuple (a,b) \in pvarmap
   * rename all occurences of a by a fresh lvar
