@@ -21,8 +21,9 @@ For JSON dumper see [code-listener/README](https://github.com/kdudka/predator/bl
 
 1. Install code-listener dependencies and opam:
   ```
-  sudo apt install cmake gcc-10-multilib libboost-all-dev opam  # for Ubuntu 20.04
-  brew install cmake gcc@10 boost boost-build coreutils opam    # for MacOS
+  sudo apt install cmake gcc-10-multilib libboost-all-dev opam                              # for Ubuntu 20.04
+  brew install cmake gcc@10 boost boost-build coreutils opam                                # for MacOS
+  sudo dnf install opam cmake gmp-devel cmake boost-devel gcc-plugin-devel glibc-devel.i686 # for Fedora 33
   ```
 2. Opam setup:
   ```
