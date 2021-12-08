@@ -7,6 +7,8 @@
 
 # LIBZ3=`opam config var z3:lib`
 
+echoerr() { echo "$@" 1>&2; }
+
 if [ `uname` = Darwin ]; then
     ABSPATH='realpath'
 #     export DYLD_LIBRARY_PATH=$LIBZ3${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}
@@ -40,16 +42,16 @@ if [ -z $@ ]; then
         $self_dir/../_build/default/src/broom.exe $OPS \
           <<< '{ "types": [],"vars": [],"fncs": [] }'
     else
-        echo "$0: error: no input files"
+        echoerr "$0: error: no input files"
     fi
 else
-    echo "./scripts/json_dumper $CFLAGS $@ | $0 $OPS"
+    echoerr "./scripts/json_dumper $CFLAGS $@ | $0 $OPS"
     $self_dir/json_dumper $CFLAGS $@ | \
       $self_dir/../_build/default/src/broom.exe $OPS
 fi
 
 # print usage
 if [ ! -z "$HELP" ]; then
-    echo "  --compiler-options        Compiler options (e.g. --compiler-options "-m32 -g")";
+    echoerr "  --compiler-options        Compiler options (e.g. --compiler-options "-m32 -g")";
     exit 0;
 fi
