@@ -92,19 +92,21 @@ let init_main fuid =
   match num_args with
   | 0 -> empty
   | 2 -> (
+    let arg1_uid = (List.hd args) in
+    let arg2_uid = (List.nth args 1) in
     let anchor_state = init fuid in
     if not (check_main_args_type args loc) then
       anchor_state
     else
       let new_var = get_fresh_lvar fuid [] in
-      let len = FExp.BinOp ( Peq, (UnOp (Len, Var (-2))), Var new_var) in
-      let base = FExp.BinOp ( Peq, (UnOp (Base, Var (-2))), Var (-2)) in
+      let len = FExp.BinOp ( Peq, (UnOp (Len, Var (-arg2_uid))), Var new_var) in
+      let base = FExp.BinOp ( Peq, (UnOp (Base, Var (-arg2_uid))), Var (-arg2_uid)) in
       let size = FExp.BinOp ( Plesseq, FExp.zero, Var new_var) in
-      let arg2 = CL.Util.get_var (List.nth args 1) in
+      let arg2 = CL.Util.get_var arg2_uid in
       let ptr_size = CL.Util.get_type_size (arg2.typ) in
       let exp_ptr_size = FExp.Const (Int (Int64.of_int ptr_size)) in
-      let block = FExp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-1), exp_ptr_size))) in
-      let sig_add = Formula.Hpointsto (Var (-2), Var new_var, Undef) in
+      let block = FExp.BinOp ( Peq, Var new_var, (BinOp ( Pmult, Var (-arg1_uid), exp_ptr_size))) in
+      let sig_add = Formula.Hpointsto (Var (-arg2_uid), Var new_var, Undef) in
       let new_f =
         {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
         sigma = sig_add :: anchor_state.miss.sigma} in
