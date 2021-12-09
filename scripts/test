@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 LIBZ3=`opam config var z3:lib`
 
