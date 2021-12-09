@@ -40,7 +40,7 @@ type t = {
 	tbl: st_tbl
 }
 
-exception EntailmentLimit of Config.src_pos
+exception EntailmentLimit of CL.Loc.t option
 
 val create : cl_uid -> t
 

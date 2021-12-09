@@ -700,7 +700,7 @@ let exec_fnc fnc_tbl f =
       else run1
     with
       | StateTable.EntailmentLimit loc ->
-        Config.prerr_internal "Limit reached (increase 'entailment_limit')" loc;
+        Config.prerr_note "Limit reached (increase 'entailment_limit')" loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
       | CloseLambda.ErrorInLambdaClosing loc ->
