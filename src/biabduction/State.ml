@@ -109,7 +109,7 @@ let init_main fuid =
         {Formula.pi = len :: base :: size :: block :: anchor_state.miss.pi;
         sigma = sig_add :: anchor_state.miss.sigma} in
       let s = {miss = new_f; curr = new_f; lvars = [new_var]; through_loop = false} in
-      print s; s)
+      Config.debug3 (to_string s); s)
   | _ -> Config.prerr_warn  "'main' takes only zero or two arguments" loc;
     init fuid (* handling as with an ordinary function *)
 
