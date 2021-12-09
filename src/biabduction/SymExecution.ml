@@ -38,6 +38,8 @@ exception NoContract of (string * Config.src_pos)
 
 exception BadRerun
 
+exception NoApplicableRule of (string * CL.Loc.t option)
+
 (*  Checke whether expr should be added to form_z3
      false iff form_z3 => expr (no need to add expr)
      true othervice (incl. timeout)
@@ -574,7 +576,11 @@ and exec_insn tbl bb_tbl states insn =
       ) else (
         let c = find_fnc_contract tbl dst args
                                   (CL.Util.get_fnc_uid_from_op called) in
-        let s_call = get_new_states c in
+        let s_call = get_new_states ~empty_is_err:false c in
+		if s_call = [] then (
+			let fnc_name = CL.Printer.operand_to_string called in
+			raise_notrace (NoApplicableRule (fnc_name,insn.loc))
+		);
         if s_call != [] && Config.abstract_on_call_done ()
         then StateTable.try_abstraction_on_states solver bb_tbl.fuid s_call
         else s_call
@@ -701,6 +707,10 @@ let exec_fnc fnc_tbl f =
     with
       | StateTable.EntailmentLimit loc ->
         Config.prerr_note "Limit reached (increase 'entailment_limit')" loc;
+        set_fnc_unfinished_contract fnc_tbl fuid;
+        []
+      | NoApplicableRule (fnc,loc) ->
+        Config.prerr_note ("No applicable contract for function "^fnc) loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
       | CloseLambda.ErrorInLambdaClosing loc ->
