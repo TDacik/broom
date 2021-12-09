@@ -26,7 +26,6 @@ void remove_item(struct dll *item) {
 	struct dll *p=item->prev;
 	n->prev=p;
 	p->next=n;
-	free(item);
 }
 
 int main() {
@@ -36,6 +35,8 @@ int main() {
 	struct dll *item2=x->next;
 	remove_item(item); 
 	remove_item(item2); 
+	free(item);
+	free(item2); // double free
 	return 0;
 }
 

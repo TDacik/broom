@@ -26,14 +26,14 @@ void remove_item(struct dll *item) {
 	struct dll *p=item->prev;
 	n->prev=p;
 	p->next=n;
-	free(item);
 }
 
 int main() {
 	struct dll *x=create_dll();
 	struct dll *item=create_dll();
 	insert_after(x,item);
-	remove_item(item); // memory leak
+	remove_item(item);
+	free(item); // memory leak
 	return 0;
 }
 
