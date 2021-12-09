@@ -12,7 +12,7 @@ doc: build
 	dune build @doc
 	[ -e doc ] || ln -sf _build/default/_doc/_html doc
 
-examples:
+examples: build
 	./scripts/run-examples
 
 clean:
