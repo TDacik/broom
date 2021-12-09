@@ -329,11 +329,14 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
   let c_errs = List.filter_map get_err_contract states in
   SpecTable.add fnc_tbl bb_tbl.fuid c_errs
 
+(* TODO reimplementation ! *)
 let set_fnc_unfinished_contract fnc_tbl fuid =
-  Config.debug2 ">>> final unfinished contract";
+    Config.debug2 ">>> no contracts";
+    SpecTable.only_add fnc_tbl fuid []
+(*   Config.debug2 ">>> final unfinished contract";
   let c = Contract.contract_for_unfinished_fnc (CL.Util.get_fnc fuid) in
   Config.debug3 (Contract.to_string c);
-  SpecTable.only_add fnc_tbl fuid (c::[])
+  SpecTable.only_add fnc_tbl fuid (c::[]) *)
 
 (* anchors - existential vars representing arguments of function and original
    value of gvars
@@ -569,6 +572,11 @@ and exec_insn tbl bb_tbl states insn =
   | InsnNOP | InsnLABEL _ -> states
   | InsnCALL ops -> ( match ops with
     | dst::called::args ->
+      let no_contracts () =
+        let fnc_name = CL.Printer.operand_to_string called in
+        raise_notrace (NoApplicableRule (fnc_name,insn.loc))
+      in
+
       if (CL.Util.is_extern called)
       then (
         let c = Contract.get_contract insn in
@@ -576,11 +584,9 @@ and exec_insn tbl bb_tbl states insn =
       ) else (
         let c = find_fnc_contract tbl dst args
                                   (CL.Util.get_fnc_uid_from_op called) in
+        if c = [] then no_contracts ();
         let s_call = get_new_states ~empty_is_err:false c in
-		if s_call = [] then (
-			let fnc_name = CL.Printer.operand_to_string called in
-			raise_notrace (NoApplicableRule (fnc_name,insn.loc))
-		);
+        if s_call = [] then no_contracts ();
         if s_call != [] && Config.abstract_on_call_done ()
         then StateTable.try_abstraction_on_states solver bb_tbl.fuid s_call
         else s_call
@@ -710,7 +716,7 @@ let exec_fnc fnc_tbl f =
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
       | NoApplicableRule (fnc,loc) ->
-        Config.prerr_note ("No applicable contract for function "^fnc) loc;
+        Config.prerr_note ("No applicable contract for function "^fnc^"()") loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
       | CloseLambda.ErrorInLambdaClosing loc ->
