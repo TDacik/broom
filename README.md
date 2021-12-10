@@ -1,6 +1,6 @@
 # Broom
 
-Broom is a static analyzer for C written in OCaml.
+Broom is a static analyzer for C written in OCaml. Broom primarily aims at programs that use low-level pointer manipulation to deal with various kinds of linked lists. It is based on separation logic and the principle of bi-abductive reasoning.
 
 ## Building from sources
 
@@ -15,7 +15,7 @@ Broom is a static analyzer for C written in OCaml.
      - qtest
      - z3              >= 4.8.8-1
 
-For JSON dumper see [code-listener/README](https://github.com/kdudka/predator/blob/master/README.md)
+For the JSON dumper see [code-listener/README](https://github.com/kdudka/predator/blob/master/README.md)
 
 ### Install dependencies
 
