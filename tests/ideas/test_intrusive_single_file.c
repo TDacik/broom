@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // based on test_intrusive.c
-// intrusive-list-person.h
-// test_intrusive_single_file.c
+// because our tool does not support a strings, the corresponding MU_ASSERT
+// calls are commented out
 
 
 #include "minunit.h"
