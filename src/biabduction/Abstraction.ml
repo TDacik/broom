@@ -716,7 +716,13 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 			] in
 			if not (((Solver.check solv query1)=UNSATISFIABLE)
 			&& ((Solver.check solv query2)=SATISFIABLE)) then (find_new_i2 a1 l1 b1 (index+1))
-			else  index
+			else (
+				(* add query2 into the solver to enable handling linux-list style data structures, where base adresses
+				   are not fixed.
+				   The solver is discarted at the end of this function -> no need to do Solver.push/pop commands *)
+				Solver.add solv query2;
+				index
+			)
 
 		| _ -> find_new_i2 a1 l1 b1 (index+1)
 	in
@@ -876,7 +882,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 
 
 
-let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 pvars =
+let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 pvars =
 (* try to abstract two predicates i1 and i2 into a list segment,
   pvars = program variables (global vars + vars of function).
       Internal nodes of the list segment can not be pointed by global variables*)
@@ -918,6 +924,12 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 			&& ((Solver.check solv query2)=SATISFIABLE)
 			&& ((Solver.check solv (query_pvars a2))=SATISFIABLE)) then AbstractionFail
 		else
+		(
+		(* ADD: base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) to the solver for the following computations 
+		   this is needed for linux-list like examples, where the bases are only relative---i.e. we do not know the 
+		   exact distance from the base
+		   The added constrains are poped from the solver in the function  try_abstraction_to_lseg *)
+		Solver.add solv query2;
 		(* check all pointsto with equal bases to a1/a2 *)
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 [i1;i2] 0 in
 		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 ([i1;i2]@a1_block) 0 in
@@ -931,6 +943,7 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 				
 			| CheckFail -> AbstractionFail
 			| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackLink is not expected here",__POS__))
+		)
 		)
 	| Slseg(a,b,l1), Slseg(aa,bb,l2) -> (
 		let b1= (expr_to_solver_only_exp ctx z3_names b) in
@@ -1026,6 +1039,14 @@ let try_abstraction_to_lseg {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 p
 
 	)
 	| _ -> AbstractionFail 
+
+let try_abstraction_to_lseg solver form i1 i2 pvars =
+	(* in the try_abstraction_to_lseg_ll, we add some contraints related to bases of i1 i2 
+	   --> we need to remove them from the solver at the end of the function *)
+	Solver.push solver.solv;
+	let res=try_abstraction_to_lseg_ll solver form i1 i2 pvars in
+	Solver.pop solver.solv 1;
+	res
 
 (* try list abstraction - first tries the last added, at least 2 predicates in
 	sigma *)
