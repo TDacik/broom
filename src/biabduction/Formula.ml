@@ -703,7 +703,12 @@ let rename_ex_variables form evars conflicts =
   rename_ex_variables_ll form all_vars evars conflicts 1 []
 
 (***** Unfold predicate *******)
+(* for the Slseg(x,_,_) predicate given by the index pnum
+   and for each Hpointsto(y,_,_) create base(x) != base(y) 
+   skip if we use closed lambdas
+   *)
 
+(*
 let rec diffbase_ll sigma x =
   match sigma with
   | [] -> []
@@ -715,11 +720,8 @@ let rec diffbase_ll sigma x =
       Exp.BinOp (Pneq,base_a,base_x) :: diffbase_ll rest x
     | Slseg _ | Dlseg _ -> diffbase_ll rest x
 
-(* for the Slseg(x,_,_) predicate given by the index pnum
-   and for each Hpointsto(y,_,_) create base(x) != base(y) 
-   *)
 let diffbase form pnum dir =
-  if Config.close_lambda () then [] (* skip if we use closed lambdas *)
+  if Config.close_lambda () then [] 
   else
   match (List.nth form.sigma pnum),dir with
   | Slseg (x,_,_),1 | Dlseg(x,_,_,_,_),1 | Dlseg (_,_,x,_,_),2 ->
@@ -728,6 +730,9 @@ let diffbase form pnum dir =
     let sigma= remove pnum form.sigma in
     diffbase_ll sigma x
   | _ -> []
+*)
+
+let diffbase _ _ _ = []
 
 (* The predicate pnum is removed from form.sigma, unfolded once and all the new stuff is added to the end of the list form.sigma,
    !!! The function Abstraction.try_add_slseg_to_pointsto relies on the fact, that the unfolded stuff is added to the end 

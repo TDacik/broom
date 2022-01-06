@@ -40,7 +40,7 @@ type split_record =
   | NoRecord
 
 type res =
-  | Apply of Formula.t * Formula.t * Formula.t * variable list * split_record
+  | Apply of (Formula.t * Formula.t * Formula.t * variable list * split_record) list
   | Fail
 
 let to_slseg_unsafe hpred = match hpred with
@@ -132,7 +132,7 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
 
 
 (* try to apply learn1 rule for pointsto *)
-let try_learn_pointsto solver form1 form2 level _ =
+let try_learn_pointsto solver form1 form2 level _ _ =
   let ctx=solver.ctx in
   let z3_names=solver.z3_names in
   let common_part=match level with
@@ -182,22 +182,22 @@ let try_learn_pointsto solver form1 form2 level _ =
     (* learn with level 3 *)
       let learned_part=get_learned_part i2 in
       Solver.pop solver.solv 1;
-      Apply ( { sigma=form1.sigma; pi = form1.pi},
+      Apply [ { sigma=form1.sigma; pi = form1.pi},
          (remove i2 form2),
          learned_part,
          [],
-         NoRecord)
+         NoRecord]
   | (i1,i2) -> 
       (* learn with level 1 *)
       let (y1,_,_) = to_hpointsto_unsafe (List.nth form1.sigma i1) in
       let (y2,_,_) = to_hpointsto_unsafe (List.nth form2.sigma i2) in
       let learned_part=get_learned_part i2 in
       Solver.pop solver.solv 1;
-      Apply ( { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
+      Apply [ { sigma=form1.sigma; pi = (BinOp ( Pneq, y1,y2))::form1.pi},
         (remove i2 form2),
         learned_part,
         [],
-        NoRecord)
+        NoRecord]
 
 (**** LEARN - Slseg ****)
 (* check whether we can apply learn on the form2.sigma[i2].
@@ -283,7 +283,7 @@ let check_remove_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form2 i =
 
 
 (* try to apply remove and learn rule for slseg *)
-let try_learn_slseg solver form1 form2 level _=
+let try_learn_slseg solver form1 form2 level _ _ =
   let ctx=solver.ctx in
   let common_part=match level with
   | 1 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
@@ -313,17 +313,19 @@ let try_learn_slseg solver form1 form2 level _=
   match (get_index 0) with
   | _,-1 -> Solver.pop solver.solv 1; Fail
   (* learn *)
-  | false,i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
-      (remove i form2),
-      {sigma=[List.nth form2.sigma i]; pi=[]},
-      [],
-      NoRecord)
+  | false,i -> Solver.pop solver.solv 1; 
+      Apply [ { sigma=form1.sigma; pi = form1.pi},
+      	(remove i form2),
+	{sigma=[List.nth form2.sigma i]; pi=[]},
+      	[],
+      	NoRecord]
   (* remove *)
-  | true,i -> Solver.pop solver.solv 1; Apply ( { sigma=form1.sigma; pi = form1.pi},
-      (remove i form2),
-      {sigma=[]; pi=[]},
-      [],
-      NoRecord)
+  | true,i -> Solver.pop solver.solv 1; 
+      Apply [ { sigma=form1.sigma; pi = form1.pi},
+       	(remove i form2),
+      	{sigma=[]; pi=[]},
+      	[],
+      	NoRecord]
 
 (************************************************************)
 (******* SPLIT rules ******)
@@ -501,7 +503,7 @@ let find_split solver form1 form2 level =
 
 
 
-let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
+let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars _ =
   let variables=(find_vars form1)@(find_vars form2)@pvars in
   let mem lst x =
     let eq y= (x=y) in
@@ -592,11 +594,11 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
         if (level=1) then pi_tmp1 (* form1 -> pi_tmp2, no need to add this information *)
         else pi_tmp1 @ pi_tmp2
       in
-      Apply (  {sigma=sigma1_new@ (remove i1 form1).sigma; pi=form1.pi @ new_pi},
+      Apply [  {sigma=sigma1_new@ (remove i1 form1).sigma; pi=form1.pi @ new_pi},
         form2,
         {sigma=[]; pi=new_pi},
         new_lvars,
-	NoRecord)
+	NoRecord]
 
     | 2 ->   (* split right *)
       Config.debug4_string "Split_right ";
@@ -686,11 +688,11 @@ let try_split {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 level pvars =
         else pi_tmp1 @ pi_tmp2
       in
 
-      Apply ({sigma=form1.sigma; pi=form1.pi @ new_pi},
+      Apply [{sigma=form1.sigma; pi=form1.pi @ new_pi},
         {sigma=sigma2_new@ (remove i2 form2).sigma; pi=form2.pi},
         {sigma=[]; pi=new_pi},
         new_lvars,
-	Record (List.nth form2.sigma i2, {sigma=sigma2_new; pi=new_pi}, deltas  ))
+	Record (List.nth form2.sigma i2, {sigma=sigma2_new; pi=new_pi}, deltas  )]
     | _ -> raise (TempExceptionBeforeApiCleanup "try_split")
 
 (******************************************************************************)
@@ -783,9 +785,11 @@ let apply_match solver i pred_type form1 form2 pvars dir =
   | (i1,i2) ->
     match pred_type with
     | 0 -> ApplyOK ((remove i1 form1), (remove i2 form2), [])
-    | 1 | 10 -> let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) dir in
+    | 1 | 10 -> 
+      let new_form2,new_lvars=unfold_predicate form2 i2 ((find_vars form1)@pvars) dir in
       ApplyOK (form1, new_form2, new_lvars)
-    | 2 | 20 -> let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) dir in
+    | 2 | 20 -> 
+      let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) dir in
       ApplyOK (new_form1, form2, new_lvars)
     | 3 ->
       let _,y1,_ = to_slseg_unsafe  (List.nth form1.sigma i1) in
@@ -949,6 +953,36 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
         (* (l1=l2) *) (* Use this line to break the mutual recursion. *)
 	(check_lambda_entailment (Z3wrapper.config_solver ()) l1 l2 1)=1
 
+(* find pair of points-to for match with fixes index predicate on LHS *)
+and find_match_fixed_lhs solver form1 i1 form2 level =
+  let ctx=solver.ctx in
+  let common_part=match level with
+  | 1 | 3 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
+  | 2 | 4 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
+          (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
+  | _ -> []
+  in
+  Solver.push solver.solv;
+  Solver.add solver.solv common_part;
+  let rec try_with_rhs i2 =
+    if (List.length form2.sigma) <= i2
+    then -1,-1
+    else (if (check_match solver form1 i1 form2 i2 level 1)
+      then i2,1
+      else (if (check_match solver form1 i1 form2 i2 level 2)
+      	then i2,2 
+	else (try_with_rhs (i2+1)))
+    )
+  in
+  let res=(
+	if (List.length form1.sigma) <= i1
+	  then (-1,-1,-1)
+	  else 
+	    match (try_with_rhs 0) with
+	    | -1,_ -> (find_match_ll solver form1 (i1+1) form2 level)
+	    | x,dir -> (i1,x,dir)
+  ) in
+  Solver.pop solver.solv 1; res
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *)
 and find_match_ll solver form1 i1 form2 level  =
@@ -989,10 +1023,18 @@ and find_match solver form1 form2 level =
 1:  form1 - the LHS formula with removed matched part and added equality x=y
   form2 - the RHS formula with removed matched part
   M - the learned part
-2:  unfolded Slseg in form1/form2 and added equality x=y
+2a: unfolded Slseg in form1/form2 and added equality x=y
+2b: Second solution: removed Slseg in form1/form2 and added equality x=y
+     the flag option is used to enable/disable Slseg remove in form1.
+     -- in the case of entailment, we can not provide such an option in form1
 
 *)
-and try_match solver form1 form2 level pvars  =
+and try_match solver form1 form2 level pvars flag =
+  let nequiv a b = not (a=b) in
+  let remove k form =
+    { pi=form.pi;
+      sigma=List.filter (nequiv (List.nth form.sigma k)) form.sigma }
+  in
   let m=find_match solver form1 form2 level in
   match m with
   | (-1,-1,_) -> Fail
@@ -1005,6 +1047,41 @@ and try_match solver form1 form2 level pvars  =
       | Hpointsto (a,size,b) -> (a,b,Exp.Void,Exp.Void,0,size)
       | Slseg (a,b,_) -> (a,b,Exp.Void,Exp.Void,1,Exp.Void) 
       | Dlseg (a,b,c,d,_) -> (a,d,c,b,10,Exp.Void) in
+    (* If there is a match of points-to with a list predicate (type1+type2 \in {1,10}
+       then there are two possible options: 
+         - 1 unfold the predicate on RHS (form2) or
+	 - 2 consider the predicate as an empty list -- this is covered by empty_rhs_list_solution 
+    *)
+    let empty_rhs_list_solution =
+	match type1+type2, flag with
+	| 1,_ -> 
+		let empty_list_eq =[(Exp.BinOp (Peq,x2,y2))] in
+		[ { sigma=form1.sigma; pi=form1.pi @ empty_list_eq},
+          	(remove i2 form2),
+          	{sigma=[]; pi=empty_list_eq},
+          	[],NoRecord]
+	| 10,_ ->
+    	      	let empty_list_eq = [(Exp.BinOp (Peq,x2,backy2));(Exp.BinOp (Peq,backx2,y2))] in
+		[ { sigma=form1.sigma; pi=form1.pi @ empty_list_eq},
+          	(remove i2 form2),
+          	{sigma=[]; pi=empty_list_eq},
+          	[],NoRecord]
+	| 2,true -> 
+		let empty_list_eq=[(Exp.BinOp (Peq,x1,y1))] in
+		let form1_tmp=(remove i1 form1) in
+		[ { sigma=form1_tmp.sigma; pi=form1_tmp.pi @ empty_list_eq},
+          	form2,
+          	{sigma=[]; pi=empty_list_eq},
+          	[],NoRecord]
+	| 20,true ->  
+		let empty_list_eq=[(Exp.BinOp (Peq,x1,backy1)); (Exp.BinOp (Peq,backx1,y1))] in
+		let form1_tmp=(remove i1 form1) in
+		[ { sigma=form1_tmp.sigma; pi=form1_tmp.pi @ empty_list_eq},
+          	form2,
+          	{sigma=[]; pi=empty_list_eq},
+          	[],NoRecord]
+	| _ ->  []
+    in
     match apply_match solver (i1,i2) (type1+type2) form1 form2 pvars dir with
     | ApplyFail -> Fail
     | ApplyOK (f1,f2,added_lvars) ->
@@ -1023,18 +1100,21 @@ and try_match solver form1 form2 level pvars  =
       (* size1 = size2 is added if Hpointsto is mathced with Hpointsto *)
       let size_eq=if (type1+type2)=0 then [(Exp.BinOp ( Peq, size1,size2))] else [] in
       match level with
-      | 1 ->   Apply ( { sigma=f1.sigma; pi = y_eq @ dll_eq @ f1.pi},
-          f2,
-          {sigma=[]; pi=dll_eq},
-          added_lvars,NoRecord)
-      | 0 | 3 ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ f1.pi},
-          f2,
-          {sigma=[]; pi=x_eq @ dll_eq},
-          added_lvars,NoRecord)
-      | _ ->   Apply ( { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ size_eq @ f1.pi},
-          f2,
-          {sigma=[]; pi=x_eq @ dll_eq @ size_eq},
-          added_lvars,NoRecord)
+      | 1 -> Apply (empty_rhs_list_solution @ 
+      		[ { sigma=f1.sigma; pi = y_eq @ dll_eq @ f1.pi},
+          	f2,
+          	{sigma=[]; pi=dll_eq},
+          	added_lvars,NoRecord])
+      | 0 | 3 -> Apply (empty_rhs_list_solution @ 
+      		[ { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ f1.pi},
+          	f2,
+          	{sigma=[]; pi=x_eq @ dll_eq },
+          	added_lvars,NoRecord])
+      | _ -> Apply (empty_rhs_list_solution @ 
+      		[ { sigma=f1.sigma; pi = x_eq @ y_eq @ dll_eq @ size_eq @ f1.pi},
+          	f2,
+          	{sigma=[]; pi=x_eq @ dll_eq @ size_eq },
+          	added_lvars,NoRecord])
 
 
 
@@ -1090,14 +1170,36 @@ and entailment_ll solver form1 form2 evars =
   | 0 -> false
   | 1 -> true
   | -1 ->
-     (match (try_match solver form1 form2 0 []),(try_match solver form1 form2 2 []) with
+     (*(match (try_match solver form1 form2 0 []),(try_match solver form1 form2 2 []) with
      | Apply (f1,f2,_,_,_),_ ->
   		Config.debug4_string "Match, ";
   		(entailment_ll solver f1 f2 evars )
      | Fail,Apply (f1,f2,_,_,_) ->
   		Config.debug4_string "Match2, ";
   		(entailment_ll solver f1 f2 evars )
-     | Fail,Fail -> false)
+     | Fail,Fail -> false)*)
+     (* in general, there can be multiple results of match. We try to continu entailment one-by one *)
+     let rec process_matchres match_res =
+     	match match_res with
+	| [] -> false
+	| (f1,f2,_,_,_)::rest -> 
+		if (entailment_ll solver f1 f2 evars )
+		then true
+		else (process_matchres rest)
+     in
+     (match (try_match solver form1 form2 0 [] false) with
+     | Apply match_res ->
+  		Config.debug4_string "Match, ";
+		process_matchres match_res
+     | Fail -> (
+     		match (try_match solver form1 form2 2 [] false) with
+		| Apply match_res ->
+  			Config.debug4_string "Match2, ";
+			process_matchres match_res
+		| Fail -> false
+     		)
+    )
+
   | _ -> raise (TempExceptionBeforeApiCleanup "entailment_ll")
 
 and entailment solver form1 form2 evars=
@@ -1105,12 +1207,14 @@ and entailment solver form1 form2 evars=
   let form1_s=Formula.simplify form1 evars in
   let form2_s=Formula.simplify form2 evars in
   
-  (*let ent_id=string_of_int (Random.int 100) in
+  (*
+  let ent_id=string_of_int (Random.int 100) in
   print_string ("XXXXXXXXXXXXXXXXXXXXXX\nNo:"^ ent_id ^"\nFORM1: ");
   Formula.print_with_lambda form1_s;
   print_string "FORM2: ";
   Formula.print_with_lambda form2_s;
-  print_endline ("LVARS:"^(lvariables_to_string evars)); *)
+  print_endline ("LVARS:"^(lvariables_to_string evars)); 
+  *)
   let conflicts1=find_vars form1_s in
   let form2_rename,evars2=match (rename_ex_variables form2_s evars conflicts1) with
     | f -> f
@@ -1120,11 +1224,12 @@ and entailment solver form1 form2 evars=
     | f -> f
   in
   let query=(formula_to_solver solver.ctx form1_rename) @ (formula_to_solver solver.ctx form2_rename) in
-  let res=
-  	(Solver.check solver.solv query)=SATISFIABLE && (entailment_ll solver form1_rename form2_rename (evars@evars1@evars2))
-  in
-  if res then Config.debug4 ("ENT VALID") else Config.debug4 ("ENT INVALID");
-  res
+  let res1=(Solver.check solver.solv query)=SATISFIABLE in
+  if not res1 then (Config.debug4 ("ENT INVALID"); false )
+  else
+  let res2=(entailment_ll solver form1_rename form2_rename (evars@evars1@evars2)) in
+  if res2 then Config.debug4 ("ENT VALID") else Config.debug4 ("ENT INVALID");
+  res2
 
 (****************************************************)
 (* MAIN biabduction procedure *)
@@ -1175,12 +1280,12 @@ let rec biabduction solver fst_run form1 form2 pvars  =
   let rec try_rules todo=
     match todo with
     | (func_name,rule_arg,rule_name,more_results) :: rest ->
-      (match (func_name solver form1 form2 rule_arg pvars) with
-      | Apply (f1,f2,missing,n_lvars,split_rec) ->
+      (match (func_name solver form1 form2 rule_arg pvars true) with
+      | Apply abd_result ->
         	Config.debug4_string (rule_name ^", ");
 		if more_results && Config.abduction_strategy ()=1 (* try to get more solutions *)
-		then (f1,f2,missing,n_lvars,split_rec) :: (try_rules rest)
-		else [ (f1,f2,missing,n_lvars,split_rec) ]
+		then abd_result @ (try_rules rest)
+		else abd_result
       | Fail ->
         	try_rules rest
       )
