@@ -953,36 +953,6 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
         (* (l1=l2) *) (* Use this line to break the mutual recursion. *)
 	(check_lambda_entailment (Z3wrapper.config_solver ()) l1 l2 1)=1
 
-(* find pair of points-to for match with fixes index predicate on LHS *)
-and find_match_fixed_lhs solver form1 i1 form2 level =
-  let ctx=solver.ctx in
-  let common_part=match level with
-  | 1 | 3 -> [Boolean.mk_and ctx (formula_to_solver ctx form1)]
-  | 2 | 4 -> [(Boolean.mk_and ctx (formula_to_solver ctx form1));
-          (Boolean.mk_and ctx (formula_to_solver ctx form2))] 
-  | _ -> []
-  in
-  Solver.push solver.solv;
-  Solver.add solver.solv common_part;
-  let rec try_with_rhs i2 =
-    if (List.length form2.sigma) <= i2
-    then -1,-1
-    else (if (check_match solver form1 i1 form2 i2 level 1)
-      then i2,1
-      else (if (check_match solver form1 i1 form2 i2 level 2)
-      	then i2,2 
-	else (try_with_rhs (i2+1)))
-    )
-  in
-  let res=(
-	if (List.length form1.sigma) <= i1
-	  then (-1,-1,-1)
-	  else 
-	    match (try_with_rhs 0) with
-	    | -1,_ -> (find_match_ll solver form1 (i1+1) form2 level)
-	    | x,dir -> (i1,x,dir)
-  ) in
-  Solver.pop solver.solv 1; res
 
 (* Find pair of points-to for match. Return (-1,-1) if unposibble *)
 and find_match_ll solver form1 i1 form2 level  =
