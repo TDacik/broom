@@ -908,11 +908,8 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 				(expr_to_solver_only_exp ctx z3_names bb) in
 		(* First do a base check --- i.e. query1 + query2 *)
 		(* form -> l1 = l2 /\ base(b1) = base(a2) *)
-		let query1 = [	
-			Boolean.mk_or ctx [
-				(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2));
-				(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))]
-		] in
+		let query1A = [	(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2))] in
+		let query1B = [ (Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))] in
 		(* SAT: form /\  base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ 
 			Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
@@ -920,10 +917,21 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 				(BitVector.mk_sub ctx a1 (Expr.mk_app ctx z3_names.base [a1]) )
 				(BitVector.mk_sub ctx a2 (Expr.mk_app ctx z3_names.base [a2]) )
 		] in
-		if not (((Solver.check solv query1)=UNSATISFIABLE)
-			&& ((Solver.check solv query2)=SATISFIABLE)
-			&& ((Solver.check solv (query_pvars a2))=SATISFIABLE)) then AbstractionFail
-		else
+		(* check queries lazily one-by-one *)
+		let rec checkqueries q =
+			match q with
+			| [] -> true
+			| (query,res)::rest -> 
+				if (Solver.check solv query)=res
+				then checkqueries rest
+				else false
+		in
+		if not (checkqueries [(query1A, UNSATISFIABLE);
+					(query1B,UNSATISFIABLE); 
+					(query2,SATISFIABLE); 
+					(query_pvars a2, SATISFIABLE)])
+		then  AbstractionFail
+		else 
 		(
 		(* ADD: base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) to the solver for the following computations 
 		   this is needed for linux-list like examples, where the bases are only relative---i.e. we do not know the 
@@ -935,13 +943,13 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 ([i1;i2]@a1_block) 0 in
 		(* FIRST: try to find possible mapping between particula points-to predicates is block of a1/a2 *)
 		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
-		| MatchFail -> AbstractionFail 
+		| MatchFail ->  AbstractionFail 
 		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
 			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2,1)] 1 pvars) with
 			| CheckOK checked_matchres ->  
 				(fold_pointsto ctx solv z3_names form i1 i2 checked_matchres) 
 				
-			| CheckFail -> AbstractionFail
+			| CheckFail ->  AbstractionFail
 			| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackLink is not expected here",__POS__))
 		)
 		)
