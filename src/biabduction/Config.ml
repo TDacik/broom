@@ -190,11 +190,11 @@ let _solver_timeout = ref 2000
 let solver_timeout () = !_solver_timeout
 
 (** Solver timeout for symplify states (in miliseconds) : 0 - no timeout *)
-let _solver_timeout_simplify = ref 100
+let _solver_timeout_simplify = ref 200
 let solver_timeout_simplify () = !_solver_timeout_simplify
 
 (** Solver timeout for abstraction (in miliseconds) : 0 - no timeout *)
-let _solver_timeout_abstraction = ref 200
+let _solver_timeout_abstraction = ref 1000
 let solver_timeout_abstraction () = !_solver_timeout_abstraction
 
 let _print_cl = ref false

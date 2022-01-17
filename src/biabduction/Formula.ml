@@ -645,6 +645,22 @@ let remove_useless_conjuncts form evars exclude_from_refs=
   let new_pi=get_referenced_conjuncts form.pi ref_vars_filtered in
   {sigma=form.sigma; pi=new_pi}
 
+(* remove empty slsegments *)
+let rec remove_empty_slseg_ll sigma =
+	match sigma with
+	| [] -> []
+	| Slseg(a,b,l)::rest -> if (a=b) 
+			then (remove_empty_slseg_ll rest)
+			else Slseg(a,b,l) :: (remove_empty_slseg_ll rest)
+	| Dlseg(a,b,c,d,l)::rest -> if (a=d)&&(b=c)
+			then  (remove_empty_slseg_ll rest)
+			else Dlseg(a,b,c,d,l):: (remove_empty_slseg_ll rest)
+	| first:: rest -> first::(remove_empty_slseg_ll rest)
+
+let remove_empty_slseg form =
+	let sigma_new=remove_empty_slseg_ll form.sigma in
+	{sigma=sigma_new; pi=form.pi}
+
 (* now we have everything for global simplify function,
    evars is a list of Ex. q. variables, which can be renamed/removed/etc...
    form - expect satisfiable formula only *)
@@ -656,7 +672,8 @@ let simplify form evars=
   let vars = find_vars form in
   let gvars = List.filter mem vars in
   let form1 = remove_equiv_vars gvars evars form in
-  remove_useless_conjuncts form1 evars []
+  let form2 = remove_useless_conjuncts form1 evars [] in
+  remove_empty_slseg form2
 
 (* this is used in the lambda creation. 
    --- Everything related only to the referenced variables (lambda_refs) is removed from pi. 
