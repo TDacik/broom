@@ -452,13 +452,21 @@ let check_split_right {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 
       Boolean.mk_not ctx (
         Boolean.mk_and ctx [
         (BitVector.mk_sge ctx lhs rhs);
-        (BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size) );
+	(Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]));
         (BitVector.mk_sle ctx lhs_size rhs_size)
         ] )
-     ] in
-    let query2=[(BitVector.mk_slt ctx lhs_size rhs_size)] in (* check that lhs_size can be really < rhs size *)
-    (Solver.check solv query)=UNSATISFIABLE && (Solver.check solv query2)=SATISFIABLE
-    (* && ((Solver.check solv query_null)=UNSATISFIABLE || (rhs_dest = Undef))*) (* here we may thing about better Undef recognition *)
+    ] in
+    (* check that 
+       1: SAT (lhs_size < rhs size )
+       2: SAT (lhs+lhs_size <= rhs+rhs_size) 
+       Note thati the second can be substituted by "UNSAT(not (lhs+lhs_size <= rhs+rhs_size))", 
+       but the solver may fail in the case of symbolic sizes (rhs_size in the case of contract for free). *)
+    let query2=[(BitVector.mk_slt ctx lhs_size rhs_size); 
+    		(BitVector.mk_sle ctx (BitVector.mk_add ctx lhs lhs_size) (BitVector.mk_add ctx rhs rhs_size))] in 
+    if not ((Solver.check solv query)=UNSATISFIABLE)
+    then false
+    else
+        (Solver.check solv query2)=SATISFIABLE
   | 4 ->
     let query=[
       (BitVector.mk_sge ctx lhs rhs);
@@ -1246,6 +1254,12 @@ type abduction_res =
 | BFail
 
 let rec biabduction solver fst_run form1 form2 pvars  =
+  (*print_endline "XXXXXXXXXXXXXXX";
+  Formula.print form1;
+  print_endline "-------------";
+  Formula.print form2;
+  print_endline "XXXXXXXXXXXXXXX";
+  flush stdout;*)
   (* try the rules till an applicable if founded *)
   let rec try_rules todo=
     match todo with
