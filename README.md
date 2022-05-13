@@ -12,7 +12,6 @@ Broom is a static analyzer for C written in OCaml. Broom primarily aims at progr
      - core
      - cppo
      - dune
-     - qtest
      - z3              >= 4.8.8-1
 
 For the JSON dumper see [code-listener/README](https://github.com/kdudka/predator/blob/master/README.md)
@@ -21,7 +20,7 @@ For the JSON dumper see [code-listener/README](https://github.com/kdudka/predato
 
 1. Install code-listener dependencies and opam:
   ```
-  sudo apt install cmake gcc-10-multilib libboost-all-dev opam                        # for Ubuntu 20.04
+  sudo apt install cmake g++-10-multilib gcc-10-plugin-dev libboost-all-dev opam libgmp-dev  # for Ubuntu 20.04
   brew install cmake gcc@10 boost boost-build coreutils opam                          # for MacOS
   sudo dnf install opam cmake gmp-devel boost-devel gcc-plugin-devel glibc-devel.i686 # for Fedora 33
   ```
@@ -63,10 +62,6 @@ make build           # build Broom tool
   Z3 <=4.8.1 requires a compiler with OpenMP support. The minimum required
   version of Z3 is 4.8.8-1.
 
-To run the tests:
-```
-make check
-```
 ## Usage
 ```
 ./scripts/broom [OPTs] file.c                             # main binary
@@ -90,4 +85,13 @@ This will show you the available options of the Broom itself
 ## Contact
 For more information send an e-mail to:
 
-* Anonymous author <anonymus@anonymus.org>
+* Adam Rogalewicz <rogalew@fit.vut.cz>
+* Veronika Šoková <isokova@fit.vut.cz>
+* Tomáš Vojnar
+* Florian Zuleger
+* Lukáš Holík
+* Petr Peringer <peringer@fit.vut.cz> (corresponding author of JSON dumper)
+
+Former Broom team members:
+
+* Jens Pagel
