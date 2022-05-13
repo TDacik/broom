@@ -52,7 +52,7 @@ make build           # build Broom tool
 
 * Empty the `code-listener` directory:
   ```
-  git clone --recurse-submodules https://<URL>/broom.git
+  git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/broom.git
   ```
 * `ld: warning: directory not found for option '-L/opt/local/lib'` appears
   during compilation on MacOS. The cause is `zarith` (dependence from Z3).
