@@ -22,8 +22,9 @@
 - [x] sls abstraction
     - [ ] shared nested subheap
   <br/>
-- [ ] dls abstraction in logic
-
+- [x] dls abstraction in logic
+    - [ ] shared nested subheap
+  <br/>
 - [x] entailment; bug: [sll2.c](tests/sll2.c), [unreach.c](tests/unreach.c)
 
 - [ ] better error detection
@@ -38,9 +39,9 @@
   - [x] `free` - not implemented: value of pointer after free is not guaranteed (=undef) [tomas-test-02.c](tests/tomas-test-02.c)
   - [ ] `memchr`
   - [ ] `memcmp`
-  - [ ] `memcpy`
+  - [x] `memcpy`
   - [ ] `memmove`
-  - [ ] `memset`
+  - [x] `memset`
   - [x] `rand`
   - [x] `abort`
   - [ ] `assert` / `__assert_fail` / `__assert_rtn`
