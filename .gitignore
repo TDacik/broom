@@ -9,3 +9,5 @@ _build/
 doc
 *.merlin
 *.install
+*.ast.sh
+*.o
