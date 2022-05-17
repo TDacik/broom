@@ -3,7 +3,7 @@
 
 
 #include "minunit.h"
-#include "intrusive-list.h"
+#include "intrusive-list-person.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -108,12 +108,6 @@ static link* list_get_link_from_node(list *l, void* node) {
 // https://github.com/robbiev/coh-linkedlist
 
 int tests_run = 0;
-
-typedef struct {
-  int weight;
-  char *name;
-  link link;
-} person;
 
 person* person_create(char *name, int weight) {
   person *p = malloc(sizeof(person));
