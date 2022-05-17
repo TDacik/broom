@@ -78,6 +78,8 @@ This will show you the available options of the Broom itself
 ./scripts/broom -h
 ```
 
+An example of using the Broom tool can be found [here](example.md).
+
 ## See also [for developers]
    * [atd's documentation](http://atd.readthedocs.io/en/latest/)
    * [yojson's documentation](https://docs.mirage.io/yojson/Yojson/index.html)
