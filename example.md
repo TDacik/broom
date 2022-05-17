@@ -1,6 +1,6 @@
 # Example
 
-This section is true for Broom v0.0.1. Here is a simple [tests/easy-01b-err.c](C program) with an error to illustrate how Broom works.
+This section is true for Broom v0.0.1. Here is a simple [C program](tests/easy-01b-err.c) with an error to illustrate how Broom works.
 
 ```c
 #include <stdlib.h>
@@ -151,7 +151,7 @@ Program variables (_PVars_):
 Logical variables (_LVars_):
  * `%l<uid>` logical/existential variables
  * `%mF<uid>:<name>_anch` anchor for arguments of function
- * %ret
+ * `%ret`
  * `%c<uid>` contract variables (unique existential variables in contract)
 
 Compared to the separation logic described in Section 5, Broom uses a slightly different notation:
