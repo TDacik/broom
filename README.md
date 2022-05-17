@@ -64,7 +64,7 @@ make build           # build Broom tool
 
 ## Usage
 ```
-./scripts/broom [OPTs] file.c                             # main binary
+./scripts/broom [OPTs] -- file.c                          # main binary
 ./scripts/contract-generator file.c                       # print contracts
 ./scripts/call_graph file.c            # create DOTs (call graph, CFGs) from C
 ./scripts/json_dumper [-m32] file.c > file.json           # create JSON from C
