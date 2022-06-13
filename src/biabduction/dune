@@ -7,7 +7,7 @@
   (targets Version.ml)
   (action
     (with-stdout-to Version.ml
-     (bash "echo \"let curr=\\\"%{version:broom}\\\"\n\""))))
+     (bash "echo \"let curr=\\\"%{version:broom}-`git log --pretty=format:'%h' -n 1`\\\"\n\""))))
 
 (library
   (name biabd)
