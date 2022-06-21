@@ -365,7 +365,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 	        (dist_fields al size_z3 alloc_aa size_aa_z3);
         	(fit_len al alloc_aa);
 		(fix_len al alloc_aa)]), exundef
-      | Slseg (aa,bb,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
+      | Slseg (aa,bb,_,_) -> (* base(al) != base(aa) or Slseq is empty aa=bb *)
         let alloc_aa,ex1 = alloc aa in
 	let alloc_bb,ex2 = alloc bb in
 	let exundef=ex1@ex2 in
@@ -397,7 +397,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     	(exundef1@exundef2@exundef3)
     )
     
-  | Slseg (a,b,_) ->
+  | Slseg (a,b,_,_) ->
     let x,exundef1=alloc a in
     let y,exundef2=alloc b in
     (* alloc base(x) or x=y 
@@ -417,7 +417,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         Boolean.mk_or ctx
         	[ Boolean.mk_not ctx (base_eq al alloc_aa );
         	Boolean.mk_eq ctx al dst ],exu1
-      | Slseg (aa,bb,_) ->(* base(al) != base(aa) or one of the Slseqs is empty al=dst \/ aa=bb *)
+      | Slseg (aa,bb,_,_) ->(* base(al) != base(aa) or one of the Slseqs is empty al=dst \/ aa=bb *)
 	let alloc_aa,exu1=alloc aa in
 	let alloc_bb,exu2=alloc bb in
         Boolean.mk_or ctx
@@ -484,7 +484,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			Boolean.mk_not ctx (base_eq last alloc_aa );
 			];
         	Boolean.mk_eq ctx first nextlast ],exu1
-      | Slseg (aa,bb,_) ->(* (base(first) != base(aa) /\ base(last)!=base(aa))or one of the list segments is empty first=nextlast \/ aa=bb *)
+      | Slseg (aa,bb,_,_) ->(* (base(first) != base(aa) /\ base(last)!=base(aa))or one of the list segments is empty first=nextlast \/ aa=bb *)
 	let alloc_aa,exu1=alloc aa in
 	let alloc_bb,exu2=alloc bb in
         Boolean.mk_or ctx
@@ -585,7 +585,7 @@ let formula_to_solver_with_quantified_undefs ctx form =
 let rec check_sp_predicate ctx solv pred =
   let z3_names=get_sl_functions_z3 ctx in
   match pred with
-  | Slseg(_,_,lambda) ->
+  | Slseg(_,_,lambda,_) ->
     (* basic checks, there must be two parameters, which are different *)
     if not ((List.length lambda.param) = 2) ||
       (List.nth lambda.param 0) = (List.nth lambda.param 1) then false

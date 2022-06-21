@@ -166,7 +166,7 @@ let close_lambda lambda =
 	let rec get_lseg sigma =
 		match sigma with
 		| [] -> []
-		| (Slseg (a,b,c))::rest -> (Slseg (a,b,c)) :: get_lseg rest
+		| (Slseg (a,b,c,shared))::rest -> (Slseg (a,b,c,shared)) :: get_lseg rest
 		| (Dlseg (a,b,c,d,e)):: rest -> (Dlseg (a,b,c,d,e)) :: get_lseg rest
 		| _::rest -> (* we drop pointsto *)
 			get_lseg rest

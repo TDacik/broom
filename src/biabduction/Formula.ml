@@ -186,7 +186,8 @@ and lambda = {
 
 and heap_pred =
   | Hpointsto of Exp.t * Exp.t * Exp.t (* source, size_of_field, destination *)
-  | Slseg of Exp.t * Exp.t * lambda    (* source, destination, lambda *)
+  (* We use type Exp.t list for shared nodes because this allows us to handle arithmetic compositions on pointers *)
+  | Slseg of Exp.t * Exp.t * lambda * Exp.t list   (* source, destination, lambda, shared *) (*DAVID: add 4th param which is list of Exp.t, if list is empty, there is no change to current impl*)
   | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
 
 (* spatial part *)
@@ -220,11 +221,11 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
       Exp.to_string ~lvars:lvars a ^" -("^
       (Exp.to_string ~lvars:lvars l) ^")->"^
       Exp.to_string ~lvars:lvars b), ""
-    | Slseg (a,b,lambda) ->
+    | Slseg (a,b,lambda,shared) ->
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
       ("Slseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
         Exp.to_string ~lvars:lvars b ^", "^
-        lambda_id^") "),
+        lambda_id^ ", "^ String.concat ", " (List.map Exp.to_string shared) ^") "),
       "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
         (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
     | Dlseg (a,b,c,d,lambda) ->
@@ -290,7 +291,7 @@ let rec is_invalid pi =
 let rec is_sigma_abstract sigma =
   match sigma with
   | [] -> false
-  | Slseg (_,_,_)::_ -> true
+  | Slseg (_,_,_,_)::_ -> true
   | Dlseg (_,_,_,_,_)::_ -> true
   | _::tl -> is_sigma_abstract tl
 
@@ -333,7 +334,7 @@ let rec find_vars_sigma sigma =
   | Hpointsto (a,_, b)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
-  | Slseg (a,b,_)::rest ->
+  | Slseg (a,b,_,_)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
   | Dlseg (a,b,c,d,_)::rest ->
@@ -410,14 +411,14 @@ let rec subsigma vars sigma =
       (CL.Util.list_join_unique new_vars tl_vars, Hpointsto (a,size,b)::subtl)
     else
       (tl_vars,subtl)
-  | Slseg (a,b,l)::tl ->
+  | Slseg (a,b,l,shared)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
     let (tl_vars,subtl) = subsigma vars tl in
     if (a_found) (* must be reach from source pointer *)
     then
       let (b_vars,_) = find_expr_contains_vars vars b in
       let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
-      (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l)::subtl)
+      (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l,shared)::subtl)
     else
       (tl_vars,subtl)
   | Dlseg (a,b,c,d,l)::tl ->
@@ -522,10 +523,10 @@ let rec substitute_sigma var1 var2 sigma =
       let b_new = substitute_expr var1 var2 b in
       let l_new = substitute_expr var1 var2 l in
       Hpointsto (a_new,l_new,b_new):: substitute_sigma var1 var2 rest
-    | Slseg (a,b,l) ::rest ->
+    | Slseg (a,b,l,shared) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
-      Slseg (a_new,b_new,l) :: substitute_sigma var1 var2 rest
+      Slseg (a_new,b_new,l,shared) :: substitute_sigma var1 var2 rest
     | Dlseg (a,b,c,d,l) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
@@ -649,9 +650,9 @@ let remove_useless_conjuncts form evars exclude_from_refs=
 let rec remove_empty_slseg_ll sigma =
 	match sigma with
 	| [] -> []
-	| Slseg(a,b,l)::rest -> if (a=b) 
+	| Slseg(a,b,l,shared)::rest -> if (a=b) 
 			then (remove_empty_slseg_ll rest)
-			else Slseg(a,b,l) :: (remove_empty_slseg_ll rest)
+			else Slseg(a,b,l,shared) :: (remove_empty_slseg_ll rest)
 	| Dlseg(a,b,c,d,l)::rest -> if (a=d)&&(b=c)
 			then  (remove_empty_slseg_ll rest)
 			else Dlseg(a,b,c,d,l):: (remove_empty_slseg_ll rest)
@@ -755,6 +756,9 @@ let diffbase _ _ _ = []
    !!! The function Abstraction.try_add_slseg_to_pointsto relies on the fact, that the unfolded stuff is added to the end 
 
   dir (in case of Dlseg): 1 - from begining, 2 - from end. *)
+  (* pnum = pointer number in form.sigma*)
+  (* the unfolding introduces a fresh variable for an evar in the lambda iff that evar is not 
+  in 'conflicts' and does not occur in 'form' *)
 let unfold_predicate form pnum conflicts dir =
   let confl=CL.Util.list_join_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in
@@ -770,16 +774,18 @@ let unfold_predicate form pnum conflicts dir =
   in
   let nomem lst x = not (mem lst x) in
   match (List.nth form.sigma pnum) with
-  | Slseg (a,b,lambda) ->
+  | Slseg (a,b,lambda,shared) -> 
     let confl1=confl @ (find_vars lambda.form) in
     let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
+    (* do not substitute variables in shared expressions by fresh variables, so remove them from l_evars *)
+    let l_evars = List.filter (nomem (find_vars_pi shared)) l_evars in
     let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
     let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
     let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
     let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
     let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
     let res_form=simplify
-      {sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda)];
+      {sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda,shared)];
        pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum 1) }
       ([new_a;new_b]@added_vars) in
     (* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)

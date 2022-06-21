@@ -6,7 +6,7 @@
 .PHONY: build doc clean examples
 
 build:
-	dune build src/broom.exe src/test.exe
+	dune build --profile release src/broom.exe src/test.exe
 
 doc: build
 	dune build @doc

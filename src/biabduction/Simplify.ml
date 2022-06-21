@@ -38,10 +38,10 @@ let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list
         if (check_eq_bases a base_list)
         then (cut_spatial rest base_list )
         else Hpointsto (a,b,c) ::(cut_spatial rest base_list )
-      | Slseg (a,b,c) :: rest ->
+      | Slseg (a,b,c,shared) :: rest ->
         if (check_eq_bases a base_list)
         then raise Conflict_between_freed_and_lseg
-        else Slseg (a,b,c) ::(cut_spatial rest base_list )
+        else Slseg (a,b,c,shared) ::(cut_spatial rest base_list )
       | Dlseg (a,b,c,d,l) :: rest ->
         if ((check_eq_bases a base_list) || (check_eq_bases c base_list))
         then raise Conflict_between_freed_and_lseg
