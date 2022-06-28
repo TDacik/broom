@@ -171,9 +171,12 @@ let try_learn_pointsto solver form1 form2 level _ _ =
       in
       let y2_z3=expr_to_solver_only_exp ctx z3_names y2 in
       let query=[Boolean.mk_eq ctx y2_z3 (Expr.mk_app ctx z3_names.base [y2_z3])] in
-      if (size_simplified=Exp.zero)&&(Solver.check solver.solv query)=UNSATISFIABLE
-	then {sigma=[]; pi=[]}
-	else {sigma=[Hpointsto (y2,size_simplified,dest2)]; pi=[]}
+      if (size_simplified=Exp.zero)
+      then (if(Solver.check solver.solv query)=UNSATISFIABLE
+		then {sigma=[]; pi=[]}
+		else {sigma=[Hpointsto (y2,size_simplified,dest2)]; pi=[]}
+	     )
+      else {sigma=[Hpointsto (y2,size_simplified,dest2)]; pi=[]}
   in
 
   match (get_index 0) with
@@ -387,7 +390,9 @@ let check_split_left {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 l
         ] )
     ] in
     let query2=[(BitVector.mk_sgt ctx lhs_size rhs_size)] in (* check that lhs_size can be really > rhs size *)
-    (Solver.check solv query)=UNSATISFIABLE && (Solver.check solv query2)=SATISFIABLE
+    if (Solver.check solv query)=UNSATISFIABLE 
+    then ((Solver.check solv query2)=SATISFIABLE)
+    else false
     (* &&((Solver.check solv query_null)=UNSATISFIABLE || (lhs_dest = Undef)) *)(* here we may thing about better Undef recognition *)
   | 4 ->
     let query=[
