@@ -98,7 +98,8 @@ val main : unit -> string
     Could be disabled by option [--no-rerun] *)
 val rerun : unit -> bool
 
-(** Set by option [--oom] (out of memory). Simulate possible shortage of memory
+(** EXPERIMENTAL: Set by option [--oom] (out of memory). Simulate possible
+    shortage of memory
     (heap allocation e.g. [malloc], [calloc] can fail). Default: false *)
 val oom : unit -> bool
 
@@ -107,7 +108,7 @@ val oom : unit -> bool
     function or {!main}), Default: true *)
 val exit_leaks : unit -> bool
 
-(** Set by [--memory_leaks_as_errors]. If true, reports memory leaks as errors
+(** Set by [--memory-leaks-as-errors]. If true, reports memory leaks as errors
     otherwise warnings. Default: false *)
 val memory_leaks_as_errors : unit -> bool
 

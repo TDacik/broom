@@ -2,8 +2,7 @@
 #include <alloca.h>
 
 void ff(int **pp) {
-    *pp = malloc(sizeof(int)); // Tady se muze zdat, ze stara hodnota *pp je junk.
-    if (*pp == NULL) abort();
+    *pp = malloc(sizeof(int)); // here it may seem that the old value of *pp is junk
     **pp = 1;
     return;
 }
@@ -17,8 +16,8 @@ int main() {
     **s = 0;
     *t = *s;         
 
-    ff(s);  // Junk nevznika, protoze na starou bunku ukazuje t.
-            // Kdyby ale tam t=s nebylo, junk vznikne.
+    ff(s);  // No junk, because t points to the old cell.
+            // But if t=s were not there, junk will be. 
     free(*t);
     free(*s);
 }

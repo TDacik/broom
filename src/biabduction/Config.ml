@@ -133,7 +133,7 @@ let main () = !_main
 let _rerun = ref true
 let rerun () = !_rerun
 
-(** --oom / --out-of-memory unsuccesful heap allocation *)
+(** EXPERIMENTAL: --oom / --out-of-memory unsuccesful heap allocation *)
 (* TODO fix rerun *)
 let _oom = ref false
 let oom () = !_oom
@@ -229,7 +229,7 @@ let analyse_cmd_arguments () = Arg.(
       " Diseable second run";
 
       "--oom", Set _oom,
-      " Out of memory (heap allocation can fail)";
+      " EXPERIMENTAL: Out of memory (heap allocation can fail)";
 
       "--exit-leaks", Set _exit_leaks,
       " Report memory leaks while executing a no-return function";
@@ -237,7 +237,7 @@ let analyse_cmd_arguments () = Arg.(
       "--no-exit-leaks", Clear _exit_leaks,
       " Not report memory leaks while executing a no-return function";
 
-      "--memory_leaks_as_errors", Set _memory_leaks_as_errors,
+      "--memory-leaks-as-errors", Set _memory_leaks_as_errors,
       " Report memory leaks as errors otherwise warnings";
 
       "--abstraction-mode ", Set_int _abstraction_mode,

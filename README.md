@@ -12,7 +12,6 @@ Broom is a static analyzer for C written in OCaml. Broom primarily aims at progr
      - core
      - cppo
      - dune
-     - qtest
      - z3              >= 4.8.8-1
 
 For the JSON dumper see [code-listener/README](https://github.com/kdudka/predator/blob/master/README.md)
@@ -21,7 +20,7 @@ For the JSON dumper see [code-listener/README](https://github.com/kdudka/predato
 
 1. Install code-listener dependencies and opam:
   ```
-  sudo apt install cmake gcc-10-multilib libboost-all-dev opam                        # for Ubuntu 20.04
+  sudo apt install cmake g++-10-multilib gcc-10-plugin-dev libboost-all-dev opam libgmp-dev  # for Ubuntu 20.04
   brew install cmake gcc@10 boost boost-build coreutils opam                          # for MacOS
   sudo dnf install opam cmake gmp-devel boost-devel gcc-plugin-devel glibc-devel.i686 # for Fedora 33
   ```
@@ -53,7 +52,7 @@ make build           # build Broom tool
 
 * Empty the `code-listener` directory:
   ```
-  git clone --recurse-submodules https://<URL>/broom.git
+  git clone --recurse-submodules https://pajda.fit.vutbr.cz/rogalew/broom.git
   ```
 * `ld: warning: directory not found for option '-L/opt/local/lib'` appears
   during compilation on MacOS. The cause is `zarith` (dependence from Z3).
@@ -63,13 +62,9 @@ make build           # build Broom tool
   Z3 <=4.8.1 requires a compiler with OpenMP support. The minimum required
   version of Z3 is 4.8.8-1.
 
-To run the tests:
-```
-make check
-```
 ## Usage
 ```
-./scripts/broom [OPTs] file.c                             # main binary
+./scripts/broom [OPTs] -- file.c                          # main binary
 ./scripts/contract-generator file.c                       # print contracts
 ./scripts/call_graph file.c            # create DOTs (call graph, CFGs) from C
 ./scripts/json_dumper [-m32] file.c > file.json           # create JSON from C
@@ -83,6 +78,8 @@ This will show you the available options of the Broom itself
 ./scripts/broom -h
 ```
 
+An example of using the Broom tool can be found [here](example.md).
+
 ## See also [for developers]
    * [atd's documentation](http://atd.readthedocs.io/en/latest/)
    * [yojson's documentation](https://docs.mirage.io/yojson/Yojson/index.html)
@@ -90,4 +87,13 @@ This will show you the available options of the Broom itself
 ## Contact
 For more information send an e-mail to:
 
-* Anonymous author <anonymus@anonymus.org>
+* Adam Rogalewicz <rogalew@fit.vut.cz>
+* Veronika Šoková <isokova@fit.vut.cz>
+* Tomáš Vojnar
+* Florian Zuleger
+* Lukáš Holík
+* Petr Peringer <peringer@fit.vut.cz> (corresponding author of JSON dumper)
+
+Former Broom team members:
+
+* Jens Pagel

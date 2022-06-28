@@ -1,1 +1,0 @@
-../code-listener/tests/predator-regre/test-0258.c

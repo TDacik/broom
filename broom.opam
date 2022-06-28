@@ -1,22 +1,26 @@
 opam-version: "2.0"
 
 name: "Broom"
-version: "0.0.1"
+version: "0.0.2"
 
 synopsis: "A static analyzer for C"
 description: """
-Broom is a static analyzer for C written in OCaml.
+Broom is a static analyzer for C written in OCaml based
+on separation logic and the principle of bi-abductive reasoning.
 """
 
 maintainer: "Broom team"
 authors: [
-  ""
-  ""
+  "Adam Rogalewicz <rogalew@fit.vut.cz>"
+  "Veronika Šoková <isokova@fit.vut.cz>"
+  "Tomáš Vojnar <vojnar@fit.vut.cz>"
+  "Florian Zuleger <florian.zuleger@tuwien.ac.at>"
+  "Lukáš Holík <holik@fit.vut.cz>"
 ]
 license: "GPL3"
 
-homepage: ""
-bug-reports: ""
+homepage: "https://pajda.fit.vutbr.cz/rogalew/broom/"
+bug-reports: "https://pajda.fit.vutbr.cz/rogalew/broom/issues"
 
 depends: [
   "atdgen" {>="2.0.0"}
@@ -24,8 +28,6 @@ depends: [
   "cppo"
   "dune"
   "ocaml" {>="4.08.0"}
-  "odocs"
-  "qtest"
+  "odoc"
   "z3" {>= "4.8.8-1"}
-  "utop"
 ]
