@@ -917,7 +917,9 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
 	    in
 	    let query1 = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
 	    in
-	    query_size && ((Solver.check solv query1)=UNSATISFIABLE)
+	    if query_size 
+	    then ((Solver.check solv query1)=UNSATISFIABLE)
+	    else false
 	  | 2 ->
 	    let query_size =
 	      if ((lhs_size=ff)||(rhs_size=ff)) then true
@@ -927,7 +929,9 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
 	    in
 	    let query = [Boolean.mk_not ctx (Boolean.mk_eq ctx lhs rhs)]
 	    in
-	    query_size && ((Solver.check solv query)=UNSATISFIABLE)
+	    if query_size 
+	    then ((Solver.check solv query)=UNSATISFIABLE)
+	    else false
 	  | 3 ->
 	    let query_size =
 	      if ((lhs_size=ff)||(rhs_size=ff)) then true
@@ -942,8 +946,13 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
 	      ]
 	    in
 	    let query2=[Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [lhs]) (Expr.mk_app ctx z3_names.base [rhs]))] in
-	    query_size
-	    && ((Solver.check solv query1)=SATISFIABLE) && ((Solver.check solv query2)=UNSATISFIABLE)
+	    if query_size
+	    then (
+	    	if ((Solver.check solv query1)=SATISFIABLE) 
+		then ((Solver.check solv query2)=UNSATISFIABLE)
+		else false
+	    ) 
+	    else false
 	  | 4 ->
 	    let query_size =
 	      if ((lhs_size=ff)||(rhs_size=ff)) then true
@@ -953,7 +962,9 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
 	      (Solver.check solv qq)=UNSATISFIABLE
 	    in
 	    let query=[(Boolean.mk_eq ctx lhs rhs)] in
-	    query_size && ((Solver.check solv query)=SATISFIABLE)
+	    if query_size 
+	    then ((Solver.check solv query)=SATISFIABLE)
+	    else false
 	  | _ -> false
   in
   (* if both sides are spatial predicates then we have to check entailment of lambdas to confirm match *)

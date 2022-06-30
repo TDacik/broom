@@ -217,8 +217,10 @@ let post_contract_application state solver pvarmap pvars =
    apper, we just try it *)
   let sat_query_curr=formula_to_solver solver.ctx final_state.curr in
   let sat_query_missing=formula_to_solver solver.ctx final_state.miss in
-  if ((Solver.check solver.solv sat_query_curr)=UNSATISFIABLE) ||
-     ((Solver.check solver.solv sat_query_missing)=UNSATISFIABLE)
+  if ((Solver.check solver.solv sat_query_curr)=UNSATISFIABLE) 
+  then []
+  else
+  if ((Solver.check solver.solv sat_query_missing)=UNSATISFIABLE)
   then (
     (*prerr_endline "------------";
     prerr_endline (State.to_string final_state);
