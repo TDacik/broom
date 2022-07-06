@@ -207,6 +207,14 @@ let rec pi_to_string ?lvars:(lvars=[]) p =
   | first::rest -> Exp.to_string ~lvars:lvars first ^ " & " ^
     pi_to_string ~lvars:lvars rest
 
+let points_to_to_string ?lvars:(lvars=[]) points_to = 
+  match points_to with
+  | Hpointsto(a,l,b) ->
+  Exp.to_string ~lvars:lvars a ^" -("^
+      (Exp.to_string ~lvars:lvars l) ^")->"^
+      Exp.to_string ~lvars:lvars b
+  | _ -> ""    
+
 let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
 (* num is used to marking lambdas *)
   let rec lambda_params_to_string params =
@@ -217,10 +225,7 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
   in
   let pred_to_string a =
     match a with
-    | Hpointsto (a,l,b) -> (
-      Exp.to_string ~lvars:lvars a ^" -("^
-      (Exp.to_string ~lvars:lvars l) ^")->"^
-      Exp.to_string ~lvars:lvars b), ""
+    | Hpointsto (a,l,b) -> points_to_to_string (Hpointsto (a,l,b)), ""
     | Slseg (a,b,lambda,shared) ->
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
       ("Slseg(" ^ Exp.to_string ~lvars:lvars a ^", "^

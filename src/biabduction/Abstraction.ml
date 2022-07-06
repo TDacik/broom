@@ -172,7 +172,7 @@ type match_res =
 | MatchFail
 
 
-(* DAVID: checks that the the fields of the two blocks are at the same offset, returns pairs of fields with same offset in block *)
+(* checks that the the fields of the two blocks are at the same offset, returns pairs of fields with same offset in block *)
 let rec match_pointsto_from_two_blocks ctx solv z3_names form l1 l2 =
 	match l1 with
 	| [] -> if l2=[] then MatchOK [] else MatchFail
@@ -285,6 +285,13 @@ type check_res =
 | DlsegBackLink
 | CheckFail
 
+let rec quadruples_to_string check_res =
+	match check_res with
+	(a,b,points_to,is_dls) :: tail -> "(" ^ (string_of_int a) ^ "," ^ 
+		(string_of_int b) ^ "," ^ Formula.points_to_to_string points_to ^ "," ^ 
+		(string_of_int is_dls) ^ "), " ^ quadruples_to_string tail 
+	| [] -> "\n"
+
 (* this function is quite similar to the try_pointsto_to_lseg, but is is dedicated to the blocks referenced from the blocks, which should be folded *)
 let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 	let global_bases base g=Boolean.mk_not ctx
@@ -303,7 +310,6 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		] in
 		(* SAT: form /\ base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ 
-			Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 			Boolean.mk_eq ctx 
 			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
@@ -315,6 +321,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		then DlsegBackLink
 		else
 		(* SAT: forall g in gvar. base(g)!=base(a1) /\ base(g)!=base(a2) *)
+		(* ensures that pvars are not abstracted *)
 		let query3=if gvars=[] then []
 			else
 			[ 
@@ -324,8 +331,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		if not ((Solver.check solv query3)=SATISFIABLE) then CheckFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
-		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [i2] 0 in
-		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 (i1::a1_block) 0 in
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [] 0 in
+		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 [] 0 in
 		(match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 			| MatchFail -> CheckFail
 			| MatchOK matchres ->  
@@ -437,19 +444,18 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 
-(*DAVID: recursion of nested sublists is supported up to one level -> to identify nested lists of nested lists,
-	 sever steps of abstractions have to be performed*)
-(*DAVID: returns quadruples (a,b,c,d) where a and b are indices of the matched nodes to form.sigma, 
-	 c is lambda, d == 0 iff sls and d == 1 is dls*)
+(* recursion of nested sublists is supported up to one level -> to identify nested lists of nested lists,
+	 several steps of abstractions have to be performed*)
+(* returns quadruples (a,b,l,d) where a and b are indices of the matched fields in form.sigma, 
+	 l is lambda, d == 0 marks sls and d == 1 or d == 2 marks dls*)
 and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_ref_blocks gvars=
 	match pairs_of_pto with
 	| [] -> CheckOK []
 	| (i1,i2)::rest ->
-		(*print_string (">>> "^(string_of_int i1)^":"^(string_of_int i2)^"\n");*)
 		(* Slseg can not present here *)
 		let a1,s1,b1 = to_hpointsto_unsafe (List.nth form.sigma i1) in
 		let a2,_,b2 =  to_hpointsto_unsafe (List.nth form.sigma i2) in
-		let vars_b1 = find_vars_expr b1 in (*DAVID: vars_b1 should contain only element*)
+		let vars_b1 = find_vars_expr b1 in (* vars_b1/vars_b1 should contain only one element*)
 		let vars_b2 = find_vars_expr b2 in
 		let eq_base dir var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] dir in
 		let pt_refs_b1 = List.concat(List.map (eq_base 1) vars_b1) in 
@@ -457,10 +463,11 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		let pt_refs_b1_back = List.concat(List.map (eq_base 2) vars_b1) in 
 		let pt_refs_b2_back = List.concat(List.map (eq_base 2) vars_b2) in
 		let query=[
-				(* DAVID: query checks if data fields are equal and perserves the information, if they are*)
+				(* query checks if data fields are equal and perserves the information, if they are*)
 				Boolean.mk_eq ctx (expr_to_solver_only_exp ctx z3_names b1) (expr_to_solver_only_exp ctx z3_names b2)
 			] in
-				(* DAVID check that the pointers lead back to the same block, lead to a new block or also lead to the next block*)
+		(* check that the pointers lead back to the same block, lead to a new block or also lead to the next block*)
+		(* pt_refs_b1/pt_refs_b2 collect all indices in form.sigma of points-to predicates with source = b1/b2*)
 		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2, pt_refs_b1_back,pt_refs_b2_back  with
 		| _,_,[],[],[],[] -> 
 			(* b1 and b2 does not points to an fixed allocated block --- i.e. only integers or undef *) 
@@ -474,37 +481,37 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 			)
 		| [x1],[x2],f1::_,f2::_,[],[] 
 		| [x1],[x2],[],[],f1::_,f2::_ ->
-			(*DAVID: cover cases where pointers lead back to same block or where pointers both point to new blocks*)
+			(* cover cases where pointers lead back to same block or where pointers both point to new blocks*)
 			(* b1 and b2 contaisn only a single variable pointing to an allocated block *)
 			(match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
+			(* check_block_bases checks if b1 and b2 are in the same block as a1/a2 and have same offset 
+			-> pointers pointing back to node struct*)
 			| true, _ ->
 				(match (check_matched_pointsto ctx solv z3_names form rest block_bases incl_ref_blocks gvars) with
 				| CheckFail -> CheckFail
 				| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: res)
 				| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackling is not expected here",__POS__))
 				)
-				(* DAVID: false means that dest of b1 and b2 are not known to be comparable*)
 			| false, 0 -> CheckFail
 			| false, _ -> 
-				(* DAVID: here in find_ref_blocks abstraction for shared nodes currently fails*) 
 				(match (find_ref_blocks ctx solv z3_names form f1 f2 block_bases gvars) with
 				| CheckFail -> CheckFail
-				(*DAVID: this case corresponding to a nested list where you try to match sublists*)
 
 				| CheckOK res_rec ->
+				(* this case corresponding to a nested list where you try to match sublists*)
 					(match (check_matched_pointsto ctx solv z3_names form rest 
-					(* DAVID: add the new block base (a1,a2) for the recusively called function*)
+					(* add the new block base (a1,a2) for the recusively called function*)
 						((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0 )::block_bases) 
 						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),0):: (res @ res_rec))
 					| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackling is not expected here",__POS__))
 					)
-					(* DAVID: case where you construct DLS*)
-				| DlsegBackLink -> (match (check_matched_pointsto ctx solv z3_names form rest block_bases
+				| DlsegBackLink -> 					
+				(* case where you construct DLS*)
+				(match (check_matched_pointsto ctx solv z3_names form rest block_bases
 						incl_ref_blocks gvars) with
 					| CheckFail -> CheckFail
-					(*DAVID: 1 is inteneded to mark DLS*)
 					| CheckOK res -> CheckOK ((i1,i2,(List.nth form.sigma i1),1):: res )
 					| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackling is not expected here",__POS__))
 					)
@@ -632,7 +639,7 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 	let lseg_d,lambda,shared = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
 			| Hpointsto _ -> raise_notrace (ErrorInAbstraction ("Points-to can not be on this place",__POS__))
 			| Slseg (_,d,lambda,shared) -> (find_vars_expr d),lambda,shared
-			| Dlseg (_,_,_,d,lambda) -> (find_vars_expr d),lambda,[] 	(*DAVID: replace '[]' by an accurate value if Dlseg contains param for shared*)
+			| Dlseg (_,_,_,d,lambda) -> (find_vars_expr d),lambda,[] 	(*DAVID TODO: replace '[]' by an accurate value if Dlseg contains param for shared*)
 	in
 	let lseg_a_orig,lseg_b_orig,lseg_c_orig,lseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
 			| Hpointsto _ -> raise_notrace (ErrorInAbstraction ("Points-to can not be on this place",__POS__));
@@ -819,6 +826,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
     		List.exists eq l
   	in
 	let nomem l x = not (mem l x) in
+	(* get_new_sigma is used to determine which formulas in the new sigma have to be retained and which are abstracted *)
 	let rec get_new_sigma i=
 		if i=(List.length form.sigma) then []
 		else if (mem neighbours i) then get_new_sigma (i+1)
@@ -827,20 +835,28 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	(* lambda may be overaproximated during the matches *)
 	let rec new_lambda_from_quadruples quadruples =
 		match quadruples with 
-		| [] -> [],-1
+		| [] -> [],-1, []
 		| (_,index,l,2)::rest -> 
 			let (_,_,c)=to_hpointsto_unsafe(List.nth form.sigma index) in
 			let (a,b,_)=to_hpointsto_unsafe(l) in
 				let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
-				let new_l,_=new_lambda_from_quadruples rest in
-				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var
-		| (_,_,l,_)::rest -> 
-			let new_l,new_backlink_var=new_lambda_from_quadruples rest in
-			(l :: new_l), new_backlink_var
+				let new_l,_, shared =new_lambda_from_quadruples rest in
+				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var, shared
+		| (index1,index2,l,_)::rest -> 
+			let new_l,new_backlink_var, shared_rest =new_lambda_from_quadruples rest in
+			(l :: new_l), new_backlink_var,(
+			if index1 = index2 then 
+				(* during the matching two equal points-to predicates were matched, 
+				this corresponds to a shared pointer *)
+				let _,_,shared_elem = to_hpointsto_unsafe (List.nth form.sigma index1) in
+				shared_elem::shared_rest 
+			else 
+				shared_rest
+			)
 	in
-	let get_new_lambda,dll_backlink=
-		let new_l,new_back_link_var= new_lambda_from_quadruples res_quadruples in
-		(List.nth form.sigma i1):: new_l, new_back_link_var
+	let get_new_lambda,dll_backlink,shared=
+		let new_l,new_back_link_var,shared= new_lambda_from_quadruples res_quadruples in
+		(List.nth form.sigma i1):: new_l, new_back_link_var, shared
 	in
 	(* get the parameters of the list segment *)
 	let p1,p1_z3 = match (List.nth form.sigma i1) with
@@ -877,8 +893,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		let lambda={param=[a;d_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)) [d_lambda])
 		} in
-		(* DAVID: here is starting point for shared nodes abstraction*)
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda), [])]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda), shared)]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
 		let lambda={param=[a;d_lambda;b_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
@@ -896,12 +911,10 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	| _ -> AbstractionFail
 
 
-(*DAVID: pvars are all the program variables which are visible inside the function -> they are 
-	 forbidden to be abstracted*)
-let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 pvars =
 (* try to abstract two predicates i1 and i2 into a list segment,
-  pvars = program variables (global vars + vars of function).
+  pvars = program variables (global vars + vars of function), they must not be abstracted.
       Internal nodes of the list segment can not be pointed by global variables*)
+let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i2 pvars =
   	(* SAT: forall g in gvar. base(g)!=base(middle) *)
 	let global_bases middle g=Boolean.mk_not ctx
 			(Boolean.mk_eq ctx
@@ -915,7 +928,8 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 			Boolean.mk_and ctx (List.map (global_bases middle) pvars) ] 
 	in
 	match (List.nth form.sigma i1), (List.nth form.sigma i2) with
-	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> ( (*DAVID: translate to z3 format*)
+	| Hpointsto (a,l,b), Hpointsto (aa,ll,bb) -> (
+		(*translate to z3 format*)
 		let a1,l1,b1= (expr_to_solver_only_exp ctx z3_names a),
 				(expr_to_solver_only_exp ctx z3_names l),
 				(expr_to_solver_only_exp ctx z3_names b) in
@@ -926,7 +940,8 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		(* form -> l1 = l2 /\ base(b1) = base(a2) *)
 		let query1A = [	(Boolean.mk_not ctx (Boolean.mk_eq ctx l1 l2))] in
 		let query1B = [ (Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [b1]) (Expr.mk_app ctx z3_names.base [a2])))] in
-		(* SAT: form /\  base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *) (*DAVID a1 and a2 have same offset**)
+		(* check that a1 and a2 have same offset*)
+		(* SAT: form /\  base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ 
 			Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 			Boolean.mk_eq ctx 
@@ -942,8 +957,8 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 				then checkqueries rest
 				else false
 		in
-		if not (checkqueries [(query1A, UNSATISFIABLE); (*DAVID second param is expected result*)
-					(query1B,UNSATISFIABLE); 
+		if not (checkqueries [(query1A, UNSATISFIABLE);
+					(query1B,UNSATISFIABLE);
 					(query2,SATISFIABLE); 
 					(query_pvars a2, SATISFIABLE)])
 		then  AbstractionFail
@@ -954,19 +969,18 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		   exact distance from the base
 		   The added constrains are poped from the solver in the function  try_abstraction_to_lseg *)
 		Solver.add solv query2;
-		(* check all pointsto with equal bases to a1/a2 *)
-		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 [i1;i2] 0 in (*DAVID: try to find everything which is in the same block as a1*)
+		(* get all indices i in form.sigma s.t. 'List.nth form.sigma i' is a points-to 
+		predicate with the same base address as a1 resp. a2 = every points-to which is in the same
+		block as a1 resp. a2*)
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 0 [i1;i2] 0 in 
 		let a2_block=get_eq_base ctx solv z3_names form a2 0 0 ([i1;i2]@a1_block) 0 in (*DAVID @... is for performance*)
 		(* FIRST: try to find possible mapping between particula points-to predicates is block of a1/a2 *)
 		match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 		| MatchFail ->  AbstractionFail 
-		| MatchOK matchres -> (* SECOND: check that the mapped pointsto behave in an equal way *)
-		(*DAVID: check_matched_pointsto has to be changed to implement shared nodes*)
-		(*DAVID: matchres is set of tuples specifying which fields are matched*)
-		(*DAVID: a1, a2 are the points-to predicates linking the nodes*)
+		| MatchOK matchres ->  
+		(* SECOND: check that the mapped pointsto behave in an equal way *)
 			match (check_matched_pointsto ctx solv z3_names form matchres [(a1,a2,1)] 1 pvars) with
 			| CheckOK checked_matchres ->  
-				(*DAVID fold_... has to be changed *)
 				(fold_pointsto ctx solv z3_names form i1 i2 checked_matchres) 
 				
 			| CheckFail ->  AbstractionFail
@@ -990,7 +1004,7 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		in
 			
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		(*DAVID: passed shared1 as value for the newly created Slseg*)
+		(*DAVID TODO: passed shared1 as value for the newly created Slseg*)
 		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) 0 with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2,shared1) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1,shared1) :: (remove_i1_i2 form.sigma 0)}
@@ -1079,7 +1093,6 @@ let try_abstraction_to_lseg solver form i1 i2 pvars =
 
 (* try list abstraction - first tries the last added, at least 2 predicates in
 	sigma *)
-(* DAVID: TOP level function of abstraction iterating through all pairs of points-to/ls predicates  *)
 let rec lseg_abstraction_ll solver form pvars =
 	let rec f i j =
 		(*Printf.printf "%d,%d\n" i j; *)
