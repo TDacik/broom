@@ -207,6 +207,14 @@ let rec pi_to_string ?lvars:(lvars=[]) p =
   | first::rest -> Exp.to_string ~lvars:lvars first ^ " & " ^
     pi_to_string ~lvars:lvars rest
 
+let points_to_to_string ?lvars:(lvars=[]) points_to = 
+  match points_to with
+  | Hpointsto(a,l,b) ->
+  Exp.to_string ~lvars:lvars a ^" -("^
+      (Exp.to_string ~lvars:lvars l) ^")->"^
+      Exp.to_string ~lvars:lvars b
+  | _ -> ""    
+
 let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
 (* num is used to marking lambdas *)
   let rec lambda_params_to_string params =
@@ -217,10 +225,7 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
   in
   let pred_to_string a =
     match a with
-    | Hpointsto (a,l,b) -> (
-      Exp.to_string ~lvars:lvars a ^" -("^
-      (Exp.to_string ~lvars:lvars l) ^")->"^
-      Exp.to_string ~lvars:lvars b), ""
+    | Hpointsto (a,l,b) -> points_to_to_string (Hpointsto (a,l,b)), ""
     | Slseg (a,b,lambda,shared) ->
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
       ("Slseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
@@ -763,18 +768,22 @@ let unfold_predicate form pnum conflicts dir =
   let confl=CL.Util.list_join_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in
   let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
+  let mem lst x =
+    let eq y= (x=y) in
+    List.exists eq lst
+  in
   let rec get_fresh_var s confl=
-    if (List.mem s confl)
+    if (mem confl s)
     then get_fresh_var (s+1) confl
     else s
   in
-  let nomem lst x = not (List.mem x lst) in
+  let nomem lst x = not (mem lst x) in
   match (List.nth form.sigma pnum) with
   | Slseg (a,b,lambda,shared) -> 
     let confl1=confl @ (find_vars lambda.form) in
     let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
-    (* do not substitute variables in shared expressions by fresh variables, so remove them from l_evars *)
-    let l_evars = List.filter (nomem (find_vars_pi shared)) l_evars in
+    (* DAVID TODO: do not substitute variables in shared expressions by fresh variables,
+     so remove them from l_evars *)
     let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
     let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
     let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
