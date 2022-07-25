@@ -763,16 +763,12 @@ let unfold_predicate form pnum conflicts dir =
   let confl=CL.Util.list_join_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in
   let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
-  let mem lst x =
-    let eq y= (x=y) in
-    List.exists eq lst
-  in
   let rec get_fresh_var s confl=
-    if (mem confl s)
+    if (List.mem s confl)
     then get_fresh_var (s+1) confl
     else s
   in
-  let nomem lst x = not (mem lst x) in
+  let nomem lst x = not (List.mem x lst) in
   match (List.nth form.sigma pnum) with
   | Slseg (a,b,lambda,shared) -> 
     let confl1=confl @ (find_vars lambda.form) in
