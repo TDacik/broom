@@ -321,8 +321,17 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 				Boolean.mk_and ctx (List.map (global_bases a1) gvars);
 				Boolean.mk_and ctx (List.map (global_bases a2) gvars);] 
 		in
-		if not ((Solver.check solv query3)=SATISFIABLE) then CheckFail
-		else
+		(* SAT: form /\ base(a1) != base(a2) *)
+		(* checks if nodes are distint (= not 'shared') => allow abstraction of gvars iff
+		 they are in shared nodes because they are stored in Slseg's 4th param anyway and 
+		 therefore there shall be no information loss *)
+		let query4=[
+			Boolean.mk_not ctx (Boolean.mk_eq ctx 
+			(Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
+		] 
+		in
+		if (not ((Solver.check solv query3)=SATISFIABLE)) && ((Solver.check solv query4)=SATISFIABLE) 
+			then CheckFail		else
 		(* check all pointsto with equal bases to a1/a2 *)
 		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [] 0 in
 		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 [] 0 in
