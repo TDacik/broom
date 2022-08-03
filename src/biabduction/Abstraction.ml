@@ -829,26 +829,46 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		(List.nth form.sigma i1):: new_l, new_back_link_var
 	in
 	(* get the parameters of the list segment *)
-	let p1,p1_z3 = match (List.nth form.sigma i1) with
-			| Hpointsto (a,_,_) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a)
-			| _ -> [],(Boolean.mk_false ctx)
+	let p1,p1_z3,p1_dest_expr = match (List.nth form.sigma i1) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a),b
+			| _ -> [],(Boolean.mk_false ctx),Exp.Undef
 	in
+	(* The parameter p2 should be modified by offset if the linking field is not in the beginning of the data structure.
+	   The offset is computed as a difference p1_dest-p2 *)
 	let p2,p2_lambda = match (List.nth form.sigma i2) with
-			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
+			| Hpointsto (b,_,a) -> 
+				if a=Const(Ptr 0) then [a],(find_vars_expr b)
+				else
+				(
+				let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,b,p1_dest_expr)) in
+				match offset with
+				| None -> [],[]
+				| Some 0L -> [a],(find_vars_expr b)
+				| Some i -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr b)
+				)
 			| _ -> [],[]
+	in
+	let r2,r2_dest,r2_dest_expr = if y2<0 then [],[],Exp.Undef
+		else 
+		match (List.nth form.sigma y2) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b),b
+			| _ -> [],[],Exp.Undef
 	in
 	let r1,r1_lambda,r1_z3 = if y1<0 then [],[], (Boolean.mk_false ctx)
 		else
-		match (List.nth form.sigma y1),dll_backlink with
-			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
-			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l],(expr_to_solver_only_exp ctx z3_names b)
-			| _ -> [],[], (Boolean.mk_false ctx) 
-	in
-	let r2,r2_dest = if y2<0 then [],[]
-		else 
-		match (List.nth form.sigma y2) with
-			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
-			| _ -> [],[]
+		match  (List.nth form.sigma y1) with
+		| Hpointsto (b,_,a) ->
+			(
+			let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,b,r2_dest_expr)) in
+			match offset,dll_backlink with
+			| None, _ -> [],[],(Boolean.mk_false ctx)
+			| Some 0L,-1 -> [a], (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
+			| Some i, -1 -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
+			| Some 0L, back_l -> [a],[back_l] ,(expr_to_solver_only_exp ctx z3_names b)
+			| Some i, back_l -> [Exp.BinOp (Pplus,a,Const (Int i))],[back_l],(expr_to_solver_only_exp ctx z3_names b)
+			)
+
+		| _ -> [],[], (Boolean.mk_false ctx)
 	in
 	(* check direction of the dll folding *)
 	let dll_dir=if y1<0 
@@ -863,21 +883,21 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		let lambda={param=[a;d_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)) [d_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda))]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda))]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
 		let lambda={param=[a;d_lambda;b_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
 						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
 						[d_lambda;b_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, (lambda_close lambda))]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda))]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
 		let lambda={param=[a;b_lambda;d_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
 					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
 					[d_lambda;b_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, (lambda_close lambda))]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, d, Exp.Var a, b, (lambda_close lambda))]}
 	| _ -> AbstractionFail
 
 
