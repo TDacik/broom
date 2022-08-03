@@ -829,8 +829,8 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		(List.nth form.sigma i1):: new_l, new_back_link_var
 	in
 	(* get the parameters of the list segment *)
-	let p1,p1_z3,p1_dest_expr = match (List.nth form.sigma i1) with
-			| Hpointsto (a,_,b) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a),b
+	let p1,p1_z3,p1_dest_expr,p1_expr = match (List.nth form.sigma i1) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a),b,a
 			| _ -> [],(Boolean.mk_false ctx),Exp.Undef
 	in
 	(* The parameter p2 should be modified by offset if the linking field is not in the beginning of the data structure.
@@ -859,7 +859,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 		match  (List.nth form.sigma y1) with
 		| Hpointsto (b,_,a) ->
 			(
-			let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,b,r2_dest_expr)) in
+			let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,p1_expr,r2_dest_expr)) in
 			match offset,dll_backlink with
 			| None, _ -> [],[],(Boolean.mk_false ctx)
 			| Some 0L,-1 -> [a], (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
