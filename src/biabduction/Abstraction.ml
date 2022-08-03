@@ -831,7 +831,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
 	(* get the parameters of the list segment *)
 	let p1,p1_z3,p1_dest_expr,p1_expr = match (List.nth form.sigma i1) with
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a),b,a
-			| _ -> [],(Boolean.mk_false ctx),Exp.Undef
+			| _ -> [],(Boolean.mk_false ctx),Exp.Undef,Exp.Undef
 	in
 	(* The parameter p2 should be modified by offset if the linking field is not in the beginning of the data structure.
 	   The offset is computed as a difference p1_dest-p2 *)
