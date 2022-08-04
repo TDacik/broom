@@ -718,6 +718,9 @@ type entailment_slseg_remove =
 | RemFail
 
 let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
+  let query = (List.append (formula_to_solver ctx form1) (formula_to_solver ctx form2)) in
+  if not ((Solver.check solv query)=SATISFIABLE) then 0
+  else
   if (List.length form1.sigma)>0 then -1
   else
   (
