@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // based on test_intrusive.c
+// because our tool does not support a strings, the corresponding MU_ASSERT
+// calls are commented out
 
 
 #include "minunit.h"
@@ -130,15 +132,15 @@ char* smoke_test_1() {
   person *phead = (person*) list_head(l);
   person *next = (person*) link_next(&phead->link);
 
-  MU_ASSERT("head of the list is Trunky", strcmp("Trunky", phead->name) == 0);
-  MU_ASSERT("second in the list is Robbie", strcmp("Robbie", next->name) == 0);
+//   MU_ASSERT("head of the list is Trunky", strcmp("Trunky", phead->name) == 0);
+//   MU_ASSERT("second in the list is Robbie", strcmp("Robbie", next->name) == 0);
 
   MU_ASSERT("head is linked before unlink", link_is_linked(&phead->link));
   link_unlink(&phead->link);
   MU_ASSERT("head is not linked after unlink", !link_is_linked(&phead->link));
 
   phead = (person*) list_head(l);
-  MU_ASSERT("head of the list is Robbie", strcmp("Robbie", phead->name) == 0);
+//   MU_ASSERT("head of the list is Robbie", strcmp("Robbie", phead->name) == 0);
 
   free(p);
   free(p2);
@@ -158,14 +160,14 @@ char* smoke_test_2() {
   person *phead = (person*) list_head(l);
   person *next = (person*) link_next(&phead->link);
 
-  MU_ASSERT("head of the list is Robbie", strcmp("Robbie", phead->name) == 0);
-  MU_ASSERT("second in the list is Trunky", strcmp("Trunky", next->name) == 0);
+//   MU_ASSERT("head of the list is Robbie", strcmp("Robbie", phead->name) == 0);
+//   MU_ASSERT("second in the list is Trunky", strcmp("Trunky", next->name) == 0);
 
   person *ptail = (person*) list_tail(l);
   person *nextt = (person*) link_next(&ptail->link);
 
   
-  MU_ASSERT("tail of the list is Trunky", strcmp("Trunky", ptail->name) == 0);
+//   MU_ASSERT("tail of the list is Trunky", strcmp("Trunky", ptail->name) == 0);
   MU_ASSERT("tail+1 of the list is NULL", !nextt); 
 
   person *prev = (person*) link_prev(&ptail->link);

@@ -544,7 +544,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 
 
 (* fold the pointsto into a existing list segment using the unfolded version of the slseg *)
-let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples flag =
+let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quadruples flag =
 	(* get backlink indeces y1 and y2 marked by 1 or 2 in the last item of a quadruple *)
 	let rec get_backlinks quadruples res =
 		match quadruples with
@@ -555,7 +555,7 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 			| _,(-1,-1) -> get_backlinks rest (y1,y2)
 			| _ -> (-2,-2) (* more then a single backlink *)
 	in
-	let y1,_=get_backlinks res_quadruples (-1,-1) in
+	let y1,y2=get_backlinks res_quadruples (-1,-1) in
 	if y1=(-2) then AbstractionFail (* more then a single backlink *)
 	else
 	let rec range i j = if i > j then [] else i :: (range (i+1) j) in
@@ -622,29 +622,46 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		| _ -> raise_notrace (ErrorInAbstraction ("Something bad happened, probably broken unfolding",__POS__)) (*[]*)
 	in
 	(* get the parameters of the list segment *)
-	let pto_a,pto_b = match (List.nth unfolded_form.sigma new_i1) with
-			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
+	let pto_a,pto_b,pto_b_expr,pto_a_expr = match (List.nth unfolded_form.sigma new_i1) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),  (find_vars_expr b), b, a
 			| _ -> raise_notrace (ErrorInAbstraction ("Expecting pointsto",__POS__))
 	in
 	let pto_a2,pto_b2 = match (List.nth unfolded_form.sigma new_i2) with
-			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
+			| Hpointsto (a,_,b) -> ( 
+				let offset=try_simplify_SL_expr_to_int solver  form (Exp.BinOp (Pminus,a,pto_b_expr)) in
+				match offset with
+				| None -> [],[]
+				| Some 0L -> (find_vars_expr a), [b]
+				| Some i -> (find_vars_expr a), [Exp.BinOp (Pplus,b,Const (Int i))]
+				)
+
+			| _ -> raise_notrace (ErrorInAbstraction ("Expecting pointsto",__POS__))
+	in
+	let y2_dest_expr= if y2<0 then Exp.Undef
+		else match (List.nth unfolded_form.sigma y2) with
+			|  Hpointsto (_,_,b) -> b
 			| _ -> raise_notrace (ErrorInAbstraction ("Expecting pointsto",__POS__))
 	in
 	let pto_back_b,dll_backlink = if y1<0 then [],[]
-		else match (List.nth unfolded_form.sigma y1),dll_backlink with
-			| Hpointsto (_,_,b),-1 -> (find_vars_expr b),(find_vars_expr b)
-			|  Hpointsto (_,_,b),back_l -> (find_vars_expr b), [back_l]
+		else 
+			let offset=try_simplify_SL_expr_to_int solver  form (Exp.BinOp (Pminus,pto_a_expr,y2_dest_expr)) in
+			match (List.nth unfolded_form.sigma y1),dll_backlink,offset with
+			(* HERE: we should add offset  adjustment*)
+			| Hpointsto (_,_,b),-1, Some 0L -> [b],(find_vars_expr b)
+			| Hpointsto (_,_,b),-1, Some i -> [Exp.BinOp (Pplus,b,Const (Int i))],(find_vars_expr b)
+			|  Hpointsto (_,_,b),back_l, Some 0L -> [b], [back_l]
+			|  Hpointsto (_,_,b),back_l, Some i -> [Exp.BinOp (Pplus,b,Const (Int i))], [back_l]
 			| _ -> raise_notrace (ErrorInAbstraction ("Expecting pointsto",__POS__))
 	in
-	let lseg_d,lambda,shared = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
+	let lseg_d,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
 			| Hpointsto _ -> raise_notrace (ErrorInAbstraction ("Points-to can not be on this place",__POS__))
-			| Slseg (_,d,lambda,shared) -> (find_vars_expr d),lambda,shared
-			| Dlseg (_,_,_,d,lambda) -> (find_vars_expr d),lambda,[] 	(*DAVID TODO: replace '[]' by an accurate value if Dlseg contains param for shared*)
+			| Slseg (_,d,lambda,_) -> [d],lambda
+			| Dlseg (_,_,_,d,lambda) -> [d],lambda
 	in
 	let lseg_a_orig,lseg_b_orig,lseg_c_orig,lseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
 			| Hpointsto _ -> raise_notrace (ErrorInAbstraction ("Points-to can not be on this place",__POS__));
-			| Slseg (a,d,lambda,_) -> (find_vars_expr a),[],[],(find_vars_expr d),lambda
-			| Dlseg (a,b,c,d,lambda) -> (find_vars_expr a),(find_vars_expr b),(find_vars_expr c),(find_vars_expr d),lambda
+			| Slseg (a,d,lambda,_) -> (find_vars_expr a),[],[],[d],lambda
+			| Dlseg (a,b,c,d,lambda) -> (find_vars_expr a),[b],(find_vars_expr c),[d],lambda
 	in
 	(* this is a safety check that unfolding works correctly. *)
 	if not (((lseg_d=lseg_d_orig)||flag=2) && (lambda=lambda_orig) ) 
@@ -662,14 +679,160 @@ let fold_pointsto_slseg form i2_orig unfolded_form new_i1 new_i2 res_quadruples 
 		let lambda={param=[a_lambda;b_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda),shared)]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda),[])]}
 	| [a],[b],[c],[d],[a_lambda],[b_lambda],[c_lambda],_ -> (*Dlseg*)
 		let lambda={param=[a_lambda;b_lambda;c_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda;c_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, (lambda_close lambda))]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda))]}
 	| _ -> AbstractionFail
 	
+
+(* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of quadruples of the type check_res,
+  each quadruple consist of two indeces, a spacial predicated (which should be placed into the lambda) and flag whether it is a backlink *)
+let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
+	  let mem lst x =
+	    let eq y= (x=y) in
+	    List.exists eq lst
+	  in
+	let rec get_fresh_var seed confl=
+	    if (mem confl seed)
+	    then get_fresh_var (seed+1) confl
+	    else seed
+	  in
+	let fresh_backlink_var=get_fresh_var 1 (find_vars form) in
+
+	(* get backlink indeces y1 and y2 marked by 1 or 2 in the last item of a quadruple *)
+	let rec get_backlinks quadruples res =
+		match quadruples with
+		| [] -> res
+		| (y1,y2,_,i)::rest -> 
+			match i,res with
+			| 0,_ -> get_backlinks rest res
+			| _,(-1,-1) -> get_backlinks rest (y1,y2)
+			| _ -> (-2,-2) (* more then a single backlink *)
+	in
+	let y1,y2=get_backlinks res_quadruples (-1,-1) in
+	if y1=(-2) then AbstractionFail (* more then a single backlink *)
+	else
+	(* first, get only the first two elements from the triples  and store it into the tmp1, and tmp2*)
+	let rec get_indeces quadruples =
+		match quadruples with
+		| [] -> [],[]
+		| (a,b,_,_)::rest -> 
+			match get_indeces rest with
+			| a1,a2 -> (a::a1,b::a2)
+	in
+	let tmp1,tmp2=get_indeces res_quadruples in
+	let neighbours= [i1;i2] @ tmp1 @ tmp2 in
+	let mem l x =
+    		let eq y= (x=y) in
+    		List.exists eq l
+  	in
+	let nomem l x = not (mem l x) in
+	(* get_new_sigma is used to determine which formulas in the new sigma have to be retained and which are abstracted *)
+	let rec get_new_sigma i=
+		if i=(List.length form.sigma) then []
+		else if (mem neighbours i) then get_new_sigma (i+1)
+		else (List.nth form.sigma i) :: get_new_sigma (i+1)
+	in
+	(* lambda may be overaproximated during the matches *)
+	let rec new_lambda_from_quadruples quadruples =
+		match quadruples with 
+		| [] -> [],-1, []
+		| (_,index,l,2)::rest -> 
+			let (_,_,c)=to_hpointsto_unsafe(List.nth form.sigma index) in
+			let (a,b,_)=to_hpointsto_unsafe(l) in
+				let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
+				let new_l,_, shared =new_lambda_from_quadruples rest in
+				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var, shared
+		| (index1,index2,l,_)::rest -> 
+			let new_l,new_backlink_var, shared_rest =new_lambda_from_quadruples rest in
+			(l :: new_l), new_backlink_var,(
+			if index1 = index2 then 
+				(* during the matching two equal points-to predicates were matched, 
+				this corresponds to a shared pointer *)
+				let _,_,shared_elem = to_hpointsto_unsafe (List.nth form.sigma index1) in
+				shared_elem::shared_rest 
+			else 
+				shared_rest
+			)
+	in
+	let get_new_lambda,dll_backlink,shared=
+		let new_l,new_back_link_var,shared= new_lambda_from_quadruples res_quadruples in
+		(List.nth form.sigma i1):: new_l, new_back_link_var, shared
+	in
+	(* get the parameters of the list segment *)
+	let p1,p1_z3,p1_dest_expr,p1_expr = match (List.nth form.sigma i1) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a),b,a
+			| _ -> [],(Boolean.mk_false ctx),Exp.Undef,Exp.Undef
+	in
+	(* The parameter p2 should be modified by offset if the linking field is not in the beginning of the data structure.
+	   The offset is computed as a difference p1_dest-p2 *)
+	let p2,p2_lambda = match (List.nth form.sigma i2) with
+			| Hpointsto (b,_,a) -> 
+				if a=Const(Ptr 0) then [a],(find_vars_expr b)
+				else
+				(
+				let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,b,p1_dest_expr)) in
+				match offset with
+				| None -> [],[]
+				| Some 0L -> [a],(find_vars_expr b)
+				| Some i -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr b)
+				)
+			| _ -> [],[]
+	in
+	let r2,r2_dest,r2_dest_expr = if y2<0 then [],[],Exp.Undef
+		else 
+		match (List.nth form.sigma y2) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b),b
+			| _ -> [],[],Exp.Undef
+	in
+	let r1,r1_lambda,r1_z3 = if y1<0 then [],[], (Boolean.mk_false ctx)
+		else
+		match  (List.nth form.sigma y1) with
+		| Hpointsto (b,_,a) ->
+			(
+			let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,p1_expr,r2_dest_expr)) in
+			match offset,dll_backlink with
+			| None, _ -> [],[],(Boolean.mk_false ctx)
+			| Some 0L,-1 -> [a], (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
+			| Some i, -1 -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
+			| Some 0L, back_l -> [a],[back_l] ,(expr_to_solver_only_exp ctx z3_names b)
+			| Some i, back_l -> [Exp.BinOp (Pplus,a,Const (Int i))],[back_l],(expr_to_solver_only_exp ctx z3_names b)
+			)
+
+		| _ -> [],[], (Boolean.mk_false ctx)
+	in
+	(* check direction of the dll folding *)
+	let dll_dir=if y1<0 
+		then 1
+		else 
+		let query= [ BitVector.mk_slt ctx p1_z3 r1_z3 ] in
+		if (Solver.check solv query)=SATISFIABLE then 1 else 2
+	in
+	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
+	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
+	| [a],[d],[d_lambda],_,_,_,-1,_,1 -> 
+		let lambda={param=[a;d_lambda]; 
+			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)) [d_lambda])
+		} in
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda),shared)]}
+	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
+		let lambda={param=[a;d_lambda;b_lambda]; 
+			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
+						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
+						[d_lambda;b_lambda])
+		} in
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda))]}
+	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
+		let lambda={param=[a;b_lambda;d_lambda]; 
+			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
+					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
+					[d_lambda;b_lambda])
+		} in
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, d, Exp.Var a, b, (lambda_close lambda))]}
+	| _ -> AbstractionFail
 
 
 (* check that the pointsto (and its neighbourhood) is compatible with lambda in the slseg 
@@ -777,137 +940,10 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 		| MatchOK matchres ->  
 			match (check_matched_pointsto ctx solv z3_names unfolded_form matchres [(a1,a2,1)] 1 gvars) with
 			| CheckOK checked_matchres -> 
-				fold_pointsto_slseg form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
+				fold_pointsto_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form i_slseg unfolded_form new_i1 new_i2 checked_matchres flag
 			| CheckFail ->  AbstractionFail
 			| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackLink is not expected here",__POS__))
 	)
-	| _ -> AbstractionFail
-	
-
-(* fold the pointsto on indeces i1 and i2 with its neighborhood given by the list of quadruples of the type check_res,
-  each quadruple consist of two indeces, a spacial predicated (which should be placed into the lambda) and flag whether it is a backlink *)
-let fold_pointsto ctx solv z3_names form i1 i2 res_quadruples =
-	  let mem lst x =
-	    let eq y= (x=y) in
-	    List.exists eq lst
-	  in
-	let rec get_fresh_var seed confl=
-	    if (mem confl seed)
-	    then get_fresh_var (seed+1) confl
-	    else seed
-	  in
-	let fresh_backlink_var=get_fresh_var 1 (find_vars form) in
-
-	(* get backlink indeces y1 and y2 marked by 1 or 2 in the last item of a quadruple *)
-	let rec get_backlinks quadruples res =
-		match quadruples with
-		| [] -> res
-		| (y1,y2,_,i)::rest -> 
-			match i,res with
-			| 0,_ -> get_backlinks rest res
-			| _,(-1,-1) -> get_backlinks rest (y1,y2)
-			| _ -> (-2,-2) (* more then a single backlink *)
-	in
-	let y1,y2=get_backlinks res_quadruples (-1,-1) in
-	if y1=(-2) then AbstractionFail (* more then a single backlink *)
-	else
-	(* first, get only the first two elements from the triples  and store it into the tmp1, and tmp2*)
-	let rec get_indeces quadruples =
-		match quadruples with
-		| [] -> [],[]
-		| (a,b,_,_)::rest -> 
-			match get_indeces rest with
-			| a1,a2 -> (a::a1,b::a2)
-	in
-	let tmp1,tmp2=get_indeces res_quadruples in
-	let neighbours= [i1;i2] @ tmp1 @ tmp2 in
-	let mem l x =
-    		let eq y= (x=y) in
-    		List.exists eq l
-  	in
-	let nomem l x = not (mem l x) in
-	(* get_new_sigma is used to determine which formulas in the new sigma have to be retained and which are abstracted *)
-	let rec get_new_sigma i=
-		if i=(List.length form.sigma) then []
-		else if (mem neighbours i) then get_new_sigma (i+1)
-		else (List.nth form.sigma i) :: get_new_sigma (i+1)
-	in
-	(* lambda may be overaproximated during the matches *)
-	let rec new_lambda_from_quadruples quadruples =
-		match quadruples with 
-		| [] -> [],-1, []
-		| (_,index,l,2)::rest -> 
-			let (_,_,c)=to_hpointsto_unsafe(List.nth form.sigma index) in
-			let (a,b,_)=to_hpointsto_unsafe(l) in
-				let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
-				let new_l,_, shared =new_lambda_from_quadruples rest in
-				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var, shared
-		| (index1,index2,l,_)::rest -> 
-			let new_l,new_backlink_var, shared_rest =new_lambda_from_quadruples rest in
-			(l :: new_l), new_backlink_var,(
-			if index1 = index2 then 
-				(* during the matching two equal points-to predicates were matched, 
-				this corresponds to a shared pointer *)
-				let _,_,shared_elem = to_hpointsto_unsafe (List.nth form.sigma index1) in
-				shared_elem::shared_rest 
-			else 
-				shared_rest
-			)
-	in
-	let get_new_lambda,dll_backlink,shared=
-		let new_l,new_back_link_var,shared= new_lambda_from_quadruples res_quadruples in
-		(List.nth form.sigma i1):: new_l, new_back_link_var, shared
-	in
-	(* get the parameters of the list segment *)
-	let p1,p1_z3 = match (List.nth form.sigma i1) with
-			| Hpointsto (a,_,_) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a)
-			| _ -> [],(Boolean.mk_false ctx)
-	in
-	let p2,p2_lambda = match (List.nth form.sigma i2) with
-			| Hpointsto (b,_,a) -> (find_vars_expr a),(find_vars_expr b)
-			| _ -> [],[]
-	in
-	let r1,r1_lambda,r1_z3 = if y1<0 then [],[], (Boolean.mk_false ctx)
-		else
-		match (List.nth form.sigma y1),dll_backlink with
-			| Hpointsto (b,_,a),-1 -> (find_vars_expr a), (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
-			| Hpointsto (b,_,a),back_l -> (find_vars_expr a), [back_l],(expr_to_solver_only_exp ctx z3_names b)
-			| _ -> [],[], (Boolean.mk_false ctx) 
-	in
-	let r2,r2_dest = if y2<0 then [],[]
-		else 
-		match (List.nth form.sigma y2) with
-			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b)
-			| _ -> [],[]
-	in
-	(* check direction of the dll folding *)
-	let dll_dir=if y1<0 
-		then 1
-		else 
-		let query= [ BitVector.mk_slt ctx p1_z3 r1_z3 ] in
-		if (Solver.check solv query)=SATISFIABLE then 1 else 2
-	in
-	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
-	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
-	| [a],[d],[d_lambda],_,_,_,-1,_,1 -> 
-		let lambda={param=[a;d_lambda]; 
-			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} (List.filter (nomem [a;d_lambda]) (find_vars form)) [d_lambda])
-		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, Exp.Var d, (lambda_close lambda), shared)]}
-	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
-		let lambda={param=[a;d_lambda;b_lambda]; 
-			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
-						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
-						[d_lambda;b_lambda])
-		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, Exp.Var b, Exp.Var c, Exp.Var d, (lambda_close lambda))]}
-	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
-		let lambda={param=[a;b_lambda;d_lambda]; 
-			form=(simplify_lambda  {pi=form.pi; sigma=(get_new_lambda)} 
-					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
-					[d_lambda;b_lambda])
-		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, Exp.Var d, Exp.Var a, Exp.Var b, (lambda_close lambda))]}
 	| _ -> AbstractionFail
 
 
