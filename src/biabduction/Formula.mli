@@ -178,6 +178,10 @@ val substitute_vars : Exp.variable -> Exp.variable -> t -> t
 (** [substitute_vars_cvars new_var old_var form] same as above, but vars should be Var/CVar *)
 val substitute_vars_cvars : Exp.t -> Exp.t -> t -> t
 
+(**  [substitute_expr_all new_vars old_vars form] substitutes 'List.nth i old_vars' by 
+  'List.nth i new_vars' in 'form', therefore 'List.length old_vars = List.length new_vars' must hold*)
+val substitute_expr_all : Exp.t list -> Exp.t list -> t -> t
+
 (** [substitute var eqvarlist form] *)
 val substitute : Exp.variable -> Exp.variable list -> t -> t
 

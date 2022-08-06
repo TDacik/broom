@@ -805,7 +805,7 @@ let apply_match solver i pred_type form1 form2 pvars dir =
       in
       ApplyOK (lhs, rhs, [])
 	
-    | 30 -> (*DAVID: 30 is used for matching dls with dls*)
+    | 30 -> (* 30 is used for matching dls with dls*)
       let a1,b1,c1,d1,_ = to_dlseg_unsafe  (List.nth form1.sigma i1) in
       let a2,b2,c2,d2,ls2 = to_dlseg_unsafe (List.nth form2.sigma i2) in
       let lhs_tmp=(remove i1 form1) in

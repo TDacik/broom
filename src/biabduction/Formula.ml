@@ -186,8 +186,9 @@ and lambda = {
 
 and heap_pred =
   | Hpointsto of Exp.t * Exp.t * Exp.t (* source, size_of_field, destination *)
-  (* We use type Exp.t list for shared nodes because this allows us to handle arithmetic compositions on pointers *)
-  | Slseg of Exp.t * Exp.t * lambda * Exp.t list   (* source, destination, lambda, shared *) (*DAVID: add 4th param which is list of Exp.t, if list is empty, there is no change to current impl*)
+  (* We use type 'Exp.t list' for shared nodes because this allows us to handle arithmetic 
+    compositions on pointers *)
+  | Slseg of Exp.t * Exp.t * lambda * Exp.t list   (* source, destination, lambda, shared *) 
   | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
 
 (* spatial part *)
@@ -230,7 +231,7 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
       ("Slseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
         Exp.to_string ~lvars:lvars b ^", "^
-        lambda_id^ ", "^ String.concat ", " (List.map Exp.to_string shared) ^") "),
+        lambda_id^ ", ["^ String.concat ", " (List.map Exp.to_string shared) ^"]) "),
       "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
         (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
     | Dlseg (a,b,c,d,lambda) ->
@@ -552,6 +553,14 @@ let substitute_vars_cvars var1 var2 form =
   {sigma = sigma_out; pi = pi_out}
 
 
+let rec substitute_expr_all new_vars old_vars form = 
+  match new_vars, old_vars with
+  | [],[] -> form
+  | new_var :: new_vars_rest, old_var :: old_vars_rest -> 
+    substitute_expr_all new_vars_rest old_vars_rest (substitute_vars_cvars new_var old_var form)
+  | _,_ -> failwith "unequal length"  
+
+
 let substitute_vars var1 var2 form =
   substitute_vars_cvars (Var var1) (Var var2) form
 
@@ -768,30 +777,25 @@ let unfold_predicate form pnum conflicts dir =
   let confl=CL.Util.list_join_unique conflicts (find_vars form) in
   let nequiv a b = not (a=b) in
   let remove k lst = List.filter (nequiv (List.nth lst k)) lst in
-  let mem lst x =
-    let eq y= (x=y) in
-    List.exists eq lst
-  in
   let rec get_fresh_var s confl=
-    if (mem confl s)
+    if (List.mem s confl)
     then get_fresh_var (s+1) confl
     else s
   in
-  let nomem lst x = not (mem lst x) in
+  let nomem lst x = not (List.mem x lst) in
   match (List.nth form.sigma pnum) with
   | Slseg (a,b,lambda,shared) -> 
     let confl1=confl @ (find_vars lambda.form) in
     let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
-    (* DAVID TODO: do not substitute variables in shared expressions by fresh variables,
-     so remove them from l_evars *)
     let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
     let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
     let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
-    let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
-    let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
+    (* instantiate all params adequately *)
+    let l_form2 = substitute_expr_all ([(Exp.Var new_a); (Exp.Var new_b)] @ shared) 
+      (List.map (fun x -> Exp.Var x) lambda.param) l_form1 in
     let res_form=simplify
-      {sigma = (remove pnum form.sigma)@ l_form3.sigma @ [Slseg (Var new_b,b,lambda,shared)];
-       pi=form.pi @ l_form3.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum 1) }
+      {sigma = (remove pnum form.sigma)@ l_form2.sigma @ [Slseg (Var new_b,b,lambda,shared)];
+       pi=form.pi @ l_form2.pi @ [Exp.BinOp (Peq,a,Var new_a)] @ (diffbase form pnum 1) }
       ([new_a;new_b]@added_vars) in
     (* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)
     let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
