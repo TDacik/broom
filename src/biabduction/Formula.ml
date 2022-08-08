@@ -166,6 +166,8 @@ let get_list_uids vars =
 
 end (*$>*)
 
+exception ErrorInFormula of (string * Config.src_pos)
+
 (************************************************************
   type definition of Formula
  ************************************************************)
@@ -558,7 +560,7 @@ let rec substitute_expr_all new_vars old_vars form =
   | [],[] -> form
   | new_var :: new_vars_rest, old_var :: old_vars_rest -> 
     substitute_expr_all new_vars_rest old_vars_rest (substitute_vars_cvars new_var old_var form)
-  | _,_ -> failwith "unequal length"  
+  | _,_ -> raise_notrace (ErrorInFormula ("Unequal length of vars during substitution",__POS__))
 
 
 let substitute_vars var1 var2 form =

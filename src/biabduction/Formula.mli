@@ -93,6 +93,7 @@ module Exp : sig
   val get_list_uids: t list -> variable list
 end
 
+exception ErrorInFormula of (string * Config.src_pos)
 
 type t = {
     sigma: sigma;  (** spatial part *)
@@ -178,8 +179,11 @@ val substitute_vars : Exp.variable -> Exp.variable -> t -> t
 (** [substitute_vars_cvars new_var old_var form] same as above, but vars should be Var/CVar *)
 val substitute_vars_cvars : Exp.t -> Exp.t -> t -> t
 
-(**  [substitute_expr_all new_vars old_vars form] substitutes 'List.nth i old_vars' by 
-  'List.nth i new_vars' in 'form', therefore 'List.length old_vars = List.length new_vars' must hold*)
+(** [substitute_expr_all new_vars old_vars form] substitutes
+    [List.nth i old_vars] by [List.nth i new_vars] in [form], therefore
+    [List.length old_vars = List.length new_vars] must hold
+    @raise ErrorInFromula if [new_vars] and [old_vars] have unequal length
+*)
 val substitute_expr_all : Exp.t list -> Exp.t list -> t -> t
 
 (** [substitute var eqvarlist form] *)
@@ -194,12 +198,14 @@ val remove_redundant_eq : pi -> pi
     variables *)
 val remove_equiv_vars : Exp.variable list -> Exp.variable list -> t -> t
 
-(** [remove_useless_conjuncts form evars exclude_from_refs] removes usless conjuncts from pure
-    part of [form] - a conjunct is useless iff
-      1) contains vars only from [evars] only
-      2) there is no transitive reference from spatial part or program variables
+(** [remove_useless_conjuncts form evars exclude_from_refs] removes usless
+    conjuncts from pure part of [form] - a conjunct is useless iff
+      + contains vars only from [evars] only
+      + there is no transitive reference from spatial part or program variables
+
     [form] expect satisfiable formula only 
-    [exclude_from_refs] is a set of variables, which are considered not referenced by sigma *)
+    [exclude_from_refs] is a set of variables, which are considered not
+    referenced by sigma *)
 val remove_useless_conjuncts : t -> Exp.variable list -> Exp.variable list -> t
 
 (** [simplify form evars] is global simplify function, [evars] is a list of Ex.

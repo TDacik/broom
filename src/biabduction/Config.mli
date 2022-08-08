@@ -17,7 +17,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *)
 
-(** {1 Statistics *)
+(** {1 Statistics} *)
 
 type stat = {
   abstracts : int ref;    (** Number of successful abstractions *)
@@ -166,7 +166,7 @@ val print_contracts : unit -> bool
 (** Set by [--dry-run]. Do not run the analysis. Defalt: false *)
 val dry_run : unit -> bool
 
-(** {1 Parsing command line *)
+(** {1 Parsing command line} *)
 
 (** Parse the command line arguments. *)
 val analyse_cmd_arguments : unit -> unit

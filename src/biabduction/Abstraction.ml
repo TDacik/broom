@@ -651,14 +651,14 @@ let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quin
 	in
 	(* this is a safety check that unfolding works correctly. *)
 	if not (((lseg_d=lseg_d_orig)||flag=2) && (lambda=lambda_orig) ) 
-	then raise_notrace (ErrorInAbstraction ("Abstraction: Something bad with unfolding",__POS__)) (*AbstractionFail*)
+	then raise_notrace (ErrorInAbstraction ("Something bad with unfolding",__POS__)) (*AbstractionFail*)
 	else
 	let p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda=
 		match flag with
 		| 0 -> pto_a,pto_back_b,lseg_c_orig,lseg_d,pto_a,lseg_a_orig,dll_backlink
 		| 1 -> lseg_a_orig,[],[],pto_b2,pto_a,pto_b,[]
 		| 2 -> lseg_a_orig,lseg_b_orig,pto_a2,pto_b2,pto_a,pto_a2,dll_backlink
-		| _ -> raise_notrace (ErrorInAbstraction ("flag is different from 0,1,2",__POS__))
+		| _ -> raise_notrace (ErrorInAbstraction ("Flag is different from 0,1,2",__POS__))
 	in
 	match p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda,y1 with
 	| [a],_,_,[d],[a_lambda],[b_lambda],_,-1 -> (*Slseg*)
@@ -841,7 +841,7 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 				| 0 -> b1,a2 
 				| 1 -> endlist,a1
 				| 2 -> b2,a1
-				| _ -> raise_notrace (ErrorInAbstraction ("incorrect flag",__POS__))
+				| _ -> raise_notrace (ErrorInAbstraction ("Incorrect flag",__POS__))
 			in
 			let query1 = [	
 				Boolean.mk_or ctx [

@@ -725,6 +725,10 @@ let exec_fnc fnc_tbl f =
         Config.prerr_internal "Lambda closing failed" loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
         []
+      | Formula.ErrorInFormula (msg,loc) ->
+        Config.prerr_internal (msg^" (formula)") loc;
+        set_fnc_unfinished_contract fnc_tbl fuid;
+        []
       | Abstraction.ErrorInAbstraction (msg,loc) ->
         Config.prerr_internal (msg^" (abstraction)") loc;
         set_fnc_unfinished_contract fnc_tbl fuid;
