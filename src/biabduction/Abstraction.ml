@@ -556,6 +556,32 @@ let rec get_fresh_var s confl=
     then get_fresh_var (s+1) confl
 	else s
 
+(* returns tuples of form (l,bl,sv,se) where 'l' is the lambda obtained from all quintuples,
+ 'bl' is the new backlink variable, 'sv' are the new shared variables 
+ (to be placed into lambda.param), 'se' are the shared expressions 
+ (to be placed into Slseg's 4th param), so 'List.length sv = List.length se' holds) *)
+let rec new_lambda_from_quintuples quintuples form =
+	match quintuples with 
+	| [] -> [],-1, [], []
+	| (_,index,lambda,2,_)::rest -> 
+		let (_,_,c)=to_hpointsto_unsafe(List.nth form.sigma index) in
+		let (a,b,_)=to_hpointsto_unsafe(lambda) in
+		let lambda_rest,_,shared_exprs_rest, shared_vars_rest =new_lambda_from_quintuples rest form in
+		let fresh_backlink_var = get_fresh_var 1 (find_vars form @ shared_vars_rest) in 
+		let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
+		(Hpointsto (a,b,c_new) :: lambda_rest), fresh_backlink_var, shared_exprs_rest,shared_vars_rest
+	| (_,_,lambda,_,is_shared)::rest -> 
+		let lambda_rest,new_backlink_var, shared_exprs_rest, shared_vars_rest = new_lambda_from_quintuples rest form in
+		let new_lamba, new_shared_exprs, new_shared_vars = 
+		if is_shared then 
+			let src,l,shared_expr = to_hpointsto_unsafe(lambda) in 
+			let fresh_var = get_fresh_var 1 (new_backlink_var :: (find_vars form) @ shared_vars_rest) in
+			Hpointsto(src,l,Var fresh_var), [shared_expr], [fresh_var]
+		else
+			lambda, [], [] 
+		in
+		(new_lamba :: lambda_rest), new_backlink_var, new_shared_exprs @ shared_exprs_rest, new_shared_vars @ shared_vars_rest	
+
 (* fold the pointsto into a existing list segment using the unfolded version of the slseg *)
 let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quintuples flag =
 	let y1,y2=get_backlinks res_quintuples (-1,-1) in
@@ -582,28 +608,14 @@ let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quin
 		else if (List.mem i to_remove) then get_new_sigma (i+1)
 		else (List.nth unfolded_form.sigma i) :: get_new_sigma (i+1)
 	in 
-	let fresh_backlink_var=get_fresh_var 1 (find_vars unfolded_form) in	
-	let rec new_lambda_from_quintuples quintuples =
-		match quintuples with 
-		| [] -> [],-1
-		| (_,index,l,2,_)::rest -> 
-			let (_,_,c)=to_hpointsto_unsafe(List.nth unfolded_form.sigma index) in
-			let (a,b,_)=to_hpointsto_unsafe(l) in
-				let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
-				let new_l,_=new_lambda_from_quintuples rest in
-				(Hpointsto (a,b,c_new) :: new_l), fresh_backlink_var
-		| (_,_,l,_,_)::rest -> 
-			let new_l,new_backlink_var=new_lambda_from_quintuples rest in
-			(l :: new_l), new_backlink_var
-	in
-	let get_new_lambda,dll_backlink=
-		let new_l,new_back_link_var= new_lambda_from_quintuples res_quintuples in
+	let get_new_lambda,dll_backlink, shared_exprs, shared_vars=
+		let new_l,new_back_link_var, shared_exprs, shared_vars= new_lambda_from_quintuples res_quintuples unfolded_form in
 		match (List.nth unfolded_form.sigma new_i1) with
 		| Hpointsto (a,l,b) ->(
 			match (find_vars_expr b) with
-			| _::[] -> (Hpointsto (a,l,b) ::new_l),new_back_link_var
+			| _::[] -> (Hpointsto (a,l,b) ::new_l),new_back_link_var, shared_exprs, shared_vars
 			| _ -> (Hpointsto (a,l,Exp.Var (get_fresh_var (new_back_link_var+1) (find_vars unfolded_form))) 
-				::new_l), new_back_link_var (* change null/undef or equations for fresch variable *)
+				::new_l), new_back_link_var, shared_exprs, shared_vars (* change null/undef or equations for fresch variable *)
 			)
 		| _ -> raise_notrace (ErrorInAbstraction ("Something bad happened, probably broken unfolding",__POS__)) (*[]*)
 	in
@@ -662,10 +674,10 @@ let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quin
 	in
 	match p1,p2,p3,p4,p1_lambda,p2_lambda,p3_lambda,y1 with
 	| [a],_,_,[d],[a_lambda],[b_lambda],_,-1 -> (*Slseg*)
-		let lambda={param=[a_lambda;b_lambda]; 
+		let lambda={param=[a_lambda;b_lambda] @ shared_vars; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda),[])]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda),shared_exprs)]}
 	| [a],[b],[c],[d],[a_lambda],[b_lambda],[c_lambda],_ -> (*Dlseg*)
 		let lambda={param=[a_lambda;b_lambda;c_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda;c_lambda]) (find_vars unfolded_form)))
@@ -691,33 +703,7 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quintuples =
 		else (List.nth form.sigma i) :: get_new_sigma (i+1)
 	in
 	(* lambda may be overaproximated during the matches *)
-	(* returns quadruples of form (l,bl,sv,se) where 'l' is the lambda obtained from all quintuples,
-	 'bl' is the new backlink variable, 'sv' are the new shared variables 
-	 (to be placed into lambda.param), 'se' are the shared expressions 
-	 (to be placed into Slseg's 4th param), so 'List.length sv = List.length se' holds) *)
-	let rec new_lambda_from_quintuples quintuples =
-		match quintuples with 
-		| [] -> [],-1, [], []
-		| (_,index,lambda,2,_)::rest -> 
-			let (_,_,c)=to_hpointsto_unsafe(List.nth form.sigma index) in
-			let (a,b,_)=to_hpointsto_unsafe(lambda) in
-			let lambda_rest,_,shared_exprs_rest, shared_vars_rest =new_lambda_from_quintuples rest in
-			let fresh_backlink_var = get_fresh_var 1 (find_vars form @ shared_vars_rest) in 
-			let c_new=substitute_expr (Exp.Var fresh_backlink_var) (Exp.Var (List.nth (find_vars_expr c) 0)) c in
-			(Hpointsto (a,b,c_new) :: lambda_rest), fresh_backlink_var, shared_exprs_rest,shared_vars_rest
-		| (_,_,lambda,_,is_shared)::rest -> 
-			let lambda_rest,new_backlink_var, shared_exprs_rest, shared_vars_rest = new_lambda_from_quintuples rest in
-			let new_lamba, new_shared_exprs, new_shared_vars = 
-			if is_shared then 
-				let src,l,shared_expr = to_hpointsto_unsafe(lambda) in 
-				let fresh_var = get_fresh_var 1 (new_backlink_var :: (find_vars form) @ shared_vars_rest) in
-				Hpointsto(src,l,Var fresh_var), [shared_expr], [fresh_var]
-			else
-				lambda, [], [] 
-			in
-			(new_lamba :: lambda_rest), new_backlink_var, new_shared_exprs @ shared_exprs_rest, new_shared_vars @ shared_vars_rest
-	in
-	let new_lambda_incomplete, dll_backlink, shared_exprs, shared_vars = new_lambda_from_quintuples res_quintuples in 
+	let new_lambda_incomplete, dll_backlink, shared_exprs, shared_vars = new_lambda_from_quintuples res_quintuples form in 
 	let new_lambda = (List.nth form.sigma i1):: new_lambda_incomplete in
 	(* get the parameters of the list segment *)
 	let p1,p1_z3,p1_dest_expr,p1_expr = match (List.nth form.sigma i1) with
