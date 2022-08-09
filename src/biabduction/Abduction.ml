@@ -52,10 +52,10 @@ let to_hpointsto_unsafe hpred = match hpred with
   | Hpointsto (a,l,b) -> (a,l,b)
 let to_dlseg_unsafe hpred = match hpred with
   | Hpointsto _ | Slseg _ -> raise (Invalid_argument "to_dlseg_unsafe: Received points-to instead of dll list")
-  | Dlseg (a,b,c,d,l) -> (a,b,c,d,l)
+  | Dlseg (a,b,c,d,l,shared) -> (a,b,c,d,l,shared)
 let get_lambda_unsafe hpred = match hpred with
   | Hpointsto _ -> raise (Invalid_argument "get_lambda_unsafe: Received Slseg or Dlseg")
-  | Dlseg (_,_,_,_,l) | Slseg (_,_,l,_) -> l
+  | Dlseg (_,_,_,_,l,_) | Slseg (_,_,l,_) -> l
 
 (**** LEARN - pointsto ****)
 
@@ -104,7 +104,7 @@ let check_learn_pointsto {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 
 		[Boolean.mk_eq ctx
               	(Expr.mk_app ctx z3_names.base [rhs])
               	(Expr.mk_app ctx z3_names.base [lhs])]
-        | Dlseg (a,_,b,_,_) -> 
+        | Dlseg (a,_,b,_,_,_) -> 
       		let lhs1=(expr_to_solver_only_exp ctx z3_names a) in
       		let lhs2=(expr_to_solver_only_exp ctx z3_names b) in
 		[Boolean.mk_eq ctx
@@ -213,7 +213,7 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
   let rhs,rhs2=match (List.nth form2.sigma i2) with
 	  | Hpointsto (_,_,_) ->  ff,ff
 	  | Slseg (a,_,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names a)
-	  | Dlseg (a,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
+	  | Dlseg (a,_,b,_,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
   in
   if (rhs==ff) then false
   else
@@ -239,7 +239,7 @@ let check_learn_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form1 form2 i2 lev
 		let eq1=Boolean.mk_eq ctx rhs (lhs) in
 		let eq2=Boolean.mk_eq ctx rhs2 (lhs) in
 		if (rhs2==ff) then [eq1] else [eq1;eq2]
-	| Dlseg (a,_,b,_,_) ->
+	| Dlseg (a,_,b,_,_,_) ->
         	let lhs1=expr_to_solver_only_exp ctx z3_names a in
         	let lhs2=expr_to_solver_only_exp ctx z3_names b in
 		let eq1=[Boolean.mk_eq ctx rhs (lhs1); Boolean.mk_eq ctx rhs (lhs2)] in
@@ -274,7 +274,7 @@ let check_remove_slseg {ctx=ctx; solv=solv; z3_names=z3_names} form2 i =
   let b,e=match (List.nth form2.sigma i) with
 	  | Hpointsto (_,_,_) ->  ff,ff
 	  | Slseg (a,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
-	  | Dlseg (a,_,_,b,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
+	  | Dlseg (a,_,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
   in
   if (b==ff) then false
   else
@@ -742,7 +742,7 @@ let check_entailment_finish {ctx=ctx; solv=solv; z3_names=_} form1 form2 evars =
       | RemFail -> RemFail
       | RemOk f2_new -> RemOk (Exp.BinOp ( Peq, a, b):: f2_new)
       )
-    | Dlseg (a,b,c,d,_) :: rest ->
+    | Dlseg (a,b,c,d,_,_) :: rest ->
       (match (remove_lseg_form2 {pi=f2.pi; sigma=rest}) with
       | RemFail -> RemFail
       | RemOk f2_new -> RemOk ([Exp.BinOp ( Peq, a, d); Exp.BinOp ( Peq, b, c)] @ f2_new)
@@ -822,21 +822,22 @@ let apply_match solver i pred_type form1 form2 pvars dir =
       ApplyOK (lhs, rhs, [])
 	
     | 30 -> (* 30 is used for matching dls with dls*)
-      let a1,b1,c1,d1,_ = to_dlseg_unsafe  (List.nth form1.sigma i1) in
-      let a2,b2,c2,d2,ls2 = to_dlseg_unsafe (List.nth form2.sigma i2) in
+      let a1,b1,c1,d1,_,_ = to_dlseg_unsafe  (List.nth form1.sigma i1) in
+      let a2,b2,c2,d2,ls2,shared2 = to_dlseg_unsafe (List.nth form2.sigma i2) in
       let lhs_tmp=(remove i1 form1) in
       let rhs_tmp=(remove i2 form2) in
       (match dir with
       | 1 ->
       		let lhs,rhs=if (check_eq d1 d2)
 			then {sigma=lhs_tmp.sigma; pi=lhs_tmp.pi@[(Exp.BinOp (Peq,c1,c2))]}, rhs_tmp
-			else lhs_tmp,{sigma=(Dlseg (d1,c1,c2,d2,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
+      (*DAVID: passed arg shared2 to newly created Dlseg*)
+			else lhs_tmp,{sigma=(Dlseg (d1,c1,c2,d2,ls2,shared2))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
 		in
         	ApplyOK (lhs, rhs, [])
       | 2 ->
 		let lhs,rhs=if (check_eq b1 b2)
 			then {sigma=lhs_tmp.sigma; pi=lhs_tmp.pi@[(Exp.BinOp (Peq,a1,a2))]}, rhs_tmp
-			else lhs_tmp, {sigma=(Dlseg (a2,b2,b1,a1,ls2))::rhs_tmp.sigma; pi=rhs_tmp.pi}
+			else lhs_tmp, {sigma=(Dlseg (a2,b2,b1,a1,ls2,shared2))::rhs_tmp.sigma; pi=rhs_tmp.pi}
 		in
         	ApplyOK (lhs, rhs, [])
       | _ -> ApplyFail
@@ -858,8 +859,8 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
     match (List.nth form1.sigma i1),dir with
     | Hpointsto (a,_ ,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,0
     | Slseg (a,_,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,1
-    | Dlseg (a,_,_,_,_),1 -> (expr_to_solver_only_exp ctx z3_names a),a,5
-    | Dlseg (_,_,a,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,5
+    | Dlseg (a,_,_,_,_,_),1 -> (expr_to_solver_only_exp ctx z3_names a),a,5
+    | Dlseg (_,_,a,_,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,5
   in
   let lhs_size,lhs_size_noZ3 =
     match (List.nth form1.sigma i1) with
@@ -870,8 +871,8 @@ let rec check_match {ctx=ctx; solv=solv; z3_names=z3_names} form1 i1 form2 i2 le
     match (List.nth form2.sigma i2),dir with
     | Hpointsto (a,_ ,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,0
     | Slseg (a,_,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,1
-    | Dlseg (a,_,_,_,_),1 -> (expr_to_solver_only_exp ctx z3_names a),a,5
-    | Dlseg (_,_,a,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,5
+    | Dlseg (a,_,_,_,_,_),1 -> (expr_to_solver_only_exp ctx z3_names a),a,5
+    | Dlseg (_,_,a,_,_,_),_ -> (expr_to_solver_only_exp ctx z3_names a),a,5
   in
   let rhs_size,rhs_size_noZ3 =
     match (List.nth form2.sigma i2) with
@@ -1041,11 +1042,11 @@ and try_match solver form1 form2 level pvars flag =
     let x1,y1,backx1,backy1,type1,size1=match (List.nth form1.sigma i1) with
       | Hpointsto (a,size,b) -> (a,b,Exp.Void,Exp.Void,0,size)
       | Slseg (a,b,_,_) -> (a,b,Exp.Void,Exp.Void,2,Exp.Void) 
-      | Dlseg (a,b,c,d,_) -> (a,d,c,b,20,Exp.Void) in
+      | Dlseg (a,b,c,d,_,_) -> (a,d,c,b,20,Exp.Void) in
     let x2,y2,backx2,backy2,type2,size2=match (List.nth form2.sigma i2) with
       | Hpointsto (a,size,b) -> (a,b,Exp.Void,Exp.Void,0,size)
       | Slseg (a,b,_,_) -> (a,b,Exp.Void,Exp.Void,1,Exp.Void) 
-      | Dlseg (a,b,c,d,_) -> (a,d,c,b,10,Exp.Void) in
+      | Dlseg (a,b,c,d,_,_) -> (a,d,c,b,10,Exp.Void) in
     (* If there is a match of points-to with a list predicate (type1+type2 \in {1,10}
        then there are two possible options: 
          - 1 unfold the predicate on RHS (form2) or

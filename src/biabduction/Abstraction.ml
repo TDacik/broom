@@ -65,7 +65,7 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 		let a2,a2end = match (List.nth form.sigma index) with
 			| Hpointsto (a,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
 			| Slseg (a,_,_,_) -> (expr_to_solver_only_exp ctx z3_names a),ff
-			| Dlseg (a,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
+			| Dlseg (a,_,b,_,_,_) -> (expr_to_solver_only_exp ctx z3_names a),(expr_to_solver_only_exp ctx z3_names b)
 		in
 		(* form -> base(a1) = base(a2) *)
 		let query=[ 
@@ -378,7 +378,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		
 		| _ -> CheckFail
 		)
-	| Dlseg(a1,b1,c1,d1,l1), Dlseg(a2,b2,c2,d2,l2) -> ( 
+	| Dlseg(a1,b1,c1,d1,l1,shared1), Dlseg(a2,b2,c2,d2,l2,_) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
 		let vars_d1 = find_vars_expr d1 in
@@ -437,7 +437,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			| _ -> exp_false	
 		in
 		if (new_b=exp_false) || (new_d=exp_false) then CheckFail
-		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda),0, false)]
+		(*DAVID TODO: passed shared1 argument to newly created Dlseg when introducing first param in Dlseg*)
+		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda,shared1),0, false)]
 		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 
@@ -654,12 +655,12 @@ let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quin
 	let lseg_d,lambda = match (List.nth unfolded_form.sigma i_unfolded_slseg) with
 			| Hpointsto _ -> raise_notrace (ErrorInAbstraction ("Points-to can not be on this place",__POS__))
 			| Slseg (_,d,lambda,_) -> [d],lambda
-			| Dlseg (_,_,_,d,lambda) -> [d],lambda
+			| Dlseg (_,_,_,d,lambda,_) -> [d],lambda
 	in
 	let lseg_a_orig,lseg_b_orig,lseg_c_orig,lseg_d_orig,lambda_orig = match (List.nth form.sigma i2_orig) with
 			| Hpointsto _ -> raise_notrace (ErrorInAbstraction ("Points-to can not be on this place",__POS__));
 			| Slseg (a,d,lambda,_) -> (find_vars_expr a),[],[],[d],lambda
-			| Dlseg (a,b,c,d,lambda) -> (find_vars_expr a),[b],(find_vars_expr c),[d],lambda
+			| Dlseg (a,b,c,d,lambda,_) -> (find_vars_expr a),[b],(find_vars_expr c),[d],lambda
 	in
 	(* this is a safety check that unfolding works correctly. *)
 	if not (((lseg_d=lseg_d_orig)||flag=2) && (lambda=lambda_orig) ) 
@@ -682,7 +683,8 @@ let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quin
 		let lambda={param=[a_lambda;b_lambda;c_lambda]; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda;c_lambda]) (find_vars unfolded_form)))
 		} in
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda))]}
+		(* DAVID TODO: replace '[]' *)
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda),[])]}
 	| _ -> AbstractionFail
 	
 
@@ -767,14 +769,16 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quintuples =
 						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
 						[d_lambda;b_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda))]}
+		(* DAVID TODO: replace '[]' *)
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda),[])]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
 		let lambda={param=[a;b_lambda;d_lambda]; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(new_lambda)} 
 					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
 					[d_lambda;b_lambda])
 		} in
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, d, Exp.Var a, b, (lambda_close lambda))]}
+		(* DAVID TODO: replace '[]' *)
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, d, Exp.Var a, b, (lambda_close lambda),[])]}
 	| _ -> AbstractionFail
 
 
@@ -819,7 +823,7 @@ let try_add_lseg_to_pointsto form i_pto i_slseg gvars flag=
 			let endlist = (* get the expression at the end of the unfolded list *)
 				match (List.nth unfolded_form.sigma  i_unfolded_slseg) with
 				| Slseg (_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names b)
-				| Dlseg (_,_,_,b,_) -> (expr_to_solver_only_exp ctx z3_names b) 
+				| Dlseg (_,_,_,b,_,_) -> (expr_to_solver_only_exp ctx z3_names b) 
 				| _ -> raise_notrace (ErrorInAbstraction ("Incompatible unfolding",__POS__))
 			in	
 			let e1,e2=
@@ -1001,7 +1005,7 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 			| _ -> AbstractionFail
 		)
 	)
-	| Dlseg(a,b,c,d,l1), Dlseg(aa,bb,cc,dd,l2) -> (
+	| Dlseg(a,b,c,d,l1,shared1), Dlseg(aa,bb,cc,dd,l2,_) -> (
 		let d1= (expr_to_solver_only_exp ctx z3_names d) in
 		let c1= (expr_to_solver_only_exp ctx z3_names c) in
 		let a2= (expr_to_solver_only_exp ctx z3_names aa) in
@@ -1017,14 +1021,15 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		else
 			
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
+		(* TODO: 'shared1' is just a placeholder, need to implement shared nodes handling here*)
 		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) 0 with
-			| 1 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l2) :: (remove_i1_i2 form.sigma 0)}
-			| 2 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l1) :: (remove_i1_i2 form.sigma 0)}
+			| 1 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l2,shared1) :: (remove_i1_i2 form.sigma 0)}
+			| 2 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l1,shared1) :: (remove_i1_i2 form.sigma 0)}
 			| _ -> AbstractionFail
 		)
 	)
 	| Hpointsto (_,_,b), Slseg (aa,_,_,_) 
-	| Hpointsto (_,_,b), Dlseg (aa,_,_,_,_) -> (
+	| Hpointsto (_,_,b), Dlseg (aa,_,_,_,_,_) -> (
 		if check_list_pto_conditions b aa then AbstractionFail
 		else
 			(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)
@@ -1038,7 +1043,7 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 			try_add_lseg_to_pointsto form i2 i1 pvars 1
 
 	)
-	|  Dlseg (_,_,_,b,_),Hpointsto (aa,_,_) -> (
+	|  Dlseg (_,_,_,b,_,_),Hpointsto (aa,_,_) -> (
 		if check_list_pto_conditions b aa then AbstractionFail 
 		else
 			(* the process continues as follows: Slseg on is unfolded and then similar process as folding of Hpointsto x Hpointsto is appplied *)

@@ -372,7 +372,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         Boolean.mk_or ctx
         	[ Boolean.mk_not ctx (base_eq al alloc_aa);
         	Boolean.mk_eq ctx alloc_aa alloc_bb ], exundef
-      | Dlseg (aa1,_,aa2,bb,_) -> (* (base(al) != base(aa1) and base(al) != base(aa2)) or Dlseq is empty aa1=bb *)
+      | Dlseg (aa1,_,aa2,bb,_,_) -> (* (base(al) != base(aa1) and base(al) != base(aa2)) or Dlseq is empty aa1=bb *)
         let alloc_aa1,ex1 = alloc aa1 in
         let alloc_aa2,ex2 = alloc aa2 in
 	let alloc_bb,ex3 = alloc bb in
@@ -424,7 +424,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
         	[ Boolean.mk_not ctx (base_eq al alloc_aa );
         	Boolean.mk_eq ctx al dst;
         	Boolean.mk_eq ctx alloc_aa alloc_bb ], (exu1@exu2)
-      | Dlseg (aa1,_,aa2,bb,_) -> (* (base(al) != base(aa1) and base(al) != base(aa2)) or one of the list predicates is empty al=dst \/ aa1=bb *)
+      | Dlseg (aa1,_,aa2,bb,_,_) -> (* (base(al) != base(aa1) and base(al) != base(aa2)) or one of the list predicates is empty al=dst \/ aa1=bb *)
         let alloc_aa1,ex1 = alloc aa1 in
         let alloc_aa2,ex2 = alloc aa2 in
 	let alloc_bb,ex3 = alloc bb in
@@ -447,7 +447,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
     in
     let sp_constr,exundef3 = (sp_constraints rest_preds) in
     ([c1;c2;c3] @ sp_constr), (exundef1@exundef2@exundef3)
-  | Dlseg (first,ptr_back,last,ptr_from_last,_) ->
+  | Dlseg (first,ptr_back,last,ptr_from_last,_,_) ->
       let x1,exundef1=alloc first in
       let x2,exundef2=alloc last in
       let y,exundef3=alloc ptr_from_last in
@@ -494,7 +494,7 @@ let (*rec*) spatial_pred_to_solver ctx sp_pred1 rest_preds func =
 			];
         	Boolean.mk_eq ctx first nextlast;
         	Boolean.mk_eq ctx alloc_aa alloc_bb ], (exu1@exu2)
-      | Dlseg (aa1,_,aa2,bb,_) -> (* (base(first|last) != base(aa1) and base(first|last) != base(aa2)) 
+      | Dlseg (aa1,_,aa2,bb,_,_) -> (* (base(first|last) != base(aa1) and base(first|last) != base(aa2)) 
       					or one of the list predicates is empty al=dst \/ aa1=bb *)
         let alloc_aa1,ex1 = alloc aa1 in
         let alloc_aa2,ex2 = alloc aa2 in

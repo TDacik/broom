@@ -110,7 +110,8 @@ and lambda = {
 and heap_pred =
   | Hpointsto of Exp.t * Exp.t * Exp.t (** source, size_of_field, destination *)
   | Slseg of Exp.t * Exp.t * lambda * Exp.t list    (** source, destination, lambda, shared *)
-  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
+  (* first, backlink from first, last, forwardlink from last, lambda, shared *)
+  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda * Exp.t list
 
 and sigma = heap_pred list
 

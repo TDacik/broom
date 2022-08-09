@@ -191,7 +191,8 @@ and heap_pred =
   (* We use type 'Exp.t list' for shared nodes because this allows us to handle arithmetic 
     compositions on pointers *)
   | Slseg of Exp.t * Exp.t * lambda * Exp.t list   (* source, destination, lambda, shared *) 
-  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda (* first, backlink from first, last, forwardlink from last, lambda *)
+  (* first, backlink from first, last, forwardlink from last, lambda, shared *)
+  | Dlseg of Exp.t * Exp.t * Exp.t * Exp.t * lambda * Exp.t list
 
 (* spatial part *)
 and sigma = heap_pred list
@@ -236,13 +237,13 @@ let rec sigma_to_string_ll ?lvars:(lvars=[]) s lambda_level num=
         lambda_id^ ", ["^ String.concat ", " (List.map Exp.to_string shared) ^"]) "),
       "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
         (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
-    | Dlseg (a,b,c,d,lambda) ->
+    | Dlseg (a,b,c,d,lambda,shared) ->
       let lambda_id= "lambda-"^(string_of_int lambda_level)^":"^(string_of_int num) in
       ("Dlseg(" ^ Exp.to_string ~lvars:lvars a ^", "^
         Exp.to_string ~lvars:lvars b ^", "^
 	Exp.to_string ~lvars:lvars c ^", "^
 	Exp.to_string ~lvars:lvars d ^", "^
-        lambda_id^") "),
+        lambda_id^", ["^ String.concat ", " (List.map Exp.to_string shared) ^"]) "),
       "\n"^lambda_id^" ["^(lambda_params_to_string lambda.param)^"] = "^
         (to_string_with_lambda ~lvars:lvars lambda.form  (lambda_level+1))
   in
@@ -300,7 +301,7 @@ let rec is_sigma_abstract sigma =
   match sigma with
   | [] -> false
   | Slseg (_,_,_,_)::_ -> true
-  | Dlseg (_,_,_,_,_)::_ -> true
+  | Dlseg (_,_,_,_,_,_)::_ -> true
   | _::tl -> is_sigma_abstract tl
 
 let is_abstract f = is_sigma_abstract f.sigma
@@ -345,7 +346,7 @@ let rec find_vars_sigma sigma =
   | Slseg (a,b,_,_)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
-  | Dlseg (a,b,c,d,_)::rest ->
+  | Dlseg (a,b,c,d,_,_)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) 
     (CL.Util.list_join_unique (find_vars_expr c)
@@ -429,7 +430,7 @@ let rec subsigma vars sigma =
       (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l,shared)::subtl)
     else
       (tl_vars,subtl)
-  | Dlseg (a,b,c,d,l)::tl ->
+  | Dlseg (a,b,c,d,l,shared)::tl ->
     let (a_vars,a_found) = find_expr_contains_vars vars a in
     let (c_vars,c_found) = find_expr_contains_vars vars c in
     let (tl_vars,subtl) = subsigma vars tl in
@@ -438,7 +439,7 @@ let rec subsigma vars sigma =
       let (b_vars,_) = find_expr_contains_vars vars b in
       let (d_vars,_) = find_expr_contains_vars vars d in
       let new_vars = CL.Util.list_diff (a_vars @ b_vars @ c_vars @ d_vars) vars in
-      (CL.Util.list_join_unique new_vars tl_vars, Dlseg (a,b,c,d,l)::subtl)
+      (CL.Util.list_join_unique new_vars tl_vars, Dlseg (a,b,c,d,l,shared)::subtl)
     else
       (tl_vars,subtl)
 
@@ -535,12 +536,12 @@ let rec substitute_sigma var1 var2 sigma =
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       Slseg (a_new,b_new,l,shared) :: substitute_sigma var1 var2 rest
-    | Dlseg (a,b,c,d,l) ::rest ->
+    | Dlseg (a,b,c,d,l,shared) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       let c_new = substitute_expr var1 var2 c in
       let d_new = substitute_expr var1 var2 d in
-      Dlseg (a_new,b_new,c_new,d_new,l) :: substitute_sigma var1 var2 rest
+      Dlseg (a_new,b_new,c_new,d_new,l,shared) :: substitute_sigma var1 var2 rest
 
 
 let rec substitute_pi var1 var2 pi =
@@ -669,9 +670,9 @@ let rec remove_empty_slseg_ll sigma =
 	| Slseg(a,b,l,shared)::rest -> if (a=b) 
 			then (remove_empty_slseg_ll rest)
 			else Slseg(a,b,l,shared) :: (remove_empty_slseg_ll rest)
-	| Dlseg(a,b,c,d,l)::rest -> if (a=d)&&(b=c)
+	| Dlseg(a,b,c,d,l,shared)::rest -> if (a=d)&&(b=c)
 			then  (remove_empty_slseg_ll rest)
-			else Dlseg(a,b,c,d,l):: (remove_empty_slseg_ll rest)
+			else Dlseg(a,b,c,d,l,shared):: (remove_empty_slseg_ll rest)
 	| first:: rest -> first::(remove_empty_slseg_ll rest)
 
 let remove_empty_slseg form =
@@ -802,7 +803,7 @@ let unfold_predicate form pnum conflicts dir =
     (* find the newly added logical variables as (find_vars res_form) \setminus (find_vars form) *)
     let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
     res_form, new_lvars
-  | Dlseg (a,b,c,d,lambda) ->
+  | Dlseg (a,b,c,d,lambda,shared) ->
     let confl1=confl @ (find_vars lambda.form) in
     let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
     let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
@@ -815,11 +816,11 @@ let unfold_predicate form pnum conflicts dir =
     let res_form=
     	if dir=1 
 	then simplify
-      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (Var new_b,Var new_a,c,d,lambda)];
+      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (Var new_b,Var new_a,c,d,lambda,shared)];
        		pi=form.pi @ l_form4.pi @ [Exp.BinOp (Peq,a,Var new_a);Exp.BinOp (Peq,b,Var new_c)] @ (diffbase form pnum 1) }
       		([new_a;new_b;new_c]@added_vars) 
 	else simplify
-      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (a,b,Var new_c,Var new_a,lambda)];
+      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (a,b,Var new_c,Var new_a,lambda,shared)];
        		pi=form.pi @ l_form4.pi @ [Exp.BinOp (Peq,c,Var new_a);Exp.BinOp (Peq,d,Var new_b)] @ (diffbase form pnum 2) }
       		([new_a;new_b;new_c]@added_vars)
 		
