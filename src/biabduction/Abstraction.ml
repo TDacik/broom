@@ -531,7 +531,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 
 		| _ ->
 			(* complicated pattern -> stop abstraction *)
-			prerr_endline "fail"; CheckFail
+			Config.debug2 ">>> abstraction failed - complicated pattern"; CheckFail
 
 (* auxiliary functions for folding *)			
 let rec get_backlinks quintuples res =
