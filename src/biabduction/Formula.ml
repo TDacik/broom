@@ -786,15 +786,18 @@ let unfold_predicate form pnum conflicts dir =
     else s
   in
   let nomem lst x = not (List.mem x lst) in
+  let data_from_lambda lambda = 
+      let confl1=confl @ (find_vars lambda.form) in
+      let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
+      let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
+      let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
+      let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
+      (confl1,l_form1,added_vars,new_a,new_b) in
   match (List.nth form.sigma pnum) with
   | Slseg (a,b,lambda,shared) -> 
-    let confl1=confl @ (find_vars lambda.form) in
-    let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
-    let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
-    let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
-    let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
+    let (confl1,l_form1,added_vars,new_a,new_b) = data_from_lambda lambda in
     (* instantiate all params adequately *)
-    let l_form2 = substitute_expr_all ([(Exp.Var new_a); (Exp.Var new_b)] @ shared) 
+    let l_form2 = substitute_expr_all ([Exp.Var new_a; Exp.Var new_b] @ shared) 
       (List.map (fun x -> Exp.Var x) lambda.param) l_form1 in
     let res_form=simplify
       {sigma = (remove pnum form.sigma)@ l_form2.sigma @ [Slseg (Var new_b,b,lambda,shared)];
@@ -804,24 +807,19 @@ let unfold_predicate form pnum conflicts dir =
     let new_lvars=List.filter  (nomem (find_vars form)) (find_vars res_form) in
     res_form, new_lvars
   | Dlseg (a,b,c,d,lambda,shared) ->
-    let confl1=confl @ (find_vars lambda.form) in
-    let l_evars=List.filter (nomem lambda.param) (find_vars lambda.form) in
-    let (l_form1,added_vars) = rename_ex_variables lambda.form l_evars confl in
-    let new_a = (get_fresh_var (List.nth lambda.param 0) (confl1 @ added_vars) ) in
-    let new_b = (get_fresh_var (new_a + 1) (new_a::(confl1 @ added_vars))) in
+    let (confl1,l_form1,added_vars,new_a,new_b) = data_from_lambda lambda in
     let new_c = (get_fresh_var (new_b + 1) ([new_a;new_b] @ confl1 @ added_vars)) in
-    let l_form2= substitute new_a [(List.nth lambda.param 0)] l_form1 in
-    let l_form3 = substitute new_b [(List.nth lambda.param 1)] l_form2 in
-    let l_form4 = substitute new_c [(List.nth lambda.param 2)] l_form3 in
+    let l_form2 = substitute_expr_all ([Exp.Var new_a; Exp.Var new_b; Exp.Var new_c] @ shared)
+      (List.map (fun x -> Exp.Var x) lambda.param) l_form1 in 
     let res_form=
     	if dir=1 
 	then simplify
-      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (Var new_b,Var new_a,c,d,lambda,shared)];
-       		pi=form.pi @ l_form4.pi @ [Exp.BinOp (Peq,a,Var new_a);Exp.BinOp (Peq,b,Var new_c)] @ (diffbase form pnum 1) }
+      		{sigma = (remove pnum form.sigma)@ l_form2.sigma @ [Dlseg (Var new_b,Var new_a,c,d,lambda,shared)];
+       		pi=form.pi @ l_form2.pi @ [Exp.BinOp (Peq,a,Var new_a);Exp.BinOp (Peq,b,Var new_c)] @ (diffbase form pnum 1) }
       		([new_a;new_b;new_c]@added_vars) 
 	else simplify
-      		{sigma = (remove pnum form.sigma)@ l_form4.sigma @ [Dlseg (a,b,Var new_c,Var new_a,lambda,shared)];
-       		pi=form.pi @ l_form4.pi @ [Exp.BinOp (Peq,c,Var new_a);Exp.BinOp (Peq,d,Var new_b)] @ (diffbase form pnum 2) }
+      		{sigma = (remove pnum form.sigma)@ l_form2.sigma @ [Dlseg (a,b,Var new_c,Var new_a,lambda,shared)];
+       		pi=form.pi @ l_form2.pi @ [Exp.BinOp (Peq,c,Var new_a);Exp.BinOp (Peq,d,Var new_b)] @ (diffbase form pnum 2) }
       		([new_a;new_b;new_c]@added_vars)
 		
 	in
