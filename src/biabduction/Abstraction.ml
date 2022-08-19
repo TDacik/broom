@@ -705,25 +705,21 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quintuples =
 	(* lambda may be overaproximated during the matches *)
 	let new_lambda_incomplete, dll_backlink, shared_exprs, shared_vars = new_lambda_from_quintuples res_quintuples form in 
 	let new_lambda = (List.nth form.sigma i1):: new_lambda_incomplete in
-	(* get the parameters of the list segment *)
-	let p1,p1_z3,p1_dest_expr,p1_expr = match (List.nth form.sigma i1) with
-			| Hpointsto (a,_,b) -> (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names a),b,a
-			| _ -> [],(Boolean.mk_false ctx),Exp.Undef,Exp.Undef
+	(* if we are folding DLL, we check the direction
+	   -- the forward edge is the one with lower offset *)
+	let dll_dir=if y1<0 
+		then 1
+		else 
+		match (List.nth form.sigma i1),(List.nth form.sigma y1) with
+		| Hpointsto (p1,_,_), Hpointsto (p2,_,_) ->
+			let query= [ BitVector.mk_slt ctx (expr_to_solver_only_exp ctx z3_names p1) (expr_to_solver_only_exp ctx z3_names p2) ] in
+			if (Solver.check solv query)=SATISFIABLE then 1 else 2
+		| _ -> 1
 	in
-	(* The parameter p2 should be modified by offset if the linking field is not in the beginning of the data structure.
-	   The offset is computed as a difference p1_dest-p2 *)
-	let p2,p2_lambda = match (List.nth form.sigma i2) with
-			| Hpointsto (b,_,a) -> 
-				if a=Const(Ptr 0) then [a],(find_vars_expr b)
-				else
-				(
-				let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,b,p1_dest_expr)) in
-				match offset with
-				| None -> [],[]
-				| Some 0L -> [a],(find_vars_expr b)
-				| Some i -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr b)
-				)
-			| _ -> [],[]
+	(* get the parameters of the list segment *)
+	let p1,p1_dest_expr,p1_expr = match (List.nth form.sigma i1) with
+			| Hpointsto (a,_,b) -> (find_vars_expr a),b,a
+			| _ -> [],Exp.Undef,Exp.Undef
 	in
 	let r2,r2_dest,r2_dest_expr = if y2<0 then [],[],Exp.Undef
 		else 
@@ -731,28 +727,48 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quintuples =
 			| Hpointsto (a,_,b) -> (find_vars_expr a),(find_vars_expr b),b
 			| _ -> [],[],Exp.Undef
 	in
-	let r1,r1_lambda,r1_z3 = if y1<0 then [],[], (Boolean.mk_false ctx)
+	(* The parameters r1 and p2 should be modified by offset if the linking field is not in the beginning of the data structure. *)
+	(* The offsets are computed according dll_dir (direction of the folding) *)
+	let r1,r1_lambda,r1_expr = if y1<0 then [],[],Exp.Undef
 		else
 		match  (List.nth form.sigma y1) with
 		| Hpointsto (b,_,a) ->
 			(
-			let offset=try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form (Exp.BinOp (Pminus,p1_expr,r2_dest_expr)) in
+			let offset=
+				let off_to_simplify=
+					if dll_dir=1
+					then (Exp.BinOp (Pminus,p1_expr,r2_dest_expr))
+					else (Exp.BinOp (Pminus,b,r2_dest_expr))
+				in
+				try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form off_to_simplify in
 			match offset,dll_backlink with
-			| None, _ -> [],[],(Boolean.mk_false ctx)
-			| Some 0L,-1 -> [a], (find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
-			| Some i, -1 -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr a),(expr_to_solver_only_exp ctx z3_names b)
-			| Some 0L, back_l -> [a],[back_l] ,(expr_to_solver_only_exp ctx z3_names b)
-			| Some i, back_l -> [Exp.BinOp (Pplus,a,Const (Int i))],[back_l],(expr_to_solver_only_exp ctx z3_names b)
+			| None, _ -> [],[],Exp.Undef
+			| Some 0L,-1 -> [a], (find_vars_expr a), b
+			| Some i, -1 -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr a),b 
+			| Some 0L, back_l -> [a],[back_l], b 
+			| Some i, back_l -> [Exp.BinOp (Pplus,a,Const (Int i))],[back_l],b 
 			)
 
-		| _ -> [],[], (Boolean.mk_false ctx)
+		| _ -> [],[],Exp.Undef
 	in
-	(* check direction of the dll folding *)
-	let dll_dir=if y1<0 
-		then 1
-		else 
-		let query= [ BitVector.mk_slt ctx p1_z3 r1_z3 ] in
-		if (Solver.check solv query)=SATISFIABLE then 1 else 2
+	let p2,p2_lambda = match (List.nth form.sigma i2) with
+			| Hpointsto (b,_,a) -> 
+				if a=Const(Ptr 0) then [a],(find_vars_expr b)
+				else
+				(
+				let offset=
+					let off_to_simplify=
+						if dll_dir=1 
+						then (Exp.BinOp (Pminus,b,p1_dest_expr)) 
+						else (Exp.BinOp (Pminus,r1_expr,r2_dest_expr)) 
+					in
+					try_simplify_SL_expr_to_int {ctx=ctx; solv=solv; z3_names=z3_names} form off_to_simplify in
+				match offset with
+				| None -> [],[]
+				| Some 0L -> [a],(find_vars_expr b)
+				| Some i -> [Exp.BinOp (Pplus,a,Const (Int i))],(find_vars_expr b)
+				)
+			| _ -> [],[]
 	in
 	(* in the case of DLL (y1!=-1), r2_dest=p1 must be valid. Othervice we can not easily establish a lambda with 3 parameters only.*)
 	match p1,p2,p2_lambda,r1,r2,r1_lambda,y1,(p1=r2_dest),dll_dir with (* we want only a single variable on the LHS of a pointsto *)
