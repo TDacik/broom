@@ -808,18 +808,32 @@ let apply_match solver i pred_type form1 form2 pvars dir =
       let new_form1,new_lvars=unfold_predicate form1 i1 ((find_vars form2)@pvars) dir in
       ApplyOK (new_form1, form2, new_lvars)
     | 3 ->
-      let _,y1,_,_ = to_slseg_unsafe  (List.nth form1.sigma i1) in
+      let _,y1,_,shared1 = to_slseg_unsafe  (List.nth form1.sigma i1) in
       let _,y2,ls2,shared2 = to_slseg_unsafe (List.nth form2.sigma i2) in
-      (* DAVID: TODO add a predicate definig that shared1[i] = shared2[i] to the LHS *)
-      let lhs=(remove i1 form1) in
-      let rhs_tmp=(remove i2 form2) in
-      (* We do not add empty SLL if y1 and y2 are equal *)
-      let rhs=if (check_eq y1 y2)
-      		then rhs_tmp
-      (*DAVID: passed arg shared2 to newly created Slseg*)
-		else {sigma=(Slseg (y1,y2,ls2,shared2))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
-      in
-      ApplyOK (lhs, rhs, [])
+      if (List.length shared1) != (List.length shared2) then 
+        ApplyFail
+      else
+      (
+        (* returns constraints shared1[i] =shared2[i] and bool value indicating List.length shared1 = List.length shared2*)
+        let rec shared_eq_constraints s1_list s2_list= 
+          match s1_list, s2_list with
+          | [], [] -> []
+          | s1 :: s1_rest, s2::s2_rest -> Exp.BinOp(Peq, s1, s2) :: shared_eq_constraints s1_rest s2_rest
+            (* This shouldn't be reached *)
+          | _ -> raise_notrace(TempExceptionBeforeApiCleanup "Implementation error: shared nodes list lengths are different")
+        in
+        let lhs_pi = shared_eq_constraints shared1 shared2 @ form1.pi in
+        let lhs=(remove i1 {sigma = form1.sigma; pi = lhs_pi}) in
+        let rhs_tmp=(remove i2 form2) in
+        (* We do not add empty SLL if y1 and y2 are equal *)
+        let rhs=
+          if (check_eq y1 y2)
+            then rhs_tmp
+          else 
+            {sigma=(Slseg (y1,y2,ls2,shared1))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
+        in
+        ApplyOK (lhs, rhs, [])
+      )
 	
     | 30 -> (* 30 is used for matching dls with dls*)
       let a1,b1,c1,d1,_,_ = to_dlseg_unsafe  (List.nth form1.sigma i1) in
@@ -830,7 +844,7 @@ let apply_match solver i pred_type form1 form2 pvars dir =
       | 1 ->
       		let lhs,rhs=if (check_eq d1 d2)
 			then {sigma=lhs_tmp.sigma; pi=lhs_tmp.pi@[(Exp.BinOp (Peq,c1,c2))]}, rhs_tmp
-      (*DAVID: passed arg shared2 to newly created Dlseg*)
+      (*DAVID TODO: passed arg shared2 to newly created Dlseg*)
 			else lhs_tmp,{sigma=(Dlseg (d1,c1,c2,d2,ls2,shared2))::rhs_tmp.sigma; pi=rhs_tmp.pi} 
 		in
         	ApplyOK (lhs, rhs, [])
