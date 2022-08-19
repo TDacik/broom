@@ -680,11 +680,10 @@ let fold_pointsto_slseg solver form i2_orig unfolded_form new_i1 new_i2 res_quin
 		} in
 		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda),shared_exprs)]}
 	| [a],[b],[c],[d],[a_lambda],[b_lambda],[c_lambda],_ -> (*Dlseg*)
-		let lambda={param=[a_lambda;b_lambda;c_lambda]; 
+		let lambda={param=[a_lambda;b_lambda;c_lambda] @ shared_vars; 
 			form=(simplify  {pi=unfolded_form.pi; sigma=get_new_lambda} (List.filter (nomem [a_lambda;b_lambda;c_lambda]) (find_vars unfolded_form)))
 		} in
-		(* DAVID TODO: replace '[]' *)
-		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda),[])]}
+		AbstractionApply {pi=unfolded_form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda),shared_exprs)]}
 	| _ -> AbstractionFail
 	
 
@@ -764,21 +763,19 @@ let fold_pointsto ctx solv z3_names form i1 i2 res_quintuples =
 		} in
 		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Slseg (Exp.Var a, d, (lambda_close lambda),shared_exprs)]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,1 ->  (* forward folding *)
-		let lambda={param=[a;d_lambda;b_lambda]; 
+		let lambda={param=[a;d_lambda;b_lambda] @ shared_vars; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(new_lambda)} 
 						(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form)) 
 						[d_lambda;b_lambda])
 		} in
-		(* DAVID TODO: replace '[]' *)
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda),[])]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var a, b, Exp.Var c, d, (lambda_close lambda),shared_exprs)]}
 	| [a],[d],[d_lambda],[b],[c],[b_lambda],_,true,2 ->  (* backward folding *)
-		let lambda={param=[a;b_lambda;d_lambda]; 
+		let lambda={param=[a;b_lambda;d_lambda] @ shared_vars; 
 			form=(simplify_lambda  {pi=form.pi; sigma=(new_lambda)} 
 					(List.filter (nomem [a;d_lambda;b_lambda]) (find_vars form))
 					[d_lambda;b_lambda])
 		} in
-		(* DAVID TODO: replace '[]' *)
-		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, d, Exp.Var a, b, (lambda_close lambda),[])]}
+		AbstractionApply {pi=form.pi; sigma=(get_new_sigma 0) @ [Dlseg (Exp.Var c, d, Exp.Var a, b, (lambda_close lambda),shared_exprs)]}
 	| _ -> AbstractionFail
 
 
