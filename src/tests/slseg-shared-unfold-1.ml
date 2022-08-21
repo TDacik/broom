@@ -3,7 +3,7 @@ Slseg(%l1, %l2, lambda-1:1, [%l3])  * %l3 -(8)->Undef
 lambda-1:1 [%l4, %l5, %l6, ] = %l4 -(8)->%l5 * (%l4+8) -(8)->%l6 & (%l4=base((%l4+8)))
 *)
 (* EXPECTED: unfolding yields  
-%l3 -(8)->Undef * %l1 -(8)->%l8 * (%l1+8) -(8)->%l3 * Slseg(%l8, %l2, lambda-1:4, [%l3])  & (%l1=base((%l1+8)))
+%l3 -(8)->Undef * %l1 -(8)->%l8 * (%l1+8) -(8)->%l3 * Slseg(%l8, %l2, lambda-1:4, [%l3])
 *)
 
 

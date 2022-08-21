@@ -2,9 +2,9 @@
 (%l1+8) -(8)->%l4 * (%l2+8) -(8)->%l4 * %l4 -(8)->Undef * %l1 -(8)->%l2 * %l2 -(8)->%l3
 *)
 (* EXPECTED: abstraction yields formula of form 
-%l4 -(8)->Undef * Slseg(%l1, %l3, lambda-1:2, [%l4])  & (%l1=base((%l1+8))) & (%l2=base((%l2+8)))
+%l4 -(8)->Undef * Slseg(%l1, %l3, lambda-1:2, [%l4])
 ---------------
-lambda-1:2 [%l1, %l2, %l5, ] = %l1 -(8)->%l2 * (%l1+8) -(8)->%l5 & (%l1=base((%l1+8)))
+lambda-1:2 [%l1, %l2, %l5, ] = %l1 -(8)->%l2 * (%l1+8) -(8)->%l5
 *)
 
 

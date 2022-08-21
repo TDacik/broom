@@ -42,10 +42,10 @@ let cut_freed_and_invalid_parts ?(replaced=false) solver form_z3 form freed_list
         if (check_eq_bases a base_list)
         then raise Conflict_between_freed_and_lseg
         else Slseg (a,b,c,shared) ::(cut_spatial rest base_list )
-      | Dlseg (a,b,c,d,l) :: rest ->
+      | Dlseg (a,b,c,d,l,shared) :: rest ->
         if ((check_eq_bases a base_list) || (check_eq_bases c base_list))
         then raise Conflict_between_freed_and_lseg
-        else Dlseg (a,b,c,d,l) ::(cut_spatial rest base_list )
+        else Dlseg (a,b,c,d,l,shared) ::(cut_spatial rest base_list )
     in
     (* cat all "Stack(x)" predicates, where base(x) is part of base_list
        if replaced is true, add Invalid(x) *)
