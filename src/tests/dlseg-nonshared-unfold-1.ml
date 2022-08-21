@@ -4,9 +4,9 @@ Dlseg(%l4, %l5, %l6, %l7, lambda-1:1, [])
 lambda-1:1 [%l1, %l2, %l3, ] = %l1 -(8)->%l2 * (%l1+8) -(8)->%l3 
 *)
 (* EXPECTED: unfolding yields  
-%l4 -(8)->%l9 * (%l4+8) -(8)->%l5 * Dlseg(%l9, %l4, %l6, %l7, lambda-1:3, [])  & (%l4=base((%l4+8)))
+%l4 -(8)->%l9 * (%l4+8) -(8)->%l5 * Dlseg(%l9, %l4, %l6, %l7, lambda-1:3, [])
 ---------------
-lambda-1:3 [%l1, %l2, %l3, ] = %l1 -(8)->%l2 * (%l1+8) -(8)->%l3 & (%l1=base((%l1+8)))
+lambda-1:3 [%l1, %l2, %l3, ] = %l1 -(8)->%l2 * (%l1+8) -(8)->%l3
 *)
 
 
@@ -29,6 +29,5 @@ let () =
 	let result_folded = {sigma = [	Dlseg(Var 4, Var 5, Var 6, Var 7, lambda, [])];
 									 pi = []}
 	in
-		print_with_lambda result_folded;
 	let result_unfolded, _ = unfold_predicate result_folded 0 [] 1 in 
 	print_with_lambda result_unfolded;

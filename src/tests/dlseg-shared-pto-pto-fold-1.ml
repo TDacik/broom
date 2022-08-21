@@ -2,7 +2,7 @@
 %l1 -(8)->%l2 * (%l1+8) -(8)->%l4 * (%l1+16) -(8)->%l5 * %l2 -(8)->%l3 * (%l2+8) -(8)->%l1 * (%l2+16) -(8)->%l5 * %l5 -(8)->Undef
 *)
 (* EXPECTED: abstraction yields formula of form 
-%l5 -(8)->Undef * Dlseg(%l1, %l4, %l2, %l3, lambda-1:2, [%l5])
+%l5 -(8)->Undef * Dlseg(%l1, (%l4+8), %l2, (%l3+8), lambda-1:2, [%l5])
 ---------------
 lambda-1:2 [%l2, %l7, %l1, %l6, ] = (%l2+8) -(8)->%l1 * %l2 -(8)->%l7 * (%l2+16) -(8)->%l6
 *)

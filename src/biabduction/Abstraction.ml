@@ -307,6 +307,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		] in
 		(* SAT: form /\ base(a1) != base(a2) /\ a1-base(a1) = a2 - base(a2) *)
 		let query2 = [ 
+			Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2]));
 			Boolean.mk_eq ctx 
 			(BitVector.mk_sub ctx  a1 (Expr.mk_app ctx z3_names.base [a1]) )
 			(BitVector.mk_sub ctx  a2 (Expr.mk_app ctx z3_names.base [a2]) )
@@ -328,8 +329,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		if not ((Solver.check solv query3)=SATISFIABLE) then CheckFail
 		else
 		(* check all pointsto with equal bases to a1/a2 *)
-		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [] 0 in
-		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 [] 0 in
+		let a1_block=get_eq_base ctx solv z3_names form a1 0 1 [i2] 0 in
+		let a2_block=get_eq_base ctx solv z3_names form a2 0 1 (i1::a1_block) 0 in
 		(match match_pointsto_from_two_blocks ctx solv z3_names form a1_block a2_block with
 			| MatchFail -> CheckFail
 			| MatchOK matchres ->  
@@ -339,7 +340,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 					| DlsegBackLink -> raise_notrace (ErrorInAbstraction ("DllBackling is not expected here",__POS__))
 				)
 		)
-	| Slseg(a1,b1,l1,shared1), Slseg(a2,b2,l2,_) -> ( 
+	| Slseg(a1,b1,l1,_), Slseg(a2,b2,l2,_) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
 		let eq_base var = get_eq_base ctx solv z3_names form  (expr_to_solver_only_exp ctx z3_names (Exp.Var var)) 0 1 [] 0 in
@@ -365,20 +366,20 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		if ((Solver.check solv query3)=UNSATISFIABLE) then CheckFail
 		else
 		(* check compatibility of b1 and b2 *)
-		(*DAVID TODO: passed shared1 argument to newly created Slseg when introducing first param in Slseg*)
 		match vars_b1, vars_b2, pt_refs_b1, pt_refs_b2 with
 		| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
-			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,shared1),0, false)]
-			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda,shared1),0, false)]
+			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,[]),0,false)]
+			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda,[]),0, false)]
 		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names form x1 x2 
 				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0 )::block_bases)) 
-			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,shared1),0,false)]
+			(* DAVID TODO: replace '[]' by an accurate value for andling shared nodes*)
+			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,[]),0,false)]
 			else CheckFail
 		
 		| _ -> CheckFail
 		)
-	| Dlseg(a1,b1,c1,d1,l1,shared1), Dlseg(a2,b2,c2,d2,l2,_) -> ( 
+	| Dlseg(a1,b1,c1,d1,l1,_), Dlseg(a2,b2,c2,d2,l2,_) -> ( 
 		let vars_b1 = find_vars_expr b1 in
 		let vars_b2 = find_vars_expr b2 in
 		let vars_d1 = find_vars_expr d1 in
@@ -437,8 +438,8 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			| _ -> exp_false	
 		in
 		if (new_b=exp_false) || (new_d=exp_false) then CheckFail
-		(*DAVID TODO: passed shared1 argument to newly created Dlseg when introducing first param in Dlseg*)
-		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda,shared1),0, false)]
+		(* DAVID TODO: replace '[]' by an accurate value for handling shared nodes *)
+		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda,[]),0,false)]
 		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
 

@@ -39,7 +39,6 @@ let () =
 		pi =	[BinOp ( Peq, Var 4, UnOp (Base, BinOp (Pplus, Var 4, ptr_size)));
 				 BinOp ( Peq, Var 4, UnOp (Base, BinOp (Pplus, Var 4, ptr_size2)))]
 	} in 
-	print_with_lambda form;
 	let solv=config_solver () in
 	let result = Abstraction.lseg_abstraction solv form [] in 
 	print_with_lambda result;
