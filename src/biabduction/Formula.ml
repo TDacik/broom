@@ -338,20 +338,26 @@ let rec find_vars_pi pi =
     CL.Util.list_join_unique (find_vars_expr first) ( find_vars_pi rest)
 
 let rec find_vars_sigma sigma =
+  let find_lambda_shared shared =
+  	List.concat (List.map find_vars_expr shared)
+  in
   match sigma with
   | [] -> []
   | Hpointsto (a,_, b)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
-  | Slseg (a,b,_,_)::rest ->
-    CL.Util.list_join_unique (find_vars_expr a)
-    (CL.Util.list_join_unique (find_vars_expr b) (find_vars_sigma rest))
-  | Dlseg (a,b,c,d,_,_)::rest ->
+  | Slseg (a,b,_,shared)::rest ->
+     	CL.Util.list_join_unique (find_vars_expr a)
+    	(CL.Util.list_join_unique (find_vars_expr b) 
+	(CL.Util.list_join_unique (find_vars_sigma rest)
+	 (find_lambda_shared shared)))
+  | Dlseg (a,b,c,d,_,shared)::rest ->
     CL.Util.list_join_unique (find_vars_expr a)
     (CL.Util.list_join_unique (find_vars_expr b) 
     (CL.Util.list_join_unique (find_vars_expr c)
     (CL.Util.list_join_unique (find_vars_expr d)
-    (find_vars_sigma rest))))
+    (CL.Util.list_join_unique (find_vars_sigma rest)
+    (find_lambda_shared shared)))))
 
 (* This function provides a list of all variables used in the formula form *)
 let find_vars form =
@@ -535,13 +541,15 @@ let rec substitute_sigma var1 var2 sigma =
     | Slseg (a,b,l,shared) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
-      Slseg (a_new,b_new,l,shared) :: substitute_sigma var1 var2 rest
+      let shared_new = List.map (substitute_expr var1 var2) shared in
+      Slseg (a_new,b_new,l,shared_new) :: substitute_sigma var1 var2 rest
     | Dlseg (a,b,c,d,l,shared) ::rest ->
       let a_new = substitute_expr var1 var2 a in
       let b_new = substitute_expr var1 var2 b in
       let c_new = substitute_expr var1 var2 c in
       let d_new = substitute_expr var1 var2 d in
-      Dlseg (a_new,b_new,c_new,d_new,l,shared) :: substitute_sigma var1 var2 rest
+      let shared_new = List.map (substitute_expr var1 var2) shared in
+      Dlseg (a_new,b_new,c_new,d_new,l,shared_new) :: substitute_sigma var1 var2 rest
 
 
 let rec substitute_pi var1 var2 pi =
