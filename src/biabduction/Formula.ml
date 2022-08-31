@@ -432,7 +432,12 @@ let rec subsigma vars sigma =
     if (a_found) (* must be reach from source pointer *)
     then
       let (b_vars,_) = find_expr_contains_vars vars b in
-      let new_vars = CL.Util.list_diff (a_vars @ b_vars) vars in
+      let find_shared sh = 
+      		match find_expr_contains_vars vars sh with
+		| (res,_) -> res
+	in
+      let shared_vars=List.concat (List.map find_shared shared) in
+      let new_vars = CL.Util.list_diff (a_vars @ b_vars @ shared_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Slseg (a,b,l,shared)::subtl)
     else
       (tl_vars,subtl)
@@ -444,7 +449,12 @@ let rec subsigma vars sigma =
     then
       let (b_vars,_) = find_expr_contains_vars vars b in
       let (d_vars,_) = find_expr_contains_vars vars d in
-      let new_vars = CL.Util.list_diff (a_vars @ b_vars @ c_vars @ d_vars) vars in
+      let find_shared sh = 
+      		match find_expr_contains_vars vars sh with
+		| (res,_) -> res
+      in
+      let shared_vars=List.concat (List.map find_shared shared) in
+      let new_vars = CL.Util.list_diff (a_vars @ b_vars @ c_vars @ d_vars @ shared_vars) vars in
       (CL.Util.list_join_unique new_vars tl_vars, Dlseg (a,b,c,d,l,shared)::subtl)
     else
       (tl_vars,subtl)
