@@ -1113,7 +1113,10 @@ let lseg_abstraction _ form pvars=
 	Solver.add solver.solv (formula_to_solver solver.ctx form);
 	let res=lseg_abstraction_ll solver form pvars in
 	Solver.reset solver.solv; 
-	res
+	(* compute a set of added logical variables *)
+	let vars_before=find_vars form in
+	let vars_after=find_vars res in
+	res,(CL.Util.list_diff vars_after vars_before)
 
 (***** Experiments *****)
 (* let ptr_size=Exp.Const (Exp.Int (Int64.of_int 8))

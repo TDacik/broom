@@ -52,10 +52,11 @@ let try_abstraction_on_states solver fuid states =
 		match states with
 		| [] -> []
 		| s::tl ->
-			let new_miss = Abstraction.lseg_abstraction solver s.State.miss pvars in
-			let new_curr = Abstraction.lseg_abstraction solver s.curr pvars in
-			let abstract_state = {State.miss = new_miss; curr = new_curr; lvars=s.lvars; through_loop = s.through_loop} in
-			(* TODO: update lvars *)
+			let new_miss,new_lvars1 = Abstraction.lseg_abstraction solver s.State.miss pvars in
+			let new_curr,new_lvars2 = Abstraction.lseg_abstraction solver s.curr pvars in
+			let new_lvars=CL.Util.list_join_unique s.lvars
+				(CL.Util.list_join_unique new_lvars1 new_lvars2) in
+			let abstract_state = {State.miss = new_miss; curr = new_curr; lvars=new_lvars; through_loop = s.through_loop} in
 			abstract_state :: (try_abstraction tl)
 	in
 	Config.debug2 ">>> trying list abstraction";

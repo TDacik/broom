@@ -19,7 +19,7 @@ let () =
 	} in 
 	let solv=config_solver () in
 	print_string "\n Test 1\n";
-	let result = Abstraction.lseg_abstraction solv form [] in 
+	let result,_ = Abstraction.lseg_abstraction solv form [] in 
 	print_with_lambda result;
 	(*
 	let form_top_value = {
