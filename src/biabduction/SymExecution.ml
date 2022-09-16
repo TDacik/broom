@@ -271,7 +271,7 @@ let contract_application solver fst_run state c pvars =
   set existential connected with them as fresh contract variables
 *)
 
-let rec state2contract ?(status=Contract.OK) s cvar =
+let rec state2contract ?(status=Contract.OK) cvar s =
   match s.lvars with
   | [] -> {Contract.lhs = s.miss; rhs = s.curr; cvars = cvar; pvarmap = []; s = status}
   | var::tl -> let new_cvar = cvar + 1 in
@@ -280,7 +280,9 @@ let rec state2contract ?(status=Contract.OK) s cvar =
         curr = substitute_vars_cvars (CVar new_cvar) (Var var) s.curr;
         lvars = tl;
         through_loop = s.through_loop} in
-      state2contract ~status:status new_s new_cvar
+      state2contract ~status:status new_cvar new_s
+
+ let rec states2contracts states = List.map (state2contract 0) states     
 
 (* substitue gvars used (new_rhs <> c.rhs) in function of contract c and add
    corresponding pvarmoves *)
@@ -324,7 +326,7 @@ let set_fnc_error_contract ?(status=Contract.OK) solver fnc_tbl bb_tbl states in
       lvars = removed_vars;
       through_loop = s.through_loop} in
 
-    let c_err = state2contract ~status:Error s_err 0 in
+    let c_err = state2contract ~status:Error 0 s_err in
     Config.debug3 (Contract.to_string c_err);
     Some c_err
   in
@@ -384,19 +386,19 @@ let set_fnc_contract ?status:(status=Contract.OK) solver fnc_tbl bb_tbl states i
         let need_rerun = check_if_rerun bb_tbl subs in
         if (not(need_rerun) && is_invalid subs.curr.pi) then
           Config.prerr_warn "function returns address of local variable" loc;
-        let c = state2contract ~status:status subs 0 in
-        let new_c = add_gvars_moves gvars c in
         if need_rerun then ( (* add contract which need to be rerun *)
-          StateTable.add_rerun bb_tbl c;
+          StateTable.add_rerun bb_tbl subs;
           Config.debug3 ">>> need rerun, candidate:";
-          Config.debug3 ("LHS: "^Formula.to_string c.lhs);
+          Config.debug3 ("LHS: "^Formula.to_string subs.miss);
           None )
         else if check_rerun bb_tbl then (
           (* add possible final contract after 2nd run *)
-          StateTable.add_rerun bb_tbl c;
+          StateTable.add_rerun bb_tbl subs;
           None
         )
         else (
+          let c = state2contract ~status:status 0 subs in
+          let new_c = add_gvars_moves gvars c in
           Config.debug3 (Contract.to_string new_c);
           Some new_c )
       with
@@ -675,7 +677,7 @@ let exec_fnc fnc_tbl f =
       if Config.rerun () && bb_tbl.rerun!=[]
       then (
 
-        let rerun_contracts = StateTable.start_rerun bb_tbl in
+        let rerun_states = StateTable.start_rerun bb_tbl in
         Config.debug2 (">>> executing reruns for function "^fnc_decl_str^":");
         let pvars = CL.Util.get_pvars fuid in
         (* let nop = CL.Util.get_NOP () in *)
@@ -696,9 +698,9 @@ let exec_fnc fnc_tbl f =
               let rstates = apply_init_contract rc in
               let run2 = exec_block fnc_tbl bb_tbl rstates (List.hd f.cfg) in
               (* add contracts after 2nd run *)
-              let final_contracts = StateTable.start_rerun bb_tbl in
+              let final_states = StateTable.start_rerun bb_tbl in
               (* let final_contracts = List.map (Contract.rw_lhs rc.lhs) rerun_contracts2 in *)
-              SpecTable.add fnc_tbl bb_tbl.fuid final_contracts;
+              SpecTable.add fnc_tbl bb_tbl.fuid (states2contracts final_states);
               run2
             with BadRerun ->
               StateTable.reset_rerun bb_tbl;
@@ -709,7 +711,7 @@ let exec_fnc fnc_tbl f =
             states2 @ rerun_for_contracts rtl )
         in
 
-        run1 @ rerun_for_contracts rerun_contracts)
+        run1 @ rerun_for_contracts (states2contracts rerun_states))
 
       else run1
     with
