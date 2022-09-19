@@ -62,6 +62,8 @@ let try_abstraction_on_states solver fuid states =
 	Config.debug2 ">>> trying list abstraction";
 	try_abstraction states
 
+(* return [s] if s does not entail any state in 'states', return [] otw. *)
+(** entailment is checked w.r.t to the formula's side obtained by side_fnc *)
 let rec entailment_one_side side_fnc s solver states = 
 	match states with 
 	| [] -> [s]
@@ -71,6 +73,7 @@ let rec entailment_one_side side_fnc s solver states =
 				then []
 				else entailment_one_side side_fnc s solver tl1
 
+(* return [s2] or an abstraction on [s2] if s2's lhs and rhs does not entail any state in 'states' *)
 let rec entailment_incr fuid s2 solver states =
 	match states with
 	| [] -> if Config.abstraction_mode () = 1

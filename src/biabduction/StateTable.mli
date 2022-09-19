@@ -51,8 +51,8 @@ val create : cl_uid -> t
  *)
 val add : ?entailment:bool -> t -> cl_uid -> State.t list -> State.t list
 
-(** [add_rerun tbl contract] adds [contract] which needs to be rerun or
-    [contracts] which are possible final after rerun *)
+(** [add_rerun tbl state] adds [state] which needs to be rerun or
+    [state] which is possible final after rerun *)
 val add_rerun : t -> State.t -> unit
 
 val start_rerun : t -> State.t list
