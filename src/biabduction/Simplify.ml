@@ -20,6 +20,7 @@
 module FExp = Formula.Exp
 open Formula
 open Z3wrapper
+open Z3
 
 exception Conflict_between_freed_and_lseg
 
@@ -206,3 +207,53 @@ let state solver fixed_vars state loc =
   let subs = substate solver fixed_vars_exp rems loc in
   (* (find_vars rems.miss) @ (find_vars rems.curr) in *)
   subs
+
+
+(** prune useless lsegs using Z3 solver and call Formula.simplify ***)  
+let rec prune_empty_lsegs sigma solver =
+	match sigma with
+	| [] -> ([],[])
+	| Slseg(a,b,l,shared)::rest -> 
+		let rest_sigma,rest_pi=prune_empty_lsegs rest solver in
+		let a_solv=expr_to_solver_only_exp solver.ctx solver.z3_names a in
+		let b_solv=expr_to_solver_only_exp solver.ctx solver.z3_names b in
+		let query=[Boolean.mk_not solver.ctx (Boolean.mk_eq solver.ctx a_solv b_solv)] in
+		if (Solver.check solver.solv query)=UNSATISFIABLE
+		then rest_sigma, Exp.BinOp(Peq, a, b):: rest_pi
+		else  Slseg(a,b,l,shared) :: rest_sigma, rest_pi
+
+	| Dlseg(a,b,c,d,l,shared)::rest -> 
+		(* a=d or b=c ---> the list must be empty *)
+		let rest_sigma,rest_pi=prune_empty_lsegs rest solver in
+		let a_solv=expr_to_solver_only_exp solver.ctx solver.z3_names a in
+		let b_solv=expr_to_solver_only_exp solver.ctx solver.z3_names b in
+		let c_solv=expr_to_solver_only_exp solver.ctx solver.z3_names c in
+		let d_solv=expr_to_solver_only_exp solver.ctx solver.z3_names d in
+		let query=[Boolean.mk_not solver.ctx 
+				(Boolean.mk_or solver.ctx [
+				(Boolean.mk_eq solver.ctx a_solv d_solv);
+				(Boolean.mk_eq solver.ctx b_solv c_solv)
+				])
+			] in
+		if (Solver.check solver.solv query)=UNSATISFIABLE
+		then rest_sigma, [Exp.BinOp(Peq, a, d); Exp.BinOp(Peq, b, c)] @ rest_pi
+		else  Dlseg(a,b,c,d,l,shared) :: rest_sigma, rest_pi
+
+	| first:: rest -> 
+		let rest_sigma,rest_pi=(prune_empty_lsegs rest solver) in
+		first::rest_sigma, rest_pi
+
+
+let prune_formula form evars  =
+	let form1=Formula.simplify form  evars in
+	let solver=config_solver_to (Config.solver_timeout_simplify ()) in
+	Solver.push solver.solv;
+	Solver.add solver.solv (formula_to_solver solver.ctx form1);
+	let sigma_pruned, added_pi = prune_empty_lsegs form1.sigma solver in
+	let res=Formula.simplify {sigma=sigma_pruned;pi=form1.pi @ added_pi} evars in
+	Solver.pop solver.solv 1;
+	res
+
+
+
+

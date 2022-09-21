@@ -108,11 +108,12 @@ let apply_contract solver fst_run state c pvars =
 		Solver.add solver2.solv (formula_to_solver solver2.ctx state.miss);
 		solver2
 	    in
+	    let new_lvars=(state.lvars @ l_vars) in
 	    let pruned_miss_pi=List.filter (prune_expr solver_for_pruning []) miss.pi in
-	    let missing= {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } in
+	    let missing= Simplify.prune_formula {pi=state.miss.pi @ pruned_miss_pi; sigma=state.miss.sigma @ miss.sigma } l_vars in
 	    let splited_rhs=split_contract_rhs c.rhs rec_splits in
-	    let current= {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } in	    
-	    {miss=missing; curr=current; lvars=(state.lvars @ l_vars); through_loop = state.through_loop}
+	    let current= Simplify.prune_formula {pi=fr.pi @ splited_rhs.pi; sigma= fr.sigma @ splited_rhs.sigma } l_vars in	    
+	    {miss=missing; curr=current; lvars=new_lvars; through_loop = state.through_loop}
 	in
 	let res=List.map process_abd_result abd_result in
     	CAppOk res

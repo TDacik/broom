@@ -62,3 +62,6 @@ val formula : Z3wrapper.solver -> FExp.variable list -> Formula.t ->
 (* FIXME may be more variables in lvars than are in state *)
 val state : Z3wrapper.solver -> FExp.variable list -> State.t ->
             CL.Loc.t option -> State.t
+
+(** prune useless lsegs using Z3 solver and call Formula.simplify ***)
+val prune_formula : Formula.t ->  Formula.Exp.variable list  -> Formula.t 
