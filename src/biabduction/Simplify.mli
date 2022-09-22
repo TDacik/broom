@@ -64,4 +64,4 @@ val state : Z3wrapper.solver -> FExp.variable list -> State.t ->
             CL.Loc.t option -> State.t
 
 (** prune useless lsegs using Z3 solver and call Formula.simplify ***)
-val prune_formula : Formula.t ->  Formula.Exp.variable list  -> Formula.t 
+val prune_empty_lsegs : Formula.t -> Formula.t 

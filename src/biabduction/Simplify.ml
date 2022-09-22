@@ -210,11 +210,11 @@ let state solver fixed_vars state loc =
 
 
 (** prune useless lsegs using Z3 solver and call Formula.simplify ***)  
-let rec prune_empty_lsegs sigma solver =
+let rec prune_empty_lsegs_ll sigma solver =
 	match sigma with
 	| [] -> ([],[])
 	| Slseg(a,b,l,shared)::rest -> 
-		let rest_sigma,rest_pi=prune_empty_lsegs rest solver in
+		let rest_sigma,rest_pi=prune_empty_lsegs_ll rest solver in
 		let a_solv=expr_to_solver_only_exp solver.ctx solver.z3_names a in
 		let b_solv=expr_to_solver_only_exp solver.ctx solver.z3_names b in
 		let query=[Boolean.mk_not solver.ctx (Boolean.mk_eq solver.ctx a_solv b_solv)] in
@@ -224,7 +224,7 @@ let rec prune_empty_lsegs sigma solver =
 
 	| Dlseg(a,b,c,d,l,shared)::rest -> 
 		(* a=d or b=c ---> the list must be empty *)
-		let rest_sigma,rest_pi=prune_empty_lsegs rest solver in
+		let rest_sigma,rest_pi=prune_empty_lsegs_ll rest solver in
 		let a_solv=expr_to_solver_only_exp solver.ctx solver.z3_names a in
 		let b_solv=expr_to_solver_only_exp solver.ctx solver.z3_names b in
 		let c_solv=expr_to_solver_only_exp solver.ctx solver.z3_names c in
@@ -240,17 +240,16 @@ let rec prune_empty_lsegs sigma solver =
 		else  Dlseg(a,b,c,d,l,shared) :: rest_sigma, rest_pi
 
 	| first:: rest -> 
-		let rest_sigma,rest_pi=(prune_empty_lsegs rest solver) in
+		let rest_sigma,rest_pi=(prune_empty_lsegs_ll rest solver) in
 		first::rest_sigma, rest_pi
 
 
-let prune_formula form evars  =
-	let form1=Formula.simplify form  evars in
+let prune_empty_lsegs form =
 	let solver=config_solver_to (Config.solver_timeout_simplify ()) in
 	Solver.push solver.solv;
-	Solver.add solver.solv (formula_to_solver solver.ctx form1);
-	let sigma_pruned, added_pi = prune_empty_lsegs form1.sigma solver in
-	let res=Formula.simplify {sigma=sigma_pruned;pi=form1.pi @ added_pi} evars in
+	Solver.add solver.solv (formula_to_solver solver.ctx form);
+	let sigma_pruned, added_pi = prune_empty_lsegs_ll form.sigma solver in
+	let res={sigma=sigma_pruned;pi=form.pi @ added_pi} in
 	Solver.pop solver.solv 1;
 	res
 
