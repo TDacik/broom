@@ -193,7 +193,7 @@ let rec match_pointsto_from_two_blocks ctx solv z3_names form l1 l2 =
    (1) form -> base(base1) = base(v1) /\ base(base2) = base(v2)
    (2) SAT: form /\ v1-base(v1) = v2 - base(v2)
    *)
-let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
+let rec check_block_bases ctx solv z3_names v1 v2 block_bases =
 	match block_bases with
 	| [] -> false
 	| (b1,b2,_)::rest ->
@@ -214,7 +214,7 @@ let rec check_block_bases ctx solv z3_names form v1 v2 block_bases =
 		] in
 
 		if ((Solver.check solv query_blocks)=UNSATISFIABLE)&&((Solver.check solv query_dist)=SATISFIABLE) then true
-		else check_block_bases ctx solv z3_names form v1 v2 rest
+		else check_block_bases ctx solv z3_names v1 v2 rest
 
 (* check that v1 and v2 are back links in Dlseg with the use of block bases --->
    1) there exists (b1,b2,1) in block bases such that base(v2)=base(b1)
@@ -371,7 +371,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			if (Solver.check solv query)=SATISFIABLE then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,[]),0,false)]
 			else CheckOK [(i1,i2,Slseg(a1,Undef,new_lambda,[]),0, false)]
 		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
-			if (check_block_bases ctx solv z3_names form x1 x2 
+			if (check_block_bases ctx solv z3_names x1 x2 
 				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0 )::block_bases)) 
 			(* DAVID TODO: replace '[]' by an accurate value for andling shared nodes*)
 			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,[]),0,false)]
@@ -420,7 +420,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
 				if (Solver.check solv queryB)=SATISFIABLE then b1 else Undef
 			| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *)
-				if (check_block_bases ctx solv z3_names form x1 x2 
+				if (check_block_bases ctx solv z3_names x1 x2 
 				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0;
 				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2,0]@block_bases))
 				then b1 else exp_false
@@ -431,7 +431,7 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			| _,_,[],[] -> (* there is no referenced predicate in sigma by b1 and b2  -> check sat *)
 				if (Solver.check solv queryD)=SATISFIABLE then d1 else Undef
 			| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *)
-				if (check_block_bases ctx solv z3_names form x1 x2 
+				if (check_block_bases ctx solv z3_names x1 x2 
 				([expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0;
 				  expr_to_solver_only_exp ctx z3_names c1,expr_to_solver_only_exp ctx z3_names c2,0]@block_bases))
 				then d1 else exp_false
@@ -490,7 +490,7 @@ and check_matched_pointsto ctx solv z3_names form pairs_of_pto block_bases incl_
 		| [x1],[x2],[],[],f1::_,f2::_ ->
 			(* cover cases where pointers lead back to same block or where pointers both point to new blocks*)
 			(* b1 and b2 contaisn only a single variable pointing to an allocated block *)
-			(match (check_block_bases ctx solv z3_names form x1 x2 block_bases), incl_ref_blocks with
+			(match (check_block_bases ctx solv z3_names x1 x2 block_bases), incl_ref_blocks with
 			(* check_block_bases checks if b1 and b2 are in the same block as a1/a2 and have same offset 
 			-> pointers pointing back to node struct*)
 			| true, _ ->
