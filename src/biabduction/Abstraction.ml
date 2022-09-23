@@ -71,15 +71,17 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 		let query=[ 
 			(Boolean.mk_not ctx (Boolean.mk_eq ctx (Expr.mk_app ctx z3_names.base [a1]) (Expr.mk_app ctx z3_names.base [a2])))
 		] in
+		(* auxiliary function checking a query with an exception on timeout *)
+		let is_query_unsat_safe query = 
+			match (Solver.check solv query) with
+			| UNSATISFIABLE -> true
+			| SATISFIABLE -> false
+			| _ -> raise Get_eq_base_TO
+		in
 		let query_res=
 			if (dir=2) 
 			then false 
-			else (
-				match (Solver.check solv query) with
-				| UNSATISFIABLE -> true
-				| SATISFIABLE -> false
-				| _ -> raise Get_eq_base_TO
-			)
+			else is_query_unsat_safe query 
 		in
 		(* form -> base(a1) = base(a2end) *)
 		let queryend=if a2end=ff then [ff] else
@@ -89,12 +91,7 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 		let queryend_res= 
 			if ((a2end=ff) || (dir=1)) 
 			then false 
-			else (
-				match (Solver.check solv queryend) with
-				| UNSATISFIABLE -> true
-				| SATISFIABLE -> false
-				| _ -> raise Get_eq_base_TO
-			)
+			else is_query_unsat_safe queryend
 		in
 		(* form -> a1 != a2 *)
 		let query2= [ 
@@ -103,12 +100,7 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 		let query2_res= 
 			if ((dir=2)||(include_a1=1)) 
 			then true 
-			else (
-				match (Solver.check solv query2) with
-				| UNSATISFIABLE -> true
-				| SATISFIABLE -> false
-				| _ -> raise Get_eq_base_TO
-			)
+			else is_query_unsat_safe query2
 		in
 		(* form -> a1 != a2end *)
 		let query2end=if a2end=ff then [ff] else
@@ -118,12 +110,7 @@ let rec get_eq_base ctx solv z3_names form a1 index include_a1 skip dir =
 		let query2end_res= 
 			if (include_a1=1 || a2end=ff || dir=1) 
 			then true 
-			else (
-				match (Solver.check solv query2end) with
-				| UNSATISFIABLE -> true
-				| SATISFIABLE -> false
-				| _ -> raise Get_eq_base_TO
-			)
+			else is_query_unsat_safe query2end
 		in
 		match query_res,query2_res,queryend_res, query2end_res with 
 		| true, true, _,_ -> index :: (get_eq_base ctx solv z3_names form  a1 (index+1) include_a1 skip dir)
