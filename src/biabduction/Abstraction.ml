@@ -222,8 +222,7 @@ let rec check_backlink ctx solv z3_names form v2 block_bases =
 			then true,[b2]@base_list
 			else false,[b1;b2]@base_list
 			)
-		| _,(false,base_list) ->  false,[b1;b2]@base_list (* backlink found, no need to query the solver *)
-		| _,(true,base_list) ->  true,[b1;b2]@base_list (* backlink found, no need to query the solver *)
+		| _,(res_rec,base_list) ->  res_rec,[b1;b2]@base_list (* backlink found, no need to query the solver *)
 
 
 
@@ -236,7 +235,7 @@ let check_dlseg_from_block_bases ctx solv z3_names form v1 v2 block_bases =
 			)
 		in
 		let query_nomem =(List.map non_eq base_list) in
-		if ((Solver.check solv query_nomem)=SATISFIABLE) then true else false
+		Solver.check solv query_nomem=SATISFIABLE
 
 (* This is called in the case that there is no allocated block before the DLL candidate *)
 let check_backlink_simplified ctx solv z3_names form i2 block_bases =
