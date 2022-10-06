@@ -119,8 +119,6 @@ val empty : t
 
 val lvariables_to_string : Exp.variable list -> string
 
-val points_to_to_string: ?lvars:Exp.variable list -> heap_pred -> string
-
 val to_string : ?lvars:Exp.variable list -> t -> string
 
 val print : ?lvars:Exp.variable list -> t -> unit

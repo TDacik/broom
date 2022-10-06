@@ -270,7 +270,7 @@ type check_res =
 let rec quintuples_to_string quintuples =
 	match quintuples with
 	(a,b,points_to,is_dls,is_shared) :: tail -> "(" ^ (string_of_int a) ^ "," ^ 
-		(string_of_int b) ^ "," ^ Formula.points_to_to_string points_to ^ "," ^ 
+		(string_of_int b) ^ "," ^ Formula.to_string {sigma = [points_to]; pi = []} ^ "," ^ 
 		(string_of_int is_dls) ^ "," ^ (string_of_bool is_shared) ^ "), " ^
 		 quintuples_to_string tail 
 	| [] -> "\n"
@@ -359,7 +359,6 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 		| [x1],[x2],_::_,_::_ -> (* b1 and b2 refers to a predicate in sigma *) 
 			if (check_block_bases ctx solv z3_names x1 x2 
 				((expr_to_solver_only_exp ctx z3_names a1,expr_to_solver_only_exp ctx z3_names a2,0 )::block_bases)) 
-			(* DAVID TODO: replace '[]' by an accurate value for andling shared nodes*)
 			then CheckOK [(i1,i2,Slseg(a1,b1,new_lambda,[]),0,false)]
 			else CheckFail
 		
@@ -424,7 +423,6 @@ let rec find_ref_blocks ctx solv z3_names form i1 i2 block_bases gvars=
 			| _ -> exp_false	
 		in
 		if (new_b=exp_false) || (new_d=exp_false) then CheckFail
-		(* DAVID TODO: replace '[]' by an accurate value for handling shared nodes *)
 		else CheckOK [(i1,i2,Dlseg(a1,new_b,c1,new_d,new_lambda,[]),0,false)]
 		)
 	| _ -> CheckFail (* Slseg can not be matched with Hpointsto *)
@@ -998,7 +996,6 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		else
 			
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		(* TODO: 'shared1' is just a placeholder, need to implement shared nodes handling here*)
 		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) 0 with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l2,shared1) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Slseg(a,bb,l1,shared1) :: (remove_i1_i2 form.sigma 0)}
@@ -1021,7 +1018,6 @@ let try_abstraction_to_lseg_ll {ctx=ctx; solv=solv; z3_names=z3_names} form i1 i
 		else
 			
 		(* we use a fresh solver, because the current one is used in incremental way for solving the Abstraction queries *)
-		(* TODO: 'shared1' is just a placeholder, need to implement shared nodes handling here*)
 		(match (Abduction.check_lambda_entailment (config_solver ()) l1 l2) 0 with
 			| 1 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l2,shared1) :: (remove_i1_i2 form.sigma 0)}
 			| 2 -> AbstractionApply {pi=form.pi; sigma=Dlseg(a,b,cc,dd,l1,shared1) :: (remove_i1_i2 form.sigma 0)}
